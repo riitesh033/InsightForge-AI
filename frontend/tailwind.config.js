@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 
 module.exports = {
+  darkMode: "class",
 
   content: [
     "./index.html",
@@ -8,56 +9,43 @@ module.exports = {
   ],
 
   theme: {
-
     extend: {
-
       colors: {
+        background: "rgb(var(--background) / <alpha-value>)",
+        foreground: "rgb(var(--foreground) / <alpha-value>)",
 
-        primary: "#4F46E5",
-        secondary: "#F1F5F9",
+        card: "rgb(var(--card) / <alpha-value>)",
+        "card-foreground": "rgb(var(--card-foreground) / <alpha-value>)",
 
-        success: "#10B981",
+        primary: "rgb(var(--primary) / <alpha-value>)",
+        "primary-foreground":
+          "rgb(var(--primary-foreground) / <alpha-value>)",
 
-        warning: "#F59E0B",
+        secondary: "rgb(var(--secondary) / <alpha-value>)",
+        "secondary-foreground":
+          "rgb(var(--secondary-foreground) / <alpha-value>)",
 
-        danger: "#EF4444",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        "muted-foreground":
+          "rgb(var(--muted-foreground) / <alpha-value>)",
 
-      },
-
-      borderRadius: {
-
-        xl: "16px",
-
-        "2xl": "20px",
-
+        border: "rgb(var(--border) / <alpha-value>)",
       },
 
       boxShadow: {
-
-        card:
-          "0 10px 25px rgba(0,0,0,.08)",
-
-        glow:
-          "0 0 40px rgba(79,70,229,.25)",
-
+        card: "0 10px 25px rgba(0,0,0,.08)",
+        glow: "0 0 40px rgba(79,70,229,.25)",
       },
 
       maxWidth: {
-
         content: "1280px",
-
       },
 
       transitionTimingFunction: {
-
         smooth: "cubic-bezier(.4,0,.2,1)",
-
       },
-
     },
-
   },
 
   plugins: [],
-
 };

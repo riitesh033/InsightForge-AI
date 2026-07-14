@@ -43,25 +43,29 @@ export default function HowItWorks() {
   return (
     <section
       id="how-it-works"
-      className="bg-white py-28"
+      className="bg-white py-28 dark:bg-slate-950"
     >
       <div className="mx-auto max-w-7xl px-6">
 
+        {/* Heading */}
+
         <div className="mb-20 text-center">
 
-          <span className="rounded-full bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700">
+          <span className="rounded-full bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
             Workflow
           </span>
 
-          <h2 className="mt-6 text-4xl font-bold">
+          <h2 className="mt-6 text-4xl font-bold text-slate-900 dark:text-white">
             How InsightForge AI Works
           </h2>
 
-          <p className="mt-4 text-slate-600">
+          <p className="mt-4 text-slate-600 dark:text-slate-300">
             Analyze your data in four simple steps.
           </p>
 
         </div>
+
+        {/* Cards */}
 
         <div className="grid gap-8 lg:grid-cols-4">
 
@@ -72,8 +76,8 @@ export default function HowItWorks() {
 
               {index < steps.length - 1 && (
                 <ArrowRight
-                  className="absolute -right-6 top-1/2 hidden text-indigo-400 lg:block"
                   size={28}
+                  className="absolute -right-6 top-1/2 hidden text-indigo-400 dark:text-indigo-500 lg:block"
                 />
               )}
 

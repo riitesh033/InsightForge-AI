@@ -5,45 +5,51 @@
 @layer base {
 
   :root {
-
-    /* Backgrounds */
-    --background: 248 250 252;
+    --background: 255 255 255;
     --foreground: 15 23 42;
 
-    /* Cards */
     --card: 255 255 255;
     --card-foreground: 15 23 42;
 
-    /* Primary */
     --primary: 79 70 229;
     --primary-foreground: 255 255 255;
 
-    /* Secondary */
     --secondary: 241 245 249;
     --secondary-foreground: 15 23 42;
 
-    /* Muted */
-    --muted: 226 232 240;
+    --muted: 248 250 252;
     --muted-foreground: 100 116 139;
 
-    /* Border */
     --border: 226 232 240;
+  }
 
-    /* Radius */
-    --radius: 16px;
+  .dark {
+    --background: 2 6 23;
+    --foreground: 248 250 252;
+
+    --card: 15 23 42;
+    --card-foreground: 248 250 252;
+
+    --primary: 99 102 241;
+    --primary-foreground: 255 255 255;
+
+    --secondary: 30 41 59;
+    --secondary-foreground: 248 250 252;
+
+    --muted: 30 41 59;
+    --muted-foreground: 148 163 184;
+
+    --border: 51 65 85;
   }
 
   * {
-    @apply border-slate-200;
-  }
-
-  html {
-    scroll-behavior: smooth;
+    @apply border-border;
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-    font-family: Inter, sans-serif;
+    @apply transition-colors duration-300;
+    background: rgb(var(--background));
+    color: rgb(var(--foreground));
+    min-height: 100vh;
   }
-
 }

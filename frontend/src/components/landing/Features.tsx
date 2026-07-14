@@ -55,16 +55,14 @@ export default function Features() {
   ];
 
   return (
-    <section
-      id="features"
-      className="py-28 bg-slate-50"
-    >
+    <section id="features" className="bg-slate-50 dark:bg-slate-900">
+    
       <div className="mx-auto max-w-7xl px-6">
 
         <div className="mb-16 text-center">
 
           <h2 className="text-4xl font-bold">
-            Powerful Features
+             Features
           </h2>
 
           <p className="mt-4 text-slate-600">
