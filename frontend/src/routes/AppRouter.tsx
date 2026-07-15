@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import LandingLayout from "@/layouts/LandingLayout";
 import AuthLayout from "@/layouts/AuthLayout";
@@ -14,34 +14,35 @@ import ProtectedRoute from "./ProtectedRoute";
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Landing */}
-        <Route element={<LandingLayout />}>
-          <Route path="/" element={<LandingPage />} />
-        </Route>
+    <Routes>
+      {/* Landing */}
+      <Route element={<LandingLayout />}>
+        <Route path="/" element={<LandingPage />} />
+      </Route>
 
-        {/* Authentication */}
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/forgot-password"
-            element={<ForgotPasswordPage />}
-          />
-        </Route>
-
-        {/* Dashboard */}
+      {/* Authentication */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          path="/forgot-password"
+          element={<ForgotPasswordPage />}
+        />
+      </Route>
+
+      {/* Dashboard */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          path="/dashboard"
+          element={<DashboardPage />}
+        />
+      </Route>
+    </Routes>
   );
 }
