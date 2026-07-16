@@ -4,69 +4,63 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function RegisterPage() {
   const { register } = useAuth();
-
   const navigate = useNavigate();
 
   const [full_name, setName] = useState("");
-
   const [email, setEmail] = useState("");
-
   const [password, setPassword] = useState("");
 
- async function handleSubmit(e: FormEvent) {
-  e.preventDefault();
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (!full_name.trim()) {
-    alert("Full name is required.");
-    return;
+    if (!full_name.trim()) {
+      alert("Full name is required.");
+      return;
+    }
+
+    if (!email.trim()) {
+      alert("Email is required.");
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+
+    if (!password.trim()) {
+      alert("Password is required.");
+      return;
+    }
+
+    if (password.length < 8) {
+      alert("Password must be at least 8 characters.");
+      return;
+    }
+
+    try {
+      await register(full_name, email, password);
+
+      alert("Registration Successful!");
+
+      navigate("/login");
+    } catch (error: any) {
+      console.error(error);
+
+      console.log("Status:", error.response?.status);
+      console.log("Data:", error.response?.data);
+
+      alert(
+        error.response?.data?.detail ??
+        "Registration Failed"
+      );
+    }
   }
-
-  if (!email.trim()) {
-    alert("Email is required.");
-    return;
-  }
-
-  if (!emailRegex.test(email)) {
-    alert("Please enter a valid email address.");
-    return;
-  }
-
-  if (!password.trim()) {
-    alert("Password is required.");
-    return;
-  }
-
-  if (password.length < 8) {
-    alert("Password must be at least 8 characters.");
-    return;
-  }
-
-  try {
-    await register(
-      full_name,
-      email,
-      password
-    );
-
-    alert("Registration Successful!");
-
-    navigate("/login");
-
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error.response?.data?.detail ??
-      "Registration failed."
-    );
-  }
-}
 
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-900">
-
       <h1 className="text-3xl font-bold">
         Create Account
       </h1>
@@ -79,7 +73,7 @@ export default function RegisterPage() {
           className="w-full rounded-lg border p-3"
           placeholder="Full Name"
           value={full_name}
-          onChange={(e)=>setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
         />
 
         <input
@@ -87,7 +81,7 @@ export default function RegisterPage() {
           placeholder="Email"
           type="email"
           value={email}
-          onChange={(e)=>setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
         />
 
         <input
@@ -95,17 +89,18 @@ export default function RegisterPage() {
           placeholder="Password"
           type="password"
           value={password}
-          onChange={(e)=>setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button className="w-full rounded-lg bg-indigo-600 p-3 text-white">
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-indigo-600 p-3 text-white"
+        >
           Register
         </button>
-
       </form>
 
       <div className="mt-6 text-center">
-
         Already have an account?
 
         <Link
@@ -114,9 +109,7 @@ export default function RegisterPage() {
         >
           Login
         </Link>
-
       </div>
-
     </div>
   );
 }
