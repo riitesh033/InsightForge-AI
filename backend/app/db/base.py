@@ -1,5 +1,4 @@
-from sqlalchemy.orm import DeclarativeBase
+from app.db.base_models import Base
 
-
-class Base(DeclarativeBase):
-    pass
+from app.models.user import User
+from app.models.dataset import Dataset
