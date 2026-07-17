@@ -1,14 +1,11 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from app.db.session import get_db
+from fastapi import APIRouter
 
 router = APIRouter()
 
 
-@router.get("/health")
-def health_check(db: Session = Depends(get_db)):
+@router.get("/", summary="Health Check")
+def health_check():
     return {
-        "status": "ok",
-        "database": "connected",
+        "status": "healthy",
+        "message": "InsightForge AI Backend is running",
     }
