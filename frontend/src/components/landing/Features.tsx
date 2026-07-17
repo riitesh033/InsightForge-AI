@@ -9,65 +9,63 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import Container from "@/components/ui/Container";
+
 export default function Features() {
   const features = [
     {
       title: "Upload Datasets",
-      description:
-        "Upload CSV and Excel files instantly.",
-      icon: <Upload size={32} />,
+      description: "Upload CSV and Excel files instantly.",
+      icon: <Upload className="h-8 w-8" />,
     },
-
     {
       title: "AI Analysis",
       description:
-        "Automatically detect missing values, duplicates and outliers.",
-      icon: <Brain size={32} />,
+        "Automatically detect missing values, duplicates, and outliers.",
+      icon: <Brain className="h-8 w-8" />,
     },
-
     {
       title: "Interactive Dashboards",
       description:
         "Generate charts and analytics dashboards instantly.",
-      icon: <BarChart3 size={32} />,
+      icon: <BarChart3 className="h-8 w-8" />,
     },
-
     {
       title: "AI Reports",
       description:
-        "Create downloadable PDF reports with insights.",
-      icon: <FileText size={32} />,
+        "Create downloadable PDF reports with AI insights.",
+      icon: <FileText className="h-8 w-8" />,
     },
-
     {
       title: "Dataset Profiling",
       description:
-        "Understand dataset quality in seconds.",
-      icon: <Search size={32} />,
+        "Understand your dataset quality in seconds.",
+      icon: <Search className="h-8 w-8" />,
     },
-
     {
       title: "Smart Recommendations",
       description:
-        "Get AI-powered suggestions to improve your data.",
-      icon: <Sparkles size={32} />,
+        "Receive AI-powered suggestions to improve your data.",
+      icon: <Sparkles className="h-8 w-8" />,
     },
   ];
 
   return (
-    <section id="features" className="bg-slate-50 dark:bg-slate-900">
-    
-      <div className="mx-auto max-w-7xl px-6">
+    <section
+      id="features"
+      className="bg-transparent py-28"
+    >
+      <Container>
 
-        <div className="mb-16 text-center">
+        <div className="mx-auto mb-16 max-w-3xl text-center">
 
-          <h2 className="text-4xl font-bold">
-             Features
+          <h2 className="text-4xl font-bold text-foreground lg:text-5xl">
+            Powerful Features
           </h2>
 
-          <p className="mt-4 text-slate-600">
-            Everything you need for modern AI-powered
-            data analysis.
+          <p className="mt-6 text-lg text-muted-foreground">
+            Everything you need to upload, analyze, visualize,
+            clean, and understand your datasets using AI.
           </p>
 
         </div>
@@ -85,7 +83,7 @@ export default function Features() {
 
         </div>
 
-      </div>
+      </Container>
     </section>
   );
 }

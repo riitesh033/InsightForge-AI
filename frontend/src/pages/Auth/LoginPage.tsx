@@ -4,69 +4,63 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-
   const { login } = useAuth();
 
   const [email, setEmail] = useState("");
-
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
 
- async function handleSubmit(e: FormEvent) {
-  e.preventDefault();
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
 
-  // Email Validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (!email.trim()) {
-    alert("Email is required.");
-    return;
+    if (!email.trim()) {
+      alert("Email is required.");
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+
+    if (!password.trim()) {
+      alert("Password is required.");
+      return;
+    }
+
+    if (password.length < 8) {
+      alert("Password must be at least 8 characters.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await login(email, password);
+
+      navigate("/dashboard");
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error.response?.data?.detail ??
+          "Invalid email or password."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
-
-  if (!emailRegex.test(email)) {
-    alert("Please enter a valid email address.");
-    return;
-  }
-
-  if (!password.trim()) {
-    alert("Password is required.");
-    return;
-  }
-
-  if (password.length < 8) {
-    alert("Password must be at least 8 characters.");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    await login(email, password);
-
-    navigate("/dashboard");
-
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error.response?.data?.detail ??
-      "Invalid email or password."
-    );
-
-  } finally {
-    setLoading(false);
-  }
-}
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-900">
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
 
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-bold text-foreground">
         Welcome Back
       </h1>
 
-      <p className="mt-2 text-slate-500">
+      <p className="mt-2 text-muted-foreground">
         Login to your account
       </p>
 
@@ -75,61 +69,101 @@ export default function LoginPage() {
         className="mt-8 space-y-5"
       >
         <div>
-
-          <label>Email</label>
+          <label className="text-sm font-medium text-foreground">
+            Email
+          </label>
 
           <input
-            className="mt-2 w-full rounded-lg border p-3"
+            required
             type="email"
             value={email}
-            onChange={(e)=>setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
+            className="
+              mt-2
+              w-full
+              rounded-lg
+              border
+              border-border
+              bg-background
+              px-4
+              py-3
+              text-foreground
+              placeholder:text-muted-foreground
+              focus:border-primary
+              focus:outline-none
+              focus:ring-2
+              focus:ring-primary/20
+            "
           />
-
         </div>
 
         <div>
-
-          <label>Password</label>
+          <label className="text-sm font-medium text-foreground">
+            Password
+          </label>
 
           <input
-            className="mt-2 w-full rounded-lg border p-3"
+            required
             type="password"
             value={password}
-            onChange={(e)=>setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
+            className="
+              mt-2
+              w-full
+              rounded-lg
+              border
+              border-border
+              bg-background
+              px-4
+              py-3
+              text-foreground
+              placeholder:text-muted-foreground
+              focus:border-primary
+              focus:outline-none
+              focus:ring-2
+              focus:ring-primary/20
+            "
           />
-
         </div>
 
         <button
-          className="w-full rounded-lg bg-indigo-600 p-3 font-semibold text-white"
+          type="submit"
           disabled={loading}
+          className="
+            w-full
+            rounded-lg
+            bg-primary
+            py-3
+            font-semibold
+            text-primary-foreground
+            transition
+            hover:opacity-90
+            disabled:cursor-not-allowed
+            disabled:opacity-60
+          "
         >
           {loading ? "Signing In..." : "Login"}
         </button>
       </form>
 
       <div className="mt-6 text-center">
-
         <Link
           to="/forgot-password"
-          className="text-indigo-600"
+          className="text-primary hover:underline"
         >
           Forgot Password?
         </Link>
-
       </div>
 
-      <div className="mt-3 text-center">
-
+      <div className="mt-3 text-center text-foreground">
         Don't have an account?
 
         <Link
-          className="ml-2 text-indigo-600"
           to="/register"
+          className="ml-2 text-primary hover:underline"
         >
           Register
         </Link>
-
       </div>
 
     </div>

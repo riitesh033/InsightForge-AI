@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Base ---------- */
+
 html {
   scroll-behavior: smooth;
 }
@@ -13,4 +15,58 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* ---------- Light Theme ---------- */
+
+@layer base {
+  :root {
+    --background: 255 255 255;
+    --foreground: 15 23 42;
+
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
+
+    --primary: 79 70 229;
+    --primary-foreground: 255 255 255;
+
+    --secondary: 241 245 249;
+    --secondary-foreground: 15 23 42;
+
+    --muted: 248 250 252;
+    --muted-foreground: 100 116 139;
+
+    --border: 226 232 240;
+
+    --accent: 241 245 249;
+    --accent-foreground: 15 23 42;
+  }
+
+  /* ---------- Dark Theme ---------- */
+
+  .dark {
+    --background: 2 6 23;
+    --foreground: 248 250 252;
+
+    --card: 15 23 42;
+    --card-foreground: 248 250 252;
+
+    --primary: 99 102 241;
+    --primary-foreground: 255 255 255;
+
+    --secondary: 30 41 59;
+    --secondary-foreground: 248 250 252;
+
+    --muted: 30 41 59;
+    --muted-foreground: 148 163 184;
+
+    --border: 51 65 85;
+
+    --accent: 30 41 59;
+    --accent-foreground: 248 250 252;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-300;
+  }
 }

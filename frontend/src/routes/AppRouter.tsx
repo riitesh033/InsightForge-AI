@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import LandingLayout from "@/layouts/LandingLayout";
 import AuthLayout from "@/layouts/AuthLayout";
@@ -15,9 +15,10 @@ import ProtectedRoute from "./ProtectedRoute";
 export default function AppRouter() {
   return (
     <Routes>
+
       {/* Landing */}
       <Route element={<LandingLayout />}>
-        <Route path="/" element={<LandingPage />} />
+        <Route index element={<LandingPage />} />
       </Route>
 
       {/* Authentication */}
@@ -30,7 +31,7 @@ export default function AppRouter() {
         />
       </Route>
 
-      {/* Dashboard */}
+      {/* Protected Dashboard */}
       <Route
         element={
           <ProtectedRoute>
@@ -43,6 +44,19 @@ export default function AppRouter() {
           element={<DashboardPage />}
         />
       </Route>
+
+      {/* Temporary Demo Route */}
+      <Route
+        path="/demo"
+        element={<Navigate to="/" replace />}
+      />
+
+      {/* 404 */}
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
+      />
+
     </Routes>
   );
 }
