@@ -1,7 +1,7 @@
-/** @type {import('tailwindcss').Config} */
+import type { Config } from "tailwindcss";
 
-module.exports = {
-  darkMode: "class",
+const config: Config = {
+  darkMode: ["class"],
 
   content: [
     "./index.html",
@@ -30,6 +30,10 @@ module.exports = {
           "rgb(var(--muted-foreground) / <alpha-value>)",
 
         border: "rgb(var(--border) / <alpha-value>)",
+
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        "accent-foreground":
+          "rgb(var(--accent-foreground) / <alpha-value>)",
       },
 
       boxShadow: {
@@ -40,12 +44,10 @@ module.exports = {
       maxWidth: {
         content: "1280px",
       },
-
-      transitionTimingFunction: {
-        smooth: "cubic-bezier(.4,0,.2,1)",
-      },
     },
   },
 
   plugins: [],
 };
+
+export default config;

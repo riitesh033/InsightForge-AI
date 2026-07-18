@@ -10,7 +10,7 @@ import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
 
-import DashboardPage from "@/pages/Dashboard/DashboardPage";
+import DashboardPage from "@/pages/Dashboard/DashBoardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
 import DatasetsPage from "@/pages/Dashboard/DatasetsPage";
 import ReportsPage from "@/pages/Dashboard/ReportsPage";
