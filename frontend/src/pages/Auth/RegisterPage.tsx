@@ -1,6 +1,8 @@
 import { useState, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import { useAuth } from "@/hooks/useAuth";
+import { showSuccess, showError } from "@/lib/toast";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -9,6 +11,7 @@ export default function RegisterPage() {
   const [full_name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -16,43 +19,49 @@ export default function RegisterPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!full_name.trim()) {
-      alert("Full name is required.");
+      showError("Full name is required.");
       return;
     }
 
     if (!email.trim()) {
-      alert("Email is required.");
+      showError("Email is required.");
       return;
     }
 
     if (!emailRegex.test(email)) {
-      alert("Please enter a valid email address.");
+      showError("Please enter a valid email address.");
       return;
     }
 
     if (!password.trim()) {
-      alert("Password is required.");
+      showError("Password is required.");
       return;
     }
 
     if (password.length < 8) {
-      alert("Password must be at least 8 characters.");
+      showError("Password must be at least 8 characters.");
       return;
     }
 
     try {
+      setLoading(true);
+
       await register(full_name, email, password);
 
-      alert("Registration Successful!");
+      showSuccess("Registration successful!");
 
       navigate("/login");
+
     } catch (error: any) {
       console.error(error);
 
-      alert(
+      showError(
         error.response?.data?.detail ??
-        "Registration Failed"
+        "Registration failed."
       );
+
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -71,6 +80,7 @@ export default function RegisterPage() {
         onSubmit={handleSubmit}
         className="mt-8 space-y-5"
       >
+
         <div>
           <label className="text-sm font-medium text-foreground">
             Full Name
@@ -81,6 +91,7 @@ export default function RegisterPage() {
             type="text"
             value={full_name}
             onChange={(e) => setName(e.target.value)}
+            placeholder="John Doe"
             className="
               mt-2
               w-full
@@ -97,7 +108,6 @@ export default function RegisterPage() {
               focus:ring-2
               focus:ring-primary/20
             "
-            placeholder="John Doe"
           />
         </div>
 
@@ -111,6 +121,7 @@ export default function RegisterPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
             className="
               mt-2
               w-full
@@ -127,7 +138,6 @@ export default function RegisterPage() {
               focus:ring-2
               focus:ring-primary/20
             "
-            placeholder="you@example.com"
           />
         </div>
 
@@ -141,6 +151,7 @@ export default function RegisterPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="Minimum 8 characters"
             className="
               mt-2
               w-full
@@ -157,12 +168,12 @@ export default function RegisterPage() {
               focus:ring-2
               focus:ring-primary/20
             "
-            placeholder="Minimum 8 characters"
           />
         </div>
 
         <button
           type="submit"
+          disabled={loading}
           className="
             w-full
             rounded-lg
@@ -170,12 +181,17 @@ export default function RegisterPage() {
             py-3
             font-semibold
             text-primary-foreground
-            transition
+            transition-all
+            duration-200
             hover:opacity-90
+            hover:shadow-lg
+            disabled:cursor-not-allowed
+            disabled:opacity-60
           "
         >
-          Register
+          {loading ? "Creating Account..." : "Register"}
         </button>
+
       </form>
 
       <div className="mt-6 text-center text-foreground">

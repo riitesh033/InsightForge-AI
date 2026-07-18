@@ -5,10 +5,17 @@ import AuthLayout from "@/layouts/AuthLayout";
 import DashboardLayout from "@/layouts/DashBoardLayout";
 
 import LandingPage from "@/pages/Landing/LandingPage";
+
 import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
-import DashboardPage from "@/pages/Dashboard/DashBoardPage";
+
+import DashboardPage from "@/pages/Dashboard/DashboardPage";
+import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
+import DatasetsPage from "@/pages/Dashboard/DatasetsPage";
+import ReportsPage from "@/pages/Dashboard/ReportsPage";
+import AIChatPage from "@/pages/Dashboard/AIChatPage";
+import SettingsPage from "@/pages/Dashboard/SettingsPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -31,21 +38,44 @@ export default function AppRouter() {
         />
       </Route>
 
-      {/* Protected Dashboard */}
+      {/* Dashboard */}
       <Route
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <DashboardLayout />
           </ProtectedRoute>
         }
       >
+        <Route index element={<DashboardPage />} />
+
         <Route
-          path="/dashboard"
-          element={<DashboardPage />}
+          path="upload"
+          element={<UploadDatasetPage />}
+        />
+
+        <Route
+          path="datasets"
+          element={<DatasetsPage />}
+        />
+
+        <Route
+          path="reports"
+          element={<ReportsPage />}
+        />
+
+        <Route
+          path="ai-chat"
+          element={<AIChatPage />}
+        />
+
+        <Route
+          path="settings"
+          element={<SettingsPage />}
         />
       </Route>
 
-      {/* Temporary Demo Route */}
+      {/* Live Demo */}
       <Route
         path="/demo"
         element={<Navigate to="/" replace />}

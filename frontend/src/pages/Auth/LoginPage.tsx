@@ -1,6 +1,8 @@
 import { useState, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import { useAuth } from "@/hooks/useAuth";
+import { showSuccess, showError } from "@/lib/toast";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -16,22 +18,22 @@ export default function LoginPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!email.trim()) {
-      alert("Email is required.");
+      showError("Email is required.");
       return;
     }
 
     if (!emailRegex.test(email)) {
-      alert("Please enter a valid email address.");
+      showError("Please enter a valid email address.");
       return;
     }
 
     if (!password.trim()) {
-      alert("Password is required.");
+      showError("Password is required.");
       return;
     }
 
     if (password.length < 8) {
-      alert("Password must be at least 8 characters.");
+      showError("Password must be at least 8 characters.");
       return;
     }
 
@@ -40,14 +42,18 @@ export default function LoginPage() {
 
       await login(email, password);
 
+      showSuccess("Welcome back!");
+
       navigate("/dashboard");
+
     } catch (error: any) {
       console.error(error);
 
-      alert(
+      showError(
         error.response?.data?.detail ??
-          "Invalid email or password."
+        "Invalid email or password."
       );
+
     } finally {
       setLoading(false);
     }
@@ -76,6 +82,7 @@ export default function LoginPage() {
           <input
             required
             type="email"
+            placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="
@@ -105,6 +112,7 @@ export default function LoginPage() {
           <input
             required
             type="password"
+            placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="
@@ -136,8 +144,10 @@ export default function LoginPage() {
             py-3
             font-semibold
             text-primary-foreground
-            transition
+            transition-all
+            duration-200
             hover:opacity-90
+            hover:shadow-lg
             disabled:cursor-not-allowed
             disabled:opacity-60
           "
