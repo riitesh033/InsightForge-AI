@@ -10,12 +10,14 @@ import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
 
-import DashboardPage from "@/pages/Dashboard/DashBoardPage";
+import DashboardPage from "@/pages/Dashboard/DashboardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
 import DatasetsPage from "@/pages/Dashboard/DatasetsPage";
 import ReportsPage from "@/pages/Dashboard/ReportsPage";
 import AIChatPage from "@/pages/Dashboard/AIChatPage";
 import SettingsPage from "@/pages/Dashboard/SettingsPage";
+
+import NotFoundPage from "@/pages/Error/NotFoundPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -25,7 +27,7 @@ export default function AppRouter() {
 
       {/* Landing */}
       <Route element={<LandingLayout />}>
-        <Route index element={<LandingPage />} />
+        <Route path="/" element={<LandingPage />} />
       </Route>
 
       {/* Authentication */}
@@ -84,7 +86,7 @@ export default function AppRouter() {
       {/* 404 */}
       <Route
         path="*"
-        element={<Navigate to="/" replace />}
+        element={<NotFoundPage />}
       />
 
     </Routes>
