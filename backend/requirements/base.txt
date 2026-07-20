@@ -1,13 +1,69 @@
+# ==========================
+# FastAPI
+# ==========================
 fastapi
 uvicorn[standard]
+
+# ==========================
+# Validation & Settings
+# ==========================
 pydantic
 pydantic-settings
+python-dotenv
+email-validator
+
+# ==========================
+# Database
+# ==========================
 sqlalchemy
 psycopg2-binary
 alembic
-python-dotenv
-email-validator
+
+# ==========================
+# Authentication
+# ==========================
+python-jose[cryptography]
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-python-jose[cryptography]
+
+# ==========================
+# File Upload
+# ==========================
 python-multipart
+aiofiles
+
+# ==========================
+# Data Processing
+# ==========================
+pandas
+numpy
+openpyxl
+xlrd
+
+# ==========================
+# Machine Learning
+# ==========================
+scikit-learn
+scipy
+
+# ==========================
+# Visualization
+# ==========================
+matplotlib
+plotly
+
+# ==========================
+# PDF Reports
+# ==========================
+reportlab
+
+# ==========================
+# HTTP Client
+# ==========================
+httpx
+
+# ==========================
+# Testing
+# ==========================
+pytest
+pytest-asyncio

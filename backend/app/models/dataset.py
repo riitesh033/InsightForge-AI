@@ -5,7 +5,6 @@ from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
-
 from sqlalchemy.orm import relationship
 
 from app.db.base_models import Base
@@ -21,17 +20,17 @@ class Dataset(Base):
     )
 
     filename = Column(
-        String,
+        String(255),
         nullable=False,
     )
 
     original_filename = Column(
-        String,
+        String(255),
         nullable=False,
     )
 
     file_type = Column(
-        String,
+        String(20),
         nullable=False,
     )
 
@@ -41,18 +40,32 @@ class Dataset(Base):
     )
 
     file_path = Column(
-        String,
+        String(500),
         nullable=False,
+    )
+
+    rows = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    columns = Column(
+        Integer,
+        nullable=False,
+        default=0,
     )
 
     uploaded_at = Column(
         DateTime,
         default=datetime.utcnow,
+        nullable=False,
     )
 
     owner_id = Column(
         Integer,
-        ForeignKey("users.id"),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     owner = relationship(

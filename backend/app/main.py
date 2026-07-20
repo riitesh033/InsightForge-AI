@@ -21,10 +21,16 @@ app.include_router(
     prefix=settings.API_V1_STR,
 )
 
+
 @app.get("/")
 def root():
-    return {"message": "InsightForge AI Backend"}
+    return {
+        "message": "Welcome to InsightForge AI API"
+    }
+
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy"
+    }

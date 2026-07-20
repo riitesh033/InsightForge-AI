@@ -1,18 +1,28 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_models import Base
+
+if TYPE_CHECKING:
+    from app.models.dataset import Dataset
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
-    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    full_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
 
     email: Mapped[str] = mapped_column(
         String(255),
@@ -51,8 +61,8 @@ class User(Base):
         nullable=False,
     )
 
-    datasets = relationship(
-    "Dataset",
-    back_populates="owner",
-    cascade="all, delete",
-)
+    datasets: Mapped[list["Dataset"]] = relationship(
+        "Dataset",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
