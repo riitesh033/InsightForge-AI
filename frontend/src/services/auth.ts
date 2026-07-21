@@ -1,9 +1,8 @@
 import api from "./api";
 
-export interface LoginData {
-  email: string;
-  password: string;
-}
+// =========================
+// Interfaces
+// =========================
 
 export interface RegisterData {
   full_name: string;
@@ -11,7 +10,27 @@ export interface RegisterData {
   password: string;
 }
 
-export async function register(data: RegisterData) {
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+export interface ForgotPasswordData {
+  email: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
+// =========================
+// Register
+// =========================
+
+export async function register(
+  data: RegisterData
+): Promise<any> {
   const response = await api.post(
     "/api/v1/auth/register",
     data
@@ -20,21 +39,42 @@ export async function register(data: RegisterData) {
   return response.data;
 }
 
-export async function login(data: LoginData) {
-  const form = new URLSearchParams();
+// =========================
+// Login
+// =========================
 
-  form.append("username", data.email);
-  form.append("password", data.password);
+export async function login(
+  data: LoginData
+): Promise<LoginResponse> {
+  const formData = new URLSearchParams();
+
+  formData.append("username", data.email);
+  formData.append("password", data.password);
 
   const response = await api.post(
     "/api/v1/auth/login",
-    form,
+    formData,
     {
       headers: {
         "Content-Type":
           "application/x-www-form-urlencoded",
       },
     }
+  );
+
+  return response.data;
+}
+
+// =========================
+// Forgot Password
+// =========================
+
+export async function forgotPassword(
+  data: ForgotPasswordData
+): Promise<any> {
+  const response = await api.post(
+    "/api/v1/auth/forgot-password",
+    data
   );
 
   return response.data;

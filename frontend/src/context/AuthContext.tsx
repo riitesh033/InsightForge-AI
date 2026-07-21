@@ -1,30 +1,30 @@
 import {
   createContext,
+  ReactNode,
   useEffect,
   useState,
-  ReactNode,
 } from "react";
 
-import {
-  LoginResponse,
-  User,
-  AuthContextType,
-} from "@/types/auth";
+import api from "@/services/api";
 
-import {
-  saveToken,
-  getToken,
-  removeToken,
-  saveUser,
-  getUser,
-  removeUser,
-} from "@/utils/storage";
-
-// Rename imported functions
 import {
   login as loginService,
   register as registerService,
 } from "@/services/auth";
+
+import {
+  AuthContextType,
+  LoginResponse,
+  User,
+} from "@/types/auth";
+
+import {
+  clearAuthStorage,
+  getToken,
+  getUser,
+  saveToken,
+  saveUser,
+} from "@/utils/storage";
 
 export const AuthContext =
   createContext<AuthContextType>(
@@ -53,6 +53,9 @@ export function AuthProvider({
 
     if (storedToken) {
       setToken(storedToken);
+
+      api.defaults.headers.common.Authorization =
+        `Bearer ${storedToken}`;
     }
 
     if (storedUser) {
@@ -73,7 +76,29 @@ export function AuthProvider({
       });
 
     saveToken(response.access_token);
+
     setToken(response.access_token);
+
+    api.defaults.headers.common.Authorization =
+      `Bearer ${response.access_token}`;
+
+    /*
+      Later we will fetch the current user
+      from the backend.
+
+      For now we only store the email.
+    */
+
+    const currentUser: User = {
+      id: 0,
+      full_name: "",
+      email,
+      is_active: true,
+    };
+
+    saveUser(currentUser);
+
+    setUser(currentUser);
   }
 
   async function register(
@@ -89,11 +114,12 @@ export function AuthProvider({
   }
 
   function logout() {
-    removeToken();
-    removeUser();
+    clearAuthStorage();
 
-    setToken(null);
+    delete api.defaults.headers.common.Authorization;
+
     setUser(null);
+    setToken(null);
   }
 
   return (
