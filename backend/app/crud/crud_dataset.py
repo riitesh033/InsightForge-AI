@@ -7,7 +7,7 @@ from app.schemas.dataset import DatasetCreate
 def create_dataset(
     db: Session,
     dataset: DatasetCreate,
-) -> Dataset:
+):
     db_dataset = Dataset(
         filename=dataset.filename,
         original_filename=dataset.original_filename,
@@ -26,6 +26,16 @@ def create_dataset(
     return db_dataset
 
 
+def get_datasets(
+    db: Session,
+):
+    return (
+        db.query(Dataset)
+        .order_by(Dataset.uploaded_at.desc())
+        .all()
+    )
+
+
 def get_dataset(
     db: Session,
     dataset_id: int,
@@ -37,16 +47,17 @@ def get_dataset(
     )
 
 
-def get_user_datasets(
+def rename_dataset(
     db: Session,
-    owner_id: int,
+    dataset: Dataset,
+    new_name: str,
 ):
-    return (
-        db.query(Dataset)
-        .filter(Dataset.owner_id == owner_id)
-        .order_by(Dataset.uploaded_at.desc())
-        .all()
-    )
+    dataset.original_filename = new_name
+
+    db.commit()
+    db.refresh(dataset)
+
+    return dataset
 
 
 def delete_dataset(
