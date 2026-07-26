@@ -7,7 +7,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.crud.crud_dataset import create_dataset
-from app.schemas.dataset import DatasetCreate
+from app.models.dataset import Dataset
 
 
 UPLOAD_DIR = Path("app/uploads/datasets")
@@ -61,7 +61,6 @@ def upload_dataset(
     try:
         if extension == ".csv":
             dataframe = pd.read_csv(save_path)
-
         else:
             dataframe = pd.read_excel(save_path)
 
@@ -73,7 +72,7 @@ def upload_dataset(
             detail="Unable to read dataset.",
         )
 
-    dataset = DatasetCreate(
+    dataset = Dataset(
         filename=unique_filename,
         original_filename=file.filename,
         file_type=extension.replace(".", ""),

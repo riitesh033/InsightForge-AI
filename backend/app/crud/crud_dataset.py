@@ -1,36 +1,26 @@
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset
-from app.schemas.dataset import DatasetCreate
 
 
 def create_dataset(
     db: Session,
-    dataset: DatasetCreate,
+    dataset: Dataset,
 ):
-    db_dataset = Dataset(
-        filename=dataset.filename,
-        original_filename=dataset.original_filename,
-        file_type=dataset.file_type,
-        file_size=dataset.file_size,
-        file_path=dataset.file_path,
-        rows=dataset.rows,
-        columns=dataset.columns,
-        owner_id=dataset.owner_id,
-    )
-
-    db.add(db_dataset)
+    db.add(dataset)
     db.commit()
-    db.refresh(db_dataset)
+    db.refresh(dataset)
 
-    return db_dataset
+    return dataset
 
 
 def get_datasets(
     db: Session,
+    owner_id: int,
 ):
     return (
         db.query(Dataset)
+        .filter(Dataset.owner_id == owner_id)
         .order_by(Dataset.uploaded_at.desc())
         .all()
     )
@@ -39,10 +29,14 @@ def get_datasets(
 def get_dataset(
     db: Session,
     dataset_id: int,
+    owner_id: int,
 ):
     return (
         db.query(Dataset)
-        .filter(Dataset.id == dataset_id)
+        .filter(
+            Dataset.id == dataset_id,
+            Dataset.owner_id == owner_id,
+        )
         .first()
     )
 

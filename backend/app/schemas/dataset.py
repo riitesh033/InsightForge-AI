@@ -24,3 +24,6 @@ class DatasetResponse(DatasetBase):
     uploaded_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class DatasetRename(BaseModel):
+    original_filename: str
