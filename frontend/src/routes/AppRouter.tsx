@@ -24,16 +24,26 @@ import ProtectedRoute from "./ProtectedRoute";
 export default function AppRouter() {
   return (
     <Routes>
-
       {/* Landing */}
       <Route element={<LandingLayout />}>
-        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/"
+          element={<LandingPage />}
+        />
       </Route>
 
       {/* Authentication */}
       <Route element={<AuthLayout />}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/login"
+          element={<LoginPage />}
+        />
+
+        <Route
+          path="/register"
+          element={<RegisterPage />}
+        />
+
         <Route
           path="/forgot-password"
           element={<ForgotPasswordPage />}
@@ -49,7 +59,11 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        {/* Dashboard Home */}
+        <Route
+          index
+          element={<DashboardPage />}
+        />
 
         <Route
           path="upload"
@@ -88,7 +102,6 @@ export default function AppRouter() {
         path="*"
         element={<NotFoundPage />}
       />
-
     </Routes>
   );
 }

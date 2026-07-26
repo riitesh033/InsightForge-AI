@@ -20,30 +20,21 @@ export default function DashboardLayout() {
   };
 
   const pageSubtitles: Record<string, string> = {
-    "/dashboard":
-      "Welcome to InsightForge AI",
-    "/dashboard/upload":
-      "Upload CSV or Excel datasets for AI analysis.",
-    "/dashboard/datasets":
-      "Manage your uploaded datasets.",
-    "/dashboard/reports":
-      "View AI-generated reports.",
-    "/dashboard/ai-chat":
-      "Interact with your AI Data Analyst.",
-    "/dashboard/settings":
-      "Manage your account settings.",
+    "/dashboard": "Welcome to InsightForge AI",
+    "/dashboard/upload": "Upload CSV or Excel datasets for AI analysis.",
+    "/dashboard/datasets": "Manage your uploaded datasets.",
+    "/dashboard/reports": "View AI-generated reports.",
+    "/dashboard/ai-chat": "Interact with your AI Data Analyst.",
+    "/dashboard/settings": "Manage your account settings.",
   };
 
-  const title =
-    pageTitles[location.pathname] ?? "Dashboard";
-
+  const title = pageTitles[location.pathname] ?? "Dashboard";
   const subtitle =
     pageSubtitles[location.pathname] ??
     "Welcome to InsightForge AI";
 
   return (
     <div className="flex min-h-screen bg-background">
-
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar />
@@ -57,7 +48,6 @@ export default function DashboardLayout() {
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
-
         <TopNavbar
           title={title}
           subtitle={subtitle}
@@ -67,9 +57,7 @@ export default function DashboardLayout() {
         <main className="flex-1 overflow-y-auto bg-background p-6">
           <Outlet />
         </main>
-
       </div>
-
     </div>
   );
 }

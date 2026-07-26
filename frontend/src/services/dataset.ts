@@ -32,11 +32,12 @@ export async function uploadDataset(
       onUploadProgress: (event) => {
         if (!event.total || !onProgress) return;
 
-        const progress = Math.round(
-          (event.loaded * 100) / event.total
+        onProgress(
+          Math.round(
+            (event.loaded * 100) /
+            event.total
+          )
         );
-
-        onProgress(progress);
       },
     }
   );
@@ -45,12 +46,16 @@ export async function uploadDataset(
 }
 
 export async function getDatasets() {
-  const response = await api.get("/api/v1/datasets");
+  const response = await api.get(
+    "/api/v1/datasets"
+  );
 
   return response.data as Dataset[];
 }
 
-export async function getDataset(id: number) {
+export async function getDataset(
+  id: number
+) {
   const response = await api.get(
     `/api/v1/datasets/${id}`
   );
@@ -69,24 +74,22 @@ export async function renameDataset(
     }
   );
 
-  return response.data;
+  return response.data as Dataset;
 }
 
-export async function deleteDataset(id: number) {
-  const response = await api.delete(
+export async function deleteDataset(
+  id: number
+) {
+  await api.delete(
     `/api/v1/datasets/${id}`
   );
-
-  return response.data;
 }
 
-export async function downloadDataset(id: number) {
-  const response = await api.get(
-    `/api/v1/datasets/${id}/download`,
-    {
-      responseType: "blob",
-    }
+export function downloadDataset(
+  id: number
+) {
+  window.open(
+    `http://localhost:8000/api/v1/datasets/${id}/download`,
+    "_blank"
   );
-
-  return response.data;
 }

@@ -1,39 +1,49 @@
 import { useEffect, useState } from "react";
 
-import { Database } from "lucide-react";
+import DatasetCard from "@/components/dashboard/DatasetCard";
 
-import getDatasets from "@/services/dataset";
-
-import type { Dataset } from "@/services/dataset";
+import {
+  Dataset,
+  getDatasets,
+} from "@/services/dataset";
 
 export default function DatasetsPage() {
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const [datasets, setDatasets] =
+    useState<Dataset[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
 
   useEffect(() => {
     loadDatasets();
   }, []);
 
   async function loadDatasets() {
+
     try {
-      const data = await getDatasets();
+
+      const data =
+        await getDatasets();
 
       setDatasets(data);
 
-    } catch (error) {
-      console.error(error);
-
     } finally {
+
       setLoading(false);
+
     }
+
   }
 
   if (loading) {
+
     return (
-      <div className="p-8">
-        Loading datasets...
-      </div>
+      <h2 className="text-lg">
+        Loading...
+      </h2>
     );
+
   }
 
   return (
@@ -45,23 +55,18 @@ export default function DatasetsPage() {
           My Datasets
         </h1>
 
-        <p className="text-muted-foreground mt-2">
-          Manage all uploaded datasets.
+        <p className="text-muted-foreground">
+          Manage your uploaded datasets.
         </p>
 
       </div>
 
       {datasets.length === 0 ? (
 
-        <div className="rounded-xl border bg-card p-12 text-center">
+        <div className="rounded-xl border border-dashed p-16 text-center">
 
-          <Database
-            size={64}
-            className="mx-auto text-muted-foreground"
-          />
-
-          <h2 className="mt-5 text-xl font-semibold">
-            No datasets found
+          <h2 className="text-xl font-semibold">
+            No datasets uploaded
           </h2>
 
           <p className="mt-2 text-muted-foreground">
@@ -72,12 +77,22 @@ export default function DatasetsPage() {
 
       ) : (
 
-        <div>
-          Dataset list coming next...
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+
+          {datasets.map((dataset) => (
+
+            <DatasetCard
+              key={dataset.id}
+              dataset={dataset}
+            />
+
+          ))}
+
         </div>
 
       )}
 
     </div>
   );
+
 }
