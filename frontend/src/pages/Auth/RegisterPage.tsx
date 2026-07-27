@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/hooks/useAuth";
 import { showSuccess, showError } from "@/lib/toast";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -146,9 +147,8 @@ export default function RegisterPage() {
             Password
           </label>
 
-          <input
+          <PasswordInput
             required
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Minimum 8 characters"

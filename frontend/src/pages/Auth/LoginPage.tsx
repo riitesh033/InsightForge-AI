@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { showSuccess, showError } from "@/lib/toast";
@@ -10,6 +11,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -109,29 +111,55 @@ export default function LoginPage() {
             Password
           </label>
 
-          <input
-            required
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="
-              mt-2
-              w-full
-              rounded-lg
-              border
-              border-border
-              bg-background
-              px-4
-              py-3
-              text-foreground
-              placeholder:text-muted-foreground
-              focus:border-primary
-              focus:outline-none
-              focus:ring-2
-              focus:ring-primary/20
-            "
-          />
+          <div className="relative mt-2">
+            <input
+              required
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="
+                w-full
+                rounded-lg
+                border
+                border-border
+                bg-background
+                px-4
+                py-3
+                pr-12
+                text-foreground
+                placeholder:text-muted-foreground
+                focus:border-primary
+                focus:outline-none
+                focus:ring-2
+                focus:ring-primary/20
+              "
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="
+                absolute
+                right-3
+                top-1/2
+                -translate-y-1/2
+                text-muted-foreground
+                transition-colors
+                hover:text-foreground
+                focus:outline-none
+              "
+              aria-label={
+                showPassword ? "Hide password" : "Show password"
+              }
+            >
+              {showPassword ? (
+                <EyeOff size={20} />
+              ) : (
+                <Eye size={20} />
+              )}
+            </button>
+          </div>
         </div>
 
         <button
@@ -179,3 +207,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
