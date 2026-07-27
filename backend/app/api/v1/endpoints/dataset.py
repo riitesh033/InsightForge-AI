@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import get_current_user
 from app.crud.crud_dataset import (
-    create_dataset,
     delete_dataset,
     get_dataset,
     get_datasets,
@@ -19,14 +18,7 @@ from app.crud.crud_dataset import (
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.dataset import (
-    DatasetResponse,
-    RenameDataset,
-)
-from app.schemas.dataset import (
-    DatasetRename,
-    DatasetResponse,
-)
+from app.schemas.dataset import DatasetRename, DatasetResponse
 from app.services.dataset import upload_dataset
 
 router = APIRouter()
@@ -85,6 +77,7 @@ def get_dataset_by_id(
 
     return dataset
 
+
 @router.patch(
     "/{dataset_id}",
     response_model=DatasetResponse,
@@ -103,61 +96,6 @@ def rename_dataset_route(
 
     if dataset is None:
         raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
-
-    return rename_dataset(
-        db=db,
-        dataset=dataset,
-        new_name=payload.original_filename,
-    )
-
-
-@router.delete(
-    "/{dataset_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def delete_dataset_route(
-    dataset_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
-    )
-
-    if dataset is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
-
-    delete_dataset(
-        db=db,
-        dataset=dataset,
-    )
-
-@router.patch(
-    "/{dataset_id}",
-    response_model=DatasetResponse,
-)
-def rename_dataset_route(
-    dataset_id: int,
-    body: RenameDataset,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
-    )
-
-    if dataset is None:
-        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dataset not found.",
         )
@@ -165,7 +103,7 @@ def rename_dataset_route(
     return rename_dataset(
         db=db,
         dataset=dataset,
-        new_name=body.name,
+        new_name=payload.original_filename,
     )
 
 
