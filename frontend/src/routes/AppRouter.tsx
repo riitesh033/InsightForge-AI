@@ -20,6 +20,7 @@ import SettingsPage from "@/pages/Dashboard/SettingsPage";
 import NotFoundPage from "@/pages/Error/NotFoundPage";
 
 import ProtectedRoute from "./ProtectedRoute";
+import AnalysisPage from "@/pages/Dashboard/AnalysisPage";
 
 export default function AppRouter() {
   return (
@@ -73,6 +74,11 @@ export default function AppRouter() {
         <Route
           path="datasets"
           element={<DatasetsPage />}
+        />
+
+        <Route
+          path="analysis/:id"
+          element={<AnalysisPage />}
         />
 
         <Route
