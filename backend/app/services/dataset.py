@@ -7,8 +7,9 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.crud.crud_dataset import create_dataset
+from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-
+from app.services.profiling import profile_dataframe
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,6 +42,7 @@ def upload_dataset(
             detail="Only CSV, XLSX and XLS files are supported.",
         )
 
+    # File size
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
@@ -51,16 +53,20 @@ def upload_dataset(
             detail="Maximum upload size is 20 MB.",
         )
 
+    # Generate unique filename
     unique_filename = f"{uuid4().hex}{extension}"
 
     save_path = UPLOAD_DIR / unique_filename
 
+    # Save uploaded file
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Read dataset
     try:
         if extension == ".csv":
             dataframe = pd.read_csv(save_path)
+
         else:
             dataframe = pd.read_excel(save_path)
 
@@ -72,6 +78,19 @@ def upload_dataset(
             detail="Unable to read dataset.",
         )
 
+    # Generate profile
+    try:
+        analysis_data = profile_dataframe(dataframe)
+
+    except Exception:
+        save_path.unlink(missing_ok=True)
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to profile dataset.",
+        )
+
+    # Save dataset metadata
     dataset = Dataset(
         filename=unique_filename,
         original_filename=file.filename,
@@ -83,7 +102,25 @@ def upload_dataset(
         owner_id=owner_id,
     )
 
-    return create_dataset(
+    dataset = create_dataset(
         db=db,
         dataset=dataset,
     )
+
+    # Save analysis
+    analysis = Analysis(
+        dataset_id=dataset.id,
+        summary=analysis_data["summary"],
+        column_info=analysis_data["column_info"],
+        statistics=analysis_data["statistics"],
+        missing_values=analysis_data["missing_values"],
+        duplicates=analysis_data["duplicates"],
+        correlations=analysis_data["correlations"],
+        outliers=analysis_data["outliers"],
+    )
+
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return dataset

@@ -3,6 +3,17 @@ from sqlalchemy.orm import Session
 from app.models.analysis import Analysis
 
 
+def create_analysis(
+    db: Session,
+    analysis: Analysis,
+):
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return analysis
+
+
 def get_analysis(
     db: Session,
     dataset_id: int,
@@ -16,28 +27,19 @@ def get_analysis(
     )
 
 
-def create_analysis(
-    db: Session,
-    analysis: Analysis,
-):
-    db.add(analysis)
-    db.commit()
-    db.refresh(analysis)
-
-    return analysis
-
-
 def delete_analysis(
     db: Session,
     dataset_id: int,
 ):
     analysis = get_analysis(
-        db,
-        dataset_id,
+        db=db,
+        dataset_id=dataset_id,
     )
 
-    if analysis:
-        db.delete(analysis)
-        db.commit()
+    if analysis is None:
+        return None
+
+    db.delete(analysis)
+    db.commit()
 
     return analysis

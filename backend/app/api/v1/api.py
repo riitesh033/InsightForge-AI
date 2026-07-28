@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.endpoints import analysis
 from app.api.v1.endpoints import auth
 from app.api.v1.endpoints import dataset
 from app.api.v1.endpoints import health
@@ -29,4 +30,10 @@ api_router.include_router(
     dataset.router,
     prefix="/datasets",
     tags=["Datasets"],
+)
+
+api_router.include_router(
+    analysis.router,
+    prefix="/analysis",
+    tags=["Analysis"],
 )
