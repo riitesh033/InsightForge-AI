@@ -7,9 +7,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import get_current_user
-from app.crud.crud_analysis import (
-    get_analysis,
-)
+from app.crud.crud_analysis import get_analysis
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.analysis import AnalysisResponse
@@ -26,10 +24,10 @@ def get_dataset_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     analysis = get_analysis(
         db=db,
         dataset_id=dataset_id,
+        owner_id=current_user.id,   # <-- Added
     )
 
     if analysis is None:

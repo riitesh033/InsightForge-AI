@@ -41,3 +41,34 @@ def generate_dataset_summary(
         )
 
     return " ".join(text)
+
+
+def calculate_quality_score(
+    analysis: dict[str, Any],
+) -> int:
+    """
+    Calculate a quality score between 0 and 100.
+    """
+
+    summary = analysis["summary"]
+
+    rows = max(summary["rows"], 1)
+    missing = summary["missing_cells"]
+    duplicates = summary["duplicate_rows"]
+
+    outlier_count = sum(
+        analysis["outliers"].values()
+    )
+
+    score = 100
+
+    # Missing values penalty (40%)
+    score -= int((missing / rows) * 40)
+
+    # Duplicate rows penalty (30%)
+    score -= int((duplicates / rows) * 30)
+
+    # Outlier penalty (30%)
+    score -= int((outlier_count / rows) * 30)
+
+    return max(score, 0)

@@ -11,6 +11,10 @@ from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 from app.services.profiling import profile_dataframe
 from app.services.insights import generate_dataset_summary
+from app.services.insights import (
+    generate_dataset_summary,
+    calculate_quality_score,
+)
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,7 +88,10 @@ def upload_dataset(
         analysis_data = profile_dataframe(dataframe)
         analysis_text = generate_dataset_summary(
          analysis_data
-    )
+        )
+        quality_score = calculate_quality_score(
+            analysis_data
+        )
 
     except Exception:
         save_path.unlink(missing_ok=True)
@@ -116,6 +123,7 @@ def upload_dataset(
         dataset_id=dataset.id,
         summary=analysis_data["summary"],
         summary_text=analysis_text,
+        quality_score=quality_score,
         column_info=analysis_data["column_info"],
         statistics=analysis_data["statistics"],
         missing_values=analysis_data["missing_values"],

@@ -5,6 +5,7 @@ from app.api.v1.endpoints import auth
 from app.api.v1.endpoints import dataset
 from app.api.v1.endpoints import health
 from app.api.v1.endpoints import users
+from app.api.v1.endpoints import analysis
 
 api_router = APIRouter()
 
@@ -30,6 +31,12 @@ api_router.include_router(
     dataset.router,
     prefix="/datasets",
     tags=["Datasets"],
+)
+
+api_router.include_router(
+    analysis.router,
+    prefix="/analysis",
+    tags=["Analysis"],
 )
 
 api_router.include_router(
