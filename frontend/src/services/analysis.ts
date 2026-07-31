@@ -3,8 +3,8 @@ import api from "./api";
 export interface Analysis {
   id: number;
   dataset_id: number;
-
   summary: Record<string, any>;
+  summary_text: string;
   column_info: any[];
   statistics: Record<string, any>;
   missing_values: Record<string, any>;

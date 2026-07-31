@@ -4,6 +4,9 @@ import { useParams } from "react-router-dom";
 import SummaryCard from "@/components/dashboard/SummaryCard";
 import ColumnTable from "@/components/dashboard/ColumnTable";
 import MissingValuesCard from "@/components/dashboard/MissingValuesCard";
+import StatisticsTable from "@/components/dashboard/StatisticsTable";
+import MissingValuesChart from "@/components/dashboard/MissingValuesChart";
+import DataTypePieChart from "@/components/dashboard/DataTypePieChart";
 
 import {
   Analysis,
@@ -100,6 +103,22 @@ export default function AnalysisPage() {
         <MissingValuesCard
           missingValues={analysis.missing_values}
         />
+
+        <StatisticsTable
+         statistics={analysis.statistics}
+        />
+
+        <div className="grid gap-6 md:grid-cols-2">
+
+          <MissingValuesChart
+            missingValues={analysis.missing_values}
+          />
+
+          <DataTypePieChart
+            columns={analysis.column_info}
+          />
+
+        </div>
 
       </div>
 
