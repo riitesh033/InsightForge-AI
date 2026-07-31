@@ -7,6 +7,10 @@ import MissingValuesCard from "@/components/dashboard/MissingValuesCard";
 import StatisticsTable from "@/components/dashboard/StatisticsTable";
 import MissingValuesChart from "@/components/dashboard/MissingValuesChart";
 import DataTypePieChart from "@/components/dashboard/DataTypePieChart";
+import CorrelationTable from "@/components/dashboard/CorrelationTable";
+import OutlierTable from "@/components/dashboard/OutlierTable";
+import AISummaryCard from "@/components/dashboard/AISummaryCard";
+import QualityScoreCard from "@/components/dashboard/QualityScoreCard";
 
 import {
   Analysis,
@@ -14,7 +18,7 @@ import {
 } from "@/services/analysis";
 
 export default function AnalysisPage() {
-  const { id } = useParams();
+  const { datasetId } = useParams();
 
   const [analysis, setAnalysis] =
     useState<Analysis | null>(null);
@@ -24,21 +28,24 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     async function load() {
-      if (!id) return;
+      if (!datasetId) return;
 
-      const data = await getAnalysis(Number(id));
-
-      setAnalysis(data);
-
-      setLoading(false);
+      try {
+        const data = await getAnalysis(Number(datasetId));
+        setAnalysis(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();
-  }, [id]);
+  }, [datasetId]);
 
   if (loading) {
     return (
-      <div className="text-center">
+      <div className="flex h-96 items-center justify-center">
         Loading...
       </div>
     );
@@ -46,7 +53,7 @@ export default function AnalysisPage() {
 
   if (!analysis) {
     return (
-      <div>
+      <div className="flex h-96 items-center justify-center">
         Analysis not found.
       </div>
     );
@@ -56,7 +63,7 @@ export default function AnalysisPage() {
 
   return (
     <div className="space-y-8">
-
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">
           Dataset Analysis
@@ -67,8 +74,8 @@ export default function AnalysisPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-
+      {/* Summary Cards */}
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           title="Rows"
           value={summary.rows}
@@ -95,33 +102,53 @@ export default function AnalysisPage() {
           title="Duplicate Rows"
           value={summary.duplicate_rows}
         />
+      </div>
 
-        <ColumnTable
-            columns={analysis.column_info}
-        />
+      {/* AI Summary */}
+      <AISummaryCard
+        summary={analysis.summary_text}
+      />
 
-        <MissingValuesCard
+      <QualityScoreCard
+        score={analysis.quality_score}
+      />
+
+      {/* Column Information */}
+      <ColumnTable
+        columns={analysis.column_info}
+      />
+
+      {/* Missing Values */}
+      <MissingValuesCard
+        missingValues={analysis.missing_values}
+      />
+
+      {/* Statistics */}
+      <StatisticsTable
+        statistics={analysis.statistics}
+      />
+
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <MissingValuesChart
           missingValues={analysis.missing_values}
         />
 
-        <StatisticsTable
-         statistics={analysis.statistics}
+        <DataTypePieChart
+          columns={analysis.column_info}
         />
-
-        <div className="grid gap-6 md:grid-cols-2">
-
-          <MissingValuesChart
-            missingValues={analysis.missing_values}
-          />
-
-          <DataTypePieChart
-            columns={analysis.column_info}
-          />
-
-        </div>
-
       </div>
 
+      {/* Correlation & Outliers */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <CorrelationTable
+          correlations={analysis.correlations}
+        />
+
+        <OutlierTable
+          outliers={analysis.outliers}
+        />
+      </div>
     </div>
   );
 }
