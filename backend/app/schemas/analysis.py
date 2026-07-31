@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 class AnalysisBase(BaseModel):
     summary: dict
+    summary_text: str
     column_info: list
     statistics: dict
     missing_values: dict

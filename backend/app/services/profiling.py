@@ -40,8 +40,7 @@ def profile_dataframe(df: pd.DataFrame):
                     df[column].nunique(dropna=True)
                 ),
                 "memory_usage": int(
-                    df[column]
-                    .memory_usage(deep=True)
+                    df[column].memory_usage(deep=True)
                 ),
             }
         )
@@ -55,6 +54,7 @@ def profile_dataframe(df: pd.DataFrame):
     missing_values = {}
 
     for column in df.columns:
+
         count = int(df[column].isna().sum())
 
         missing_values[column] = {
@@ -73,12 +73,57 @@ def profile_dataframe(df: pd.DataFrame):
         )
     }
 
+    # -----------------------------
+    # Correlation Matrix
+    # -----------------------------
+
+    numeric_df = df.select_dtypes(include="number")
+
+    if len(numeric_df.columns) >= 2:
+
+        correlations = (
+            numeric_df.corr(numeric_only=True)
+            .round(3)
+            .fillna(0)
+            .to_dict()
+        )
+
+    else:
+
+        correlations = {}
+
+    # -----------------------------
+    # Simple Outlier Detection (IQR)
+    # -----------------------------
+
+    outliers = {}
+
+    for column in numeric_df.columns:
+
+        q1 = numeric_df[column].quantile(0.25)
+        q3 = numeric_df[column].quantile(0.75)
+
+        iqr = q3 - q1
+
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+
+        count = int(
+            (
+                (numeric_df[column] < lower)
+                |
+                (numeric_df[column] > upper)
+            ).sum()
+        )
+
+        outliers[column] = count
+
     return {
         "summary": summary,
         "column_info": column_info,
         "statistics": statistics,
         "missing_values": missing_values,
         "duplicates": duplicates,
-        "correlations": {},
-        "outliers": {},
+        "correlations": correlations,
+        "outliers": outliers,
     }

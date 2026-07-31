@@ -10,6 +10,7 @@ from app.crud.crud_dataset import create_dataset
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 from app.services.profiling import profile_dataframe
+from app.services.insights import generate_dataset_summary
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -81,6 +82,9 @@ def upload_dataset(
     # Generate profile
     try:
         analysis_data = profile_dataframe(dataframe)
+        analysis_text = generate_dataset_summary(
+         analysis_data
+    )
 
     except Exception:
         save_path.unlink(missing_ok=True)
@@ -111,6 +115,7 @@ def upload_dataset(
     analysis = Analysis(
         dataset_id=dataset.id,
         summary=analysis_data["summary"],
+        summary_text=analysis_text,
         column_info=analysis_data["column_info"],
         statistics=analysis_data["statistics"],
         missing_values=analysis_data["missing_values"],
