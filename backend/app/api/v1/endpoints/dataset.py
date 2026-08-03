@@ -9,7 +9,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_current_user
+from app.api.dependencies import get_current_user
 from app.crud.crud_dataset import (
     delete_dataset,
     get_dataset,

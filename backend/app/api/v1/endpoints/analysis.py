@@ -6,7 +6,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_current_user
+from app.api.dependencies import get_current_user
 from app.crud.crud_analysis import get_analysis
 from app.db.session import get_db
 from app.models.user import User
