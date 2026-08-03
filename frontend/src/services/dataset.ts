@@ -70,7 +70,7 @@ export async function renameDataset(
   const response = await api.patch(
     `/api/v1/datasets/${id}`,
     {
-      name,
+      original_filename: name,
     }
   );
 
