@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
+import numpy as np
 import pandas as pd
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -9,12 +10,11 @@ from sqlalchemy.orm import Session
 from app.crud.crud_dataset import create_dataset
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-from app.services.profiling import profile_dataframe
-from app.services.insights import generate_dataset_summary
 from app.services.insights import (
-    generate_dataset_summary,
     calculate_quality_score,
+    generate_dataset_summary,
 )
+from app.services.profiling import profile_dataframe
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,6 +26,48 @@ ALLOWED_EXTENSIONS = {
 }
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+def make_json_serializable(obj):
+    """Recursively convert pandas/numpy objects into JSON-safe values."""
+
+    if isinstance(obj, dict):
+        return {
+            k: make_json_serializable(v)
+            for k, v in obj.items()
+        }
+
+    if isinstance(obj, list):
+        return [
+            make_json_serializable(v)
+            for v in obj
+        ]
+
+    if isinstance(obj, tuple):
+        return tuple(
+            make_json_serializable(v)
+            for v in obj
+        )
+
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+
+    if isinstance(obj, pd.Timedelta):
+        return str(obj)
+
+    if isinstance(obj, np.integer):
+        return int(obj)
+
+    if isinstance(obj, np.floating):
+        return float(obj)
+
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+
+    if pd.isna(obj):
+        return None
+
+    return obj
 
 
 def upload_dataset(
@@ -58,20 +100,15 @@ def upload_dataset(
             detail="Maximum upload size is 20 MB.",
         )
 
-    # Generate unique filename
     unique_filename = f"{uuid4().hex}{extension}"
-
     save_path = UPLOAD_DIR / unique_filename
 
-    # Save uploaded file
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Read dataset
     try:
         if extension == ".csv":
             dataframe = pd.read_csv(save_path)
-
         else:
             dataframe = pd.read_excel(save_path)
 
@@ -83,25 +120,28 @@ def upload_dataset(
             detail="Unable to read dataset.",
         )
 
-    # Generate profile
     try:
         analysis_data = profile_dataframe(dataframe)
+
+        # Convert everything into JSON-safe objects
+        analysis_data = make_json_serializable(analysis_data)
+
         analysis_text = generate_dataset_summary(
-         analysis_data
+            analysis_data
         )
+
         quality_score = calculate_quality_score(
             analysis_data
         )
 
-    except Exception:
+    except Exception as e:
         save_path.unlink(missing_ok=True)
 
         raise HTTPException(
             status_code=500,
-            detail="Unable to profile dataset.",
+            detail=f"Unable to profile dataset. {str(e)}",
         )
 
-    # Save dataset metadata
     dataset = Dataset(
         filename=unique_filename,
         original_filename=file.filename,
@@ -118,7 +158,6 @@ def upload_dataset(
         dataset=dataset,
     )
 
-    # Save analysis
     analysis = Analysis(
         dataset_id=dataset.id,
         summary=analysis_data["summary"],

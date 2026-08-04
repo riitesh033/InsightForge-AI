@@ -1,4 +1,38 @@
+import numpy as np
 import pandas as pd
+
+
+def to_json_safe(obj):
+    """Recursively convert pandas/numpy objects into JSON-safe values."""
+
+    if isinstance(obj, dict):
+        return {k: to_json_safe(v) for k, v in obj.items()}
+
+    if isinstance(obj, list):
+        return [to_json_safe(v) for v in obj]
+
+    if isinstance(obj, tuple):
+        return [to_json_safe(v) for v in obj]
+
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+
+    if isinstance(obj, pd.Timedelta):
+        return str(obj)
+
+    if isinstance(obj, np.integer):
+        return int(obj)
+
+    if isinstance(obj, np.floating):
+        return float(obj)
+
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+
+    if pd.isna(obj):
+        return None
+
+    return obj
 
 
 def profile_dataframe(df: pd.DataFrame):
@@ -8,15 +42,9 @@ def profile_dataframe(df: pd.DataFrame):
     summary = {
         "rows": total_rows,
         "columns": len(df.columns),
-        "memory_usage": int(
-            df.memory_usage(deep=True).sum()
-        ),
-        "missing_cells": int(
-            df.isna().sum().sum()
-        ),
-        "duplicate_rows": int(
-            df.duplicated().sum()
-        ),
+        "memory_usage": int(df.memory_usage(deep=True).sum()),
+        "missing_cells": int(df.isna().sum().sum()),
+        "duplicate_rows": int(df.duplicated().sum()),
     }
 
     column_info = []
@@ -36,18 +64,14 @@ def profile_dataframe(df: pd.DataFrame):
                 )
                 if total_rows
                 else 0,
-                "unique": int(
-                    df[column].nunique(dropna=True)
-                ),
-                "memory_usage": int(
-                    df[column].memory_usage(deep=True)
-                ),
+                "unique": int(df[column].nunique(dropna=True)),
+                "memory_usage": int(df[column].memory_usage(deep=True)),
             }
         )
 
     statistics = (
         df.describe(include="all")
-        .fillna("")
+        .replace({np.nan: None})
         .to_dict()
     )
 
@@ -68,14 +92,8 @@ def profile_dataframe(df: pd.DataFrame):
         }
 
     duplicates = {
-        "count": int(
-            df.duplicated().sum()
-        )
+        "count": int(df.duplicated().sum())
     }
-
-    # -----------------------------
-    # Correlation Matrix
-    # -----------------------------
 
     numeric_df = df.select_dtypes(include="number")
 
@@ -92,10 +110,6 @@ def profile_dataframe(df: pd.DataFrame):
 
         correlations = {}
 
-    # -----------------------------
-    # Simple Outlier Detection (IQR)
-    # -----------------------------
-
     outliers = {}
 
     for column in numeric_df.columns:
@@ -108,22 +122,21 @@ def profile_dataframe(df: pd.DataFrame):
         lower = q1 - 1.5 * iqr
         upper = q3 + 1.5 * iqr
 
-        count = int(
+        outliers[column] = int(
             (
                 (numeric_df[column] < lower)
-                |
-                (numeric_df[column] > upper)
+                | (numeric_df[column] > upper)
             ).sum()
         )
 
-        outliers[column] = count
-
-    return {
-        "summary": summary,
-        "column_info": column_info,
-        "statistics": statistics,
-        "missing_values": missing_values,
-        "duplicates": duplicates,
-        "correlations": correlations,
-        "outliers": outliers,
-    }
+    return to_json_safe(
+        {
+            "summary": summary,
+            "column_info": column_info,
+            "statistics": statistics,
+            "missing_values": missing_values,
+            "duplicates": duplicates,
+            "correlations": correlations,
+            "outliers": outliers,
+        }
+    )
