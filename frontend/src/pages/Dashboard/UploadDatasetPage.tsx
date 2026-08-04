@@ -4,32 +4,30 @@ import {
   Info,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { showError, showSuccess } from "@/lib/toast";
 import { uploadDataset } from "@/services/dataset";
 
 export default function UploadDatasetPage() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
   function validateFile(file: File) {
-    const allowedTypes = [
-      "text/csv",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ];
+    const extension = file.name.split(".").pop()?.toLowerCase();
 
-    const maxSize = 20 * 1024 * 1024;
-
-    if (!allowedTypes.includes(file.type)) {
-      showError("Only CSV and Excel files are supported.");
+    if (!extension || !["csv", "xls", "xlsx"].includes(extension)) {
+      showError("Only CSV, XLS and XLSX files are supported.");
       return false;
     }
 
-    if (file.size > maxSize) {
+    if (file.size > 20 * 1024 * 1024) {
       showError("Maximum file size is 20 MB.");
       return false;
     }
@@ -46,59 +44,115 @@ export default function UploadDatasetPage() {
   function handleFileChange(
     e: React.ChangeEvent<HTMLInputElement>
   ) {
-    if (!e.target.files?.length) return;
+    const file = e.target.files?.[0];
 
-    handleFile(e.target.files[0]);
+    if (!file) return;
+
+    handleFile(file);
+
+    e.target.value = "";
   }
 
-  function handleDrop(
-    e: React.DragEvent<HTMLLabelElement>
+  function handleDragEnter(
+    e: React.DragEvent<HTMLDivElement>
   ) {
     e.preventDefault();
-
-    setDragging(false);
-
-    if (!e.dataTransfer.files.length) return;
-
-    handleFile(e.dataTransfer.files[0]);
+    e.stopPropagation();
+    setDragging(true);
   }
 
-  async function handleUpload() {
-    if (!selectedFile) {
-      showError("Please select a dataset first.");
+  function handleDragOver(
+    e: React.DragEvent<HTMLDivElement>
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    e.dataTransfer.dropEffect = "copy";
+
+    if (!dragging) {
+      setDragging(true);
+    }
+  }
+
+  function handleDragLeave(
+    e: React.DragEvent<HTMLDivElement>
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.currentTarget.contains(e.relatedTarget as Node)) {
       return;
     }
 
-    try {
-      setUploading(true);
-      setProgress(0);
-
-      await uploadDataset(selectedFile, (progress) => {
-        setProgress(progress);
-      });
-
-      showSuccess("Dataset uploaded successfully.");
-
-      setSelectedFile(null);
-      setProgress(0);
-    } catch (error: any) {
-      console.error(error);
-
-      showError(
-        error?.response?.data?.detail ??
-          "Upload failed."
-      );
-    } finally {
-      setUploading(false);
-    }
+    setDragging(false);
   }
+
+  function handleDrop(
+    e: React.DragEvent<HTMLDivElement>
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setDragging(false);
+
+    const files = e.dataTransfer.files;
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    handleFile(files[0]);
+  }
+
+async function handleUpload() {
+  if (!selectedFile) {
+    showError("Please select a dataset first.");
+    return;
+  }
+
+  try {
+    setUploading(true);
+    setProgress(0);
+
+    const response = await uploadDataset(
+      selectedFile,
+      (value) => {
+        setProgress(value);
+      }
+    );
+
+    console.log("UPLOAD RESPONSE:");
+    console.log(response);
+
+    showSuccess("Dataset uploaded successfully.");
+
+    setTimeout(() => {
+      navigate("/dashboard/datasets");
+    }, 1000);
+  } catch (error: any) {
+    console.log("FULL ERROR:");
+    console.log(error);
+
+    console.log("ERROR RESPONSE:");
+    console.log(error?.response);
+
+    console.log("ERROR DATA:");
+    console.log(error?.response?.data);
+
+    showError(
+      error?.response?.data?.detail ??
+      error?.message ??
+      "Upload failed."
+    );
+  } finally {
+    setUploading(false);
+  }
+}
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-
       <div>
-        <h1 className="text-3xl font-bold text-foreground">
+        <h1 className="text-3xl font-bold">
           Upload Dataset
         </h1>
 
@@ -107,21 +161,25 @@ export default function UploadDatasetPage() {
         </p>
       </div>
 
-      {/* Upload Area */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv,.xls,.xlsx"
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
-      <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
-        <label
-          htmlFor="dataset"
+      <div className="rounded-xl border bg-card p-8 shadow-sm">
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-16 transition ${
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-16 transition-all duration-300 ${
             dragging
-              ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary hover:bg-accent/30"
+              ? "border-primary bg-primary/10 scale-[1.02]"
+              : "border-border hover:border-primary hover:bg-accent/40"
           }`}
         >
           <UploadCloud
@@ -129,32 +187,22 @@ export default function UploadDatasetPage() {
             className="text-primary"
           />
 
-          <h2 className="mt-6 text-2xl font-semibold text-foreground">
+          <h2 className="mt-6 text-2xl font-semibold">
             Drag & Drop Dataset
           </h2>
 
-          <p className="mt-3 text-center text-muted-foreground">
-            or click here to browse files
+          <p className="mt-3 text-muted-foreground">
+            or click to browse files
           </p>
 
           <p className="mt-2 text-sm text-muted-foreground">
             CSV • XLS • XLSX • Max 20 MB
           </p>
-
-          <input
-            id="dataset"
-            type="file"
-            accept=".csv,.xls,.xlsx"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </label>
+        </div>
       </div>
 
-      {/* Selected File */}
-
       {selectedFile && (
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border bg-card p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
             <div className="rounded-lg bg-primary/10 p-3">
               <FileSpreadsheet
@@ -164,7 +212,7 @@ export default function UploadDatasetPage() {
             </div>
 
             <div className="flex-1">
-              <h3 className="font-semibold text-foreground break-all">
+              <h3 className="break-all font-semibold">
                 {selectedFile.name}
               </h3>
 
@@ -174,9 +222,9 @@ export default function UploadDatasetPage() {
 
               {uploading && (
                 <div className="mt-4">
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      className="h-full bg-primary transition-all duration-300"
                       style={{
                         width: `${progress}%`,
                       }}
@@ -192,28 +240,30 @@ export default function UploadDatasetPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setSelectedFile(null)}
+                type="button"
                 disabled={uploading}
-                className="rounded-lg p-2 text-red-500 transition hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50"
+                onClick={() => setSelectedFile(null)}
+                className="rounded-lg p-2 text-red-500 hover:bg-red-500/10"
               >
                 <Trash2 size={20} />
               </button>
 
               <button
-                onClick={handleUpload}
+                type="button"
                 disabled={uploading}
-                className="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleUpload}
+                className="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
-                {uploading ? "Uploading..." : "Upload"}
+                {uploading
+                  ? "Uploading..."
+                  : "Upload"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Information */}
-
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-xl border bg-card p-6">
         <div className="flex items-start gap-3">
           <Info
             size={22}
@@ -221,7 +271,7 @@ export default function UploadDatasetPage() {
           />
 
           <div>
-            <h3 className="font-semibold text-foreground">
+            <h3 className="font-semibold">
               What happens after uploading?
             </h3>
 

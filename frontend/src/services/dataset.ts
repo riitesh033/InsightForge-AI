@@ -28,15 +28,11 @@ export async function uploadDataset(
       headers: {
         "Content-Type": "multipart/form-data",
       },
-
       onUploadProgress: (event) => {
         if (!event.total || !onProgress) return;
 
         onProgress(
-          Math.round(
-            (event.loaded * 100) /
-            event.total
-          )
+          Math.round((event.loaded * 100) / event.total)
         );
       },
     }
@@ -46,16 +42,12 @@ export async function uploadDataset(
 }
 
 export async function getDatasets() {
-  const response = await api.get(
-    "/api/v1/datasets"
-  );
+  const response = await api.get("/api/v1/datasets");
 
   return response.data as Dataset[];
 }
 
-export async function getDataset(
-  id: number
-) {
+export async function getDataset(id: number) {
   const response = await api.get(
     `/api/v1/datasets/${id}`
   );
@@ -85,11 +77,50 @@ export async function deleteDataset(
   );
 }
 
-export function downloadDataset(
+export async function downloadDataset(
   id: number
 ) {
-  window.open(
-    `http://localhost:8000/api/v1/datasets/${id}/download`,
-    "_blank"
-  );
+  try {
+    const response = await api.get(
+      `/api/v1/datasets/${id}/download`,
+      {
+        responseType: "blob",
+      }
+    );
+
+    const blob = new Blob([response.data]);
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    const disposition =
+      response.headers["content-disposition"];
+
+    let filename = "dataset";
+
+    if (disposition) {
+      const match = disposition.match(
+        /filename="?([^"]+)"?/
+      );
+
+      if (match) {
+        filename = match[1];
+      }
+    }
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(error);
+    alert("Failed to download dataset.");
+  }
 }
