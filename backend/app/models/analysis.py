@@ -6,7 +6,6 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import JSON
 from sqlalchemy import Text
-from sqlalchemy import Integer
 from sqlalchemy.orm import relationship
 
 from app.db.base_models import Base
@@ -66,6 +65,18 @@ class Analysis(Base):
         nullable=True,
     )
 
+    summary_text = Column(
+        Text,
+        nullable=False,
+        default="",
+    )
+
+    quality_score = Column(
+        Integer,
+        nullable=False,
+        default=100,
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow,
@@ -76,14 +87,3 @@ class Analysis(Base):
         "Dataset",
         back_populates="analysis",
     )
-
-    summary_text = Column(
-    Text,
-    nullable=False,
-)
-
-quality_score = Column(
-    Integer,
-    nullable=False,
-    default=100,
-)

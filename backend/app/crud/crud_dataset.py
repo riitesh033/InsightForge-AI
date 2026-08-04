@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
+from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 
 
@@ -58,5 +61,22 @@ def delete_dataset(
     db: Session,
     dataset: Dataset,
 ):
+    # Delete analysis record
+    (
+        db.query(Analysis)
+        .filter(
+            Analysis.dataset_id == dataset.id
+        )
+        .delete()
+    )
+
+    # Delete uploaded file
+    file_path = Path(dataset.file_path)
+
+    if file_path.exists():
+        file_path.unlink()
+
+    # Delete dataset
     db.delete(dataset)
+
     db.commit()

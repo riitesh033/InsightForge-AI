@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -18,7 +20,10 @@ from app.crud.crud_dataset import (
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.dataset import DatasetRename, DatasetResponse
+from app.schemas.dataset import (
+    DatasetRename,
+    DatasetResponse,
+)
 from app.services.dataset import upload_dataset
 
 router = APIRouter()
@@ -27,6 +32,7 @@ router = APIRouter()
 @router.post(
     "/upload",
     response_model=DatasetResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 def upload_dataset_route(
     file: UploadFile = File(...),
@@ -109,7 +115,7 @@ def rename_dataset_route(
 
 @router.delete(
     "/{dataset_id}",
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_dataset_route(
     dataset_id: int,
@@ -133,10 +139,6 @@ def delete_dataset_route(
         dataset=dataset,
     )
 
-    return {
-        "message": "Dataset deleted successfully."
-    }
-
 
 @router.get("/{dataset_id}/download")
 def download_dataset_route(
@@ -156,8 +158,16 @@ def download_dataset_route(
             detail="Dataset not found.",
         )
 
+    file_path = Path(dataset.file_path)
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found on server.",
+        )
+
     return FileResponse(
-        path=dataset.file_path,
+        path=file_path,
         filename=dataset.original_filename,
         media_type="application/octet-stream",
     )
