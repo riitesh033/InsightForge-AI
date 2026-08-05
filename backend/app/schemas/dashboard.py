@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class DashboardStats(BaseModel):
@@ -19,9 +19,7 @@ class RecentDataset(BaseModel):
     uploaded_at: datetime
     quality_score: int | None = None
 
-    model_config = {
-        "from_attributes": True,
-    }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecentAnalysis(BaseModel):
@@ -31,12 +29,32 @@ class RecentAnalysis(BaseModel):
     quality_score: int
     created_at: datetime
 
-    model_config = {
-        "from_attributes": True,
-    }
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UploadTrend(BaseModel):
+    month: str
+    uploads: int
+
+
+class FileTypeDistribution(BaseModel):
+    file_type: str
+    count: int
+
+
+class QualityDistribution(BaseModel):
+    range: str
+    count: int
+
+
+class DashboardCharts(BaseModel):
+    uploads_per_month: list[UploadTrend]
+    file_types: list[FileTypeDistribution]
+    quality_distribution: list[QualityDistribution]
 
 
 class DashboardResponse(BaseModel):
     stats: DashboardStats
     recent_datasets: list[RecentDataset]
     recent_analyses: list[RecentAnalysis]
+    charts: DashboardCharts
