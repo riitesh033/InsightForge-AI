@@ -25,10 +25,32 @@ export interface RecentAnalysis {
   created_at: string;
 }
 
+export interface UploadTrend {
+  month: string;
+  uploads: number;
+}
+
+export interface FileTypeDistribution {
+  file_type: string;
+  count: number;
+}
+
+export interface QualityDistribution {
+  range: string;
+  count: number;
+}
+
+export interface DashboardCharts {
+  uploads_per_month: UploadTrend[];
+  file_types: FileTypeDistribution[];
+  quality_distribution: QualityDistribution[];
+}
+
 export interface DashboardResponse {
   stats: DashboardStats;
   recent_datasets: RecentDataset[];
   recent_analyses: RecentAnalysis[];
+  charts: DashboardCharts;
 }
 
 export async function getDashboard() {

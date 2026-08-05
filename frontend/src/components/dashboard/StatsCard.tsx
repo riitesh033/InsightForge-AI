@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { motion } from "framer-motion";
 
 interface Props {
   title: string;
@@ -12,7 +13,24 @@ export default function StatsCard({
   icon,
 }: Props) {
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm transition hover:shadow-md">
+    <motion.div
+      initial={{
+        opacity: 0,
+        y: 20,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+      }}
+      transition={{
+        duration: 0.4,
+      }}
+      whileHover={{
+        y: -5,
+        scale: 1.02,
+      }}
+      className="rounded-2xl border bg-card p-6 shadow-sm"
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -28,6 +46,6 @@ export default function StatsCard({
           {icon}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
