@@ -77,7 +77,7 @@ export default function AppRouter() {
         />
 
         <Route
-          path="analysis/:id"
+          path="analysis/:datasetid"
           element={<AnalysisPage />}
         />
 

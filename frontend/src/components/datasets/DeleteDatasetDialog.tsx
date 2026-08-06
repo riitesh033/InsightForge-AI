@@ -1,18 +1,21 @@
 interface Props {
   open: boolean;
-  datasetId: number;
   datasetName: string;
+  loading: boolean;
   onClose: () => void;
-  onDeleted: () => void;
+  onDelete: () => void | Promise<void>;
 }
 
 export default function DeleteDatasetDialog({
   open,
-  datasetId,
   datasetName,
+  loading,
   onClose,
-  onDeleted,
+  onDelete,
 }: Props) {
+  if (!open) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

@@ -1,42 +1,118 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import {
+  useParams,
+} from "react-router-dom";
 
-import { getAnalysis } from "@/services/analysis";
+import {
+  useAnalysis,
+} from "@/hooks/useAnalysis";
+
 
 export default function AnalysisPage() {
-  const { datasetId } = useParams();
 
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const {
+    datasetId,
+  } = useParams();
 
-  useEffect(() => {
-    const load = async () => {
-      console.log("datasetId =", datasetId);
 
-      try {
-        const result = await getAnalysis(Number(datasetId));
+  const {
+    data,
+    loading,
+    error,
+  } = useAnalysis(datasetId);
 
-        console.log("API Response:", result);
 
-        setData(result);
-      } catch (err) {
-        console.error("API Error:", err);
-      }
-
-      console.log("Setting loading = false");
-      setLoading(false);
-    };
-
-    load();
-  }, [datasetId]);
 
   if (loading) {
-    return <h1>Loading...</h1>;
+
+    return (
+      <div className="p-8">
+        Loading analysis...
+      </div>
+    );
+
   }
 
+
+  if (error) {
+
+    return (
+      <div className="text-red-500">
+        {error}
+      </div>
+    );
+
+  }
+
+
+  if (!data) {
+
+    return (
+      <div>
+        No analysis found.
+      </div>
+    );
+
+  }
+
+
+
   return (
-    <pre style={{ color: "white" }}>
-      {JSON.stringify(data, null, 2)}
-    </pre>
+
+    <div className="space-y-8">
+
+
+      <div>
+
+        <h1 className="text-3xl font-bold">
+          Analysis Report
+        </h1>
+
+
+        <p className="text-muted-foreground">
+          Dataset ID: {data.dataset_id}
+        </p>
+
+      </div>
+
+
+
+      <div className="rounded-2xl border bg-card p-6">
+
+        <h2 className="text-xl font-semibold">
+          Data Quality Score
+        </h2>
+
+
+        <div className="mt-4 text-5xl font-bold text-primary">
+
+          {data.quality_score}%
+
+        </div>
+
+      </div>
+
+
+
+      <div className="rounded-2xl border bg-card p-6">
+
+        <h2 className="text-xl font-semibold">
+          AI Summary
+        </h2>
+
+
+        <p className="mt-3 text-muted-foreground">
+
+          {data.summary_text}
+
+        </p>
+
+
+      </div>
+
+
+
+    </div>
+
   );
+
 }
