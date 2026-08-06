@@ -13,6 +13,7 @@ import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
 import DashboardPage from "@/pages/Dashboard/DashboardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
 import DatasetsPage from "@/pages/Dashboard/DatasetsPage";
+import AnalysisPage from "@/pages/Dashboard/AnalysisPage";
 import ReportsPage from "@/pages/Dashboard/ReportsPage";
 import AIChatPage from "@/pages/Dashboard/AIChatPage";
 import SettingsPage from "@/pages/Dashboard/SettingsPage";
@@ -20,12 +21,15 @@ import SettingsPage from "@/pages/Dashboard/SettingsPage";
 import NotFoundPage from "@/pages/Error/NotFoundPage";
 
 import ProtectedRoute from "./ProtectedRoute";
-import AnalysisPage from "@/pages/Dashboard/AnalysisPage";
+
 
 export default function AppRouter() {
   return (
     <Routes>
-      {/* Landing */}
+
+      {/* =========================
+          Landing Pages
+      ========================== */}
       <Route element={<LandingLayout />}>
         <Route
           path="/"
@@ -33,8 +37,12 @@ export default function AppRouter() {
         />
       </Route>
 
-      {/* Authentication */}
+
+      {/* =========================
+          Authentication
+      ========================== */}
       <Route element={<AuthLayout />}>
+
         <Route
           path="/login"
           element={<LoginPage />}
@@ -49,9 +57,13 @@ export default function AppRouter() {
           path="/forgot-password"
           element={<ForgotPasswordPage />}
         />
+
       </Route>
 
-      {/* Dashboard */}
+
+      {/* =========================
+          Dashboard
+      ========================== */}
       <Route
         path="/dashboard"
         element={
@@ -60,54 +72,80 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       >
-        {/* Dashboard Home */}
+
+        {/* /dashboard */}
         <Route
           index
           element={<DashboardPage />}
         />
 
+
+        {/* /dashboard/upload */}
         <Route
           path="upload"
           element={<UploadDatasetPage />}
         />
 
+
+        {/* /dashboard/datasets */}
         <Route
           path="datasets"
           element={<DatasetsPage />}
         />
 
+
+        {/* /dashboard/analysis/:datasetId */}
         <Route
-          path="analysis/:datasetid"
+          path="analysis/:datasetId"
           element={<AnalysisPage />}
         />
 
+
+        {/* /dashboard/reports */}
         <Route
           path="reports"
           element={<ReportsPage />}
         />
 
+
+        {/* /dashboard/ai-chat */}
         <Route
           path="ai-chat"
           element={<AIChatPage />}
         />
 
+
+        {/* /dashboard/settings */}
         <Route
           path="settings"
           element={<SettingsPage />}
         />
+
       </Route>
 
-      {/* Live Demo */}
+
+      {/* =========================
+          Demo Redirect
+      ========================== */}
       <Route
         path="/demo"
-        element={<Navigate to="/" replace />}
+        element={
+          <Navigate
+            to="/"
+            replace
+          />
+        }
       />
 
-      {/* 404 */}
+
+      {/* =========================
+          404 Page
+      ========================== */}
       <Route
         path="*"
         element={<NotFoundPage />}
       />
+
     </Routes>
   );
 }

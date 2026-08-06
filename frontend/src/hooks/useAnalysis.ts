@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   AnalysisData,
@@ -14,54 +14,110 @@ export function useAnalysis(
     useState<AnalysisData | null>(null);
 
   const [loading, setLoading] =
-    useState(true);
+    useState<boolean>(true);
 
   const [error, setError] =
-    useState("");
+    useState<string>("");
+
+
+
+  const loadAnalysis = useCallback(
+    async () => {
+
+      if (!datasetId) {
+
+        setError(
+          "Dataset ID is missing."
+        );
+
+        setLoading(false);
+
+        return;
+
+      }
+
+
+      try {
+
+        setLoading(true);
+        setError("");
+
+
+        console.log(
+          "Fetching analysis for dataset:",
+          datasetId
+        );
+
+
+        const response =
+          await getAnalysis(
+            Number(datasetId)
+          );
+
+
+        console.log(
+          "Analysis response:",
+          response
+        );
+
+
+        setData(response);
+
+
+      } catch (error: any) {
+
+
+        console.error(
+          "Analysis API error:",
+          error?.response?.data || error
+        );
+
+
+        setData(null);
+
+
+        setError(
+          error?.response?.data?.detail ||
+          "Failed to load analysis."
+        );
+
+
+      } finally {
+
+
+        setLoading(false);
+
+
+        console.log(
+          "Analysis loading finished"
+        );
+
+      }
+
+    },
+    [datasetId]
+  );
+
 
 
   useEffect(() => {
 
-    if (!datasetId)
-      return;
-
     loadAnalysis();
 
-  }, [datasetId]);
+  }, [loadAnalysis]);
 
-
-  async function loadAnalysis() {
-
-    try {
-
-      setLoading(true);
-
-      const result =
-        await getAnalysis(
-          Number(datasetId)
-        );
-
-      setData(result);
-
-    } catch {
-
-      setError(
-        "Failed to load analysis."
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
 
 
   return {
+
     data,
+
     loading,
+
     error,
+
     reload: loadAnalysis,
+
   };
+
 }

@@ -28,7 +28,9 @@ from app.schemas.dataset import (
 )
 from app.services.dataset import upload_dataset
 
+
 router = APIRouter()
+
 
 
 @router.post(
@@ -46,6 +48,7 @@ def upload_dataset_route(
         file=file,
         owner_id=current_user.id,
     )
+
 
 
 @router.get(
@@ -72,6 +75,51 @@ def get_all_datasets(
     )
 
 
+
+# IMPORTANT: Keep download BEFORE /{dataset_id}
+@router.get(
+    "/{dataset_id}/download"
+)
+def download_dataset_route(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    dataset = get_dataset(
+        db=db,
+        dataset_id=dataset_id,
+        owner_id=current_user.id,
+    )
+
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found.",
+        )
+
+
+    file_path = Path(
+        dataset.file_path
+    )
+
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="File not found on server.",
+        )
+
+
+    return FileResponse(
+        path=file_path,
+        filename=dataset.original_filename,
+        media_type="application/octet-stream",
+    )
+
+
+
 @router.get(
     "/{dataset_id}",
     response_model=DatasetResponse,
@@ -81,11 +129,13 @@ def get_dataset_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
+
 
     if dataset is None:
         raise HTTPException(
@@ -93,7 +143,9 @@ def get_dataset_by_id(
             detail="Dataset not found.",
         )
 
+
     return dataset
+
 
 
 @router.patch(
@@ -106,23 +158,27 @@ def rename_dataset_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
 
+
     if dataset is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Dataset not found.",
         )
+
 
     return rename_dataset(
         db=db,
         dataset=dataset,
         new_name=payload.original_filename,
     )
+
 
 
 @router.delete(
@@ -134,52 +190,22 @@ def delete_dataset_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
 
+
     if dataset is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Dataset not found.",
         )
+
 
     delete_dataset(
         db=db,
         dataset=dataset,
-    )
-
-
-@router.get("/{dataset_id}/download")
-def download_dataset_route(
-    dataset_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
-    )
-
-    if dataset is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found.",
-        )
-
-    file_path = Path(dataset.file_path)
-
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found on server.",
-        )
-
-    return FileResponse(
-        path=file_path,
-        filename=dataset.original_filename,
-        media_type="application/octet-stream",
     )

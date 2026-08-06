@@ -46,12 +46,21 @@ export async function register(
 export async function login(
   data: LoginData
 ): Promise<LoginResponse> {
+
   const formData = new URLSearchParams();
 
-  formData.append("username", data.email);
-  formData.append("password", data.password);
+  formData.append(
+    "username",
+    data.email
+  );
 
-  const response = await api.post(
+  formData.append(
+    "password",
+    data.password
+  );
+
+
+  const response = await api.post<LoginResponse>(
     "/api/v1/auth/login",
     formData,
     {
@@ -62,7 +71,16 @@ export async function login(
     }
   );
 
+
+  // Save JWT token
+  localStorage.setItem(
+    "access_token",
+    response.data.access_token
+  );
+
+
   return response.data;
+
 }
 
 // =========================

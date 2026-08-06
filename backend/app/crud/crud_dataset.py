@@ -1,9 +1,7 @@
 from math import ceil
 from pathlib import Path
 
-from sqlalchemy import asc
-from sqlalchemy import desc
-from sqlalchemy import func
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
@@ -32,7 +30,9 @@ def get_datasets(
 ):
     query = (
         db.query(Dataset)
-        .filter(Dataset.owner_id == owner_id)
+        .filter(
+            Dataset.owner_id == owner_id
+        )
     )
 
     # Search
@@ -58,19 +58,35 @@ def get_datasets(
     )
 
     if order.lower() == "asc":
-        query = query.order_by(asc(sort_column))
+        query = query.order_by(
+            asc(sort_column)
+        )
     else:
-        query = query.order_by(desc(sort_column))
+        query = query.order_by(
+            desc(sort_column)
+        )
 
-    total = query.with_entities(
-        func.count(Dataset.id)
-    ).scalar()
+
+    # Count BEFORE pagination and remove ordering
+    total = (
+        query
+        .order_by(None)
+        .with_entities(
+            func.count(Dataset.id)
+        )
+        .scalar()
+    )
+
 
     datasets = (
-        query.offset((page - 1) * page_size)
+        query
+        .offset(
+            (page - 1) * page_size
+        )
         .limit(page_size)
         .all()
     )
+
 
     return {
         "items": datasets,
@@ -78,9 +94,10 @@ def get_datasets(
         "page": page,
         "page_size": page_size,
         "pages": ceil(total / page_size)
-        if total
+        if total > 0
         else 1,
     }
+
 
 
 def get_dataset(
@@ -98,6 +115,7 @@ def get_dataset(
     )
 
 
+
 def rename_dataset(
     db: Session,
     dataset: Dataset,
@@ -111,18 +129,24 @@ def rename_dataset(
     return dataset
 
 
+
 def delete_dataset(
     db: Session,
     dataset: Dataset,
 ):
+
     db.query(Analysis).filter(
         Analysis.dataset_id == dataset.id
     ).delete()
 
-    file_path = Path(dataset.file_path)
+
+    file_path = Path(
+        dataset.file_path
+    )
 
     if file_path.exists():
         file_path.unlink()
+
 
     db.delete(dataset)
 

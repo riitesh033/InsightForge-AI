@@ -15,15 +15,6 @@ export interface Dataset {
 }
 
 
-export interface DatasetListResponse {
-  items: Dataset[];
-  total: number;
-  page: number;
-  page_size: number;
-  pages: number;
-}
-
-
 export interface DatasetQuery {
   page?: number;
   page_size?: number;
@@ -31,6 +22,10 @@ export interface DatasetQuery {
   sort_by?: string;
   order?: "asc" | "desc";
 }
+
+
+export type DatasetListResponse = Dataset[];
+
 
 
 export async function getDatasets(
@@ -95,14 +90,12 @@ export async function downloadDataset(
   );
 
 
-  const url = window.URL.createObjectURL(
-    blob
-  );
+  const url =
+    window.URL.createObjectURL(blob);
 
 
-  const link = document.createElement(
-    "a"
-  );
+  const link =
+    document.createElement("a");
 
 
   link.href = url;
@@ -114,9 +107,7 @@ export async function downloadDataset(
   );
 
 
-  document.body.appendChild(
-    link
-  );
+  document.body.appendChild(link);
 
 
   link.click();
@@ -125,11 +116,9 @@ export async function downloadDataset(
   link.remove();
 
 
-  window.URL.revokeObjectURL(
-    url
-  );
-}
+  window.URL.revokeObjectURL(url);
 
+}
 
 
 
@@ -150,8 +139,9 @@ export async function uploadDataset(
     "/datasets/upload",
     formData,
     {
-      headers: {
-        "Content-Type": "multipart/form-data",
+      headers:{
+        "Content-Type":
+          "multipart/form-data",
       },
     }
   );

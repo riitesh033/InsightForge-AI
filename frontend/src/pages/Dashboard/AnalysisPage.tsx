@@ -1,18 +1,21 @@
-import {
-  useParams,
-} from "react-router-dom";
+import { useParams } from "react-router-dom";
 
-import {
-  useAnalysis,
-} from "@/hooks/useAnalysis";
+import { useAnalysis } from "@/hooks/useAnalysis";
+
+import AnalysisStats from "@/components/analysis/AnalysisStats";
+import QualityScore from "@/components/analysis/QualityScore";
+import ColumnInfoTable from "@/components/analysis/ColumnInfoTable";
+import MissingValuesChart from "@/components/analysis/MissingValuesChart";
+import DuplicateCard from "@/components/analysis/DuplicateCard";
+import CorrelationHeatmap from "@/components/analysis/CorrelationHeatmap";
+import OutlierCard from "@/components/analysis/OutlierCard";
+import AIInsights from "@/components/analysis/AIInsights";
+import ReportButton from "@/components/analysis/ReportButton";
 
 
 export default function AnalysisPage() {
 
-  const {
-    datasetId,
-  } = useParams();
-
+  const { datasetId } = useParams<{ datasetId: string }>();
 
   const {
     data,
@@ -21,98 +24,130 @@ export default function AnalysisPage() {
   } = useAnalysis(datasetId);
 
 
-
   if (loading) {
-
     return (
       <div className="p-8">
         Loading analysis...
       </div>
     );
-
   }
 
 
   if (error) {
-
     return (
-      <div className="text-red-500">
+      <div className="p-8 text-red-500">
         {error}
       </div>
     );
-
   }
 
 
   if (!data) {
-
     return (
-      <div>
+      <div className="p-8">
         No analysis found.
       </div>
     );
-
   }
 
 
-
   return (
-
     <div className="space-y-8">
 
 
-      <div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
 
-        <h1 className="text-3xl font-bold">
-          Analysis Report
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold">
+            Dataset Analysis
+          </h1>
 
-
-        <p className="text-muted-foreground">
-          Dataset ID: {data.dataset_id}
-        </p>
-
-      </div>
-
-
-
-      <div className="rounded-2xl border bg-card p-6">
-
-        <h2 className="text-xl font-semibold">
-          Data Quality Score
-        </h2>
-
-
-        <div className="mt-4 text-5xl font-bold text-primary">
-
-          {data.quality_score}%
-
+          <p className="text-muted-foreground">
+            AI powered data quality report
+          </p>
         </div>
 
+
+        <ReportButton
+          datasetId={data.dataset_id}
+        />
+
+      </div>
+
+
+
+      {/* Quality Score */}
+
+      <QualityScore
+        score={data.quality_score}
+      />
+
+
+
+      {/* Statistics */}
+
+      <AnalysisStats
+        summary={data.summary}
+        missingValues={data.missing_values}
+        duplicates={data.duplicates}
+      />
+
+
+
+      {/* Columns */}
+
+      <ColumnInfoTable
+        columnInfo={data.column_info}
+        statistics={data.statistics}
+      />
+
+
+
+      {/* Quality Charts */}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+
+        <MissingValuesChart
+          missingValues={data.missing_values}
+        />
+
+
+        <DuplicateCard
+          duplicates={data.duplicates}
+        />
+
       </div>
 
 
 
-      <div className="rounded-2xl border bg-card p-6">
+      {/* Correlation */}
 
-        <h2 className="text-xl font-semibold">
-          AI Summary
-        </h2>
-
-
-        <p className="mt-3 text-muted-foreground">
-
-          {data.summary_text}
-
-        </p>
+      {data.correlations && (
+        <CorrelationHeatmap
+          correlations={data.correlations}
+        />
+      )}
 
 
-      </div>
 
+      {/* Outliers */}
+
+      {data.outliers && (
+        <OutlierCard
+          outliers={data.outliers}
+        />
+      )}
+
+
+
+      {/* AI Summary */}
+
+      <AIInsights
+        summary={data.summary_text}
+      />
 
 
     </div>
-
   );
-
 }
