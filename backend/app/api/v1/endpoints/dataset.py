@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -21,6 +22,7 @@ from app.crud.crud_dataset import (
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.dataset import (
+    DatasetListResponse,
     DatasetRename,
     DatasetResponse,
 )
@@ -48,15 +50,25 @@ def upload_dataset_route(
 
 @router.get(
     "",
-    response_model=list[DatasetResponse],
+    response_model=DatasetListResponse,
 )
 def get_all_datasets(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str = Query("uploaded_at"),
+    order: str = Query("desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     return get_datasets(
         db=db,
         owner_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        search=search,
+        sort_by=sort_by,
+        order=order,
     )
 
 

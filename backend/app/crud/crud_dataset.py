@@ -1,5 +1,9 @@
+from math import ceil
 from pathlib import Path
 
+from sqlalchemy import asc
+from sqlalchemy import desc
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
@@ -20,13 +24,63 @@ def create_dataset(
 def get_datasets(
     db: Session,
     owner_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    search: str | None = None,
+    sort_by: str = "uploaded_at",
+    order: str = "desc",
 ):
-    return (
+    query = (
         db.query(Dataset)
         .filter(Dataset.owner_id == owner_id)
-        .order_by(Dataset.uploaded_at.desc())
+    )
+
+    # Search
+    if search:
+        query = query.filter(
+            Dataset.original_filename.ilike(
+                f"%{search}%"
+            )
+        )
+
+    # Sorting
+    sortable_columns = {
+        "uploaded_at": Dataset.uploaded_at,
+        "rows": Dataset.rows,
+        "columns": Dataset.columns,
+        "file_size": Dataset.file_size,
+        "original_filename": Dataset.original_filename,
+    }
+
+    sort_column = sortable_columns.get(
+        sort_by,
+        Dataset.uploaded_at,
+    )
+
+    if order.lower() == "asc":
+        query = query.order_by(asc(sort_column))
+    else:
+        query = query.order_by(desc(sort_column))
+
+    total = query.with_entities(
+        func.count(Dataset.id)
+    ).scalar()
+
+    datasets = (
+        query.offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
+
+    return {
+        "items": datasets,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": ceil(total / page_size)
+        if total
+        else 1,
+    }
 
 
 def get_dataset(
@@ -61,22 +115,15 @@ def delete_dataset(
     db: Session,
     dataset: Dataset,
 ):
-    # Delete analysis record
-    (
-        db.query(Analysis)
-        .filter(
-            Analysis.dataset_id == dataset.id
-        )
-        .delete()
-    )
+    db.query(Analysis).filter(
+        Analysis.dataset_id == dataset.id
+    ).delete()
 
-    # Delete uploaded file
     file_path = Path(dataset.file_path)
 
     if file_path.exists():
         file_path.unlink()
 
-    # Delete dataset
     db.delete(dataset)
 
     db.commit()

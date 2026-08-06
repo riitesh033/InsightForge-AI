@@ -25,5 +25,22 @@ class DatasetResponse(DatasetBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class DatasetRename(BaseModel):
     original_filename: str
+
+
+class DatasetListResponse(BaseModel):
+    items: list[DatasetResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class DatasetQueryParams(BaseModel):
+    page: int = 1
+    page_size: int = 10
+    search: str | None = None
+    sort_by: str = "uploaded_at"
+    order: str = "desc"
