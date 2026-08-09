@@ -26,7 +26,7 @@ export default function DatasetsPage() {
 
       const response = await getDatasets();
 
-      setDatasets(response);
+      setDatasets(response.items);
 
     } catch (err) {
       console.error(

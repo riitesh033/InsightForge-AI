@@ -1,6 +1,5 @@
 import api from "@/lib/api";
 
-
 // =========================
 // Dashboard Stats
 // =========================
@@ -11,7 +10,6 @@ export interface DashboardStats {
   average_quality_score: number;
   total_rows: number;
 }
-
 
 // =========================
 // Recent Dataset
@@ -27,7 +25,6 @@ export interface RecentDataset {
   quality_score: number | null;
 }
 
-
 // =========================
 // Recent Analysis
 // =========================
@@ -40,7 +37,6 @@ export interface RecentAnalysis {
   created_at: string;
 }
 
-
 // =========================
 // Charts
 // =========================
@@ -50,25 +46,21 @@ export interface UploadTrend {
   uploads: number;
 }
 
-
 export interface FileTypeDistribution {
   file_type: string;
   count: number;
 }
-
 
 export interface QualityDistribution {
   range: string;
   count: number;
 }
 
-
 export interface DashboardCharts {
   uploads_per_month: UploadTrend[];
   file_types: FileTypeDistribution[];
   quality_distribution: QualityDistribution[];
 }
-
 
 // =========================
 // Dashboard Response
@@ -81,18 +73,15 @@ export interface DashboardResponse {
   charts: DashboardCharts;
 }
 
-
 // =========================
 // Get Dashboard
 // =========================
 
-export async function getDashboard() {
-
-  const response =
-    await api.get<DashboardResponse>(
-      "/api/v1/dashboard"
-    );
+export async function getDashboard(): Promise<DashboardResponse> {
+  const response = await api.get<DashboardResponse>(
+    "dashboard"
+  );
 
   return response.data;
-
 }
+

@@ -1,5 +1,8 @@
 import api from "@/lib/api";
 
+// =========================
+// Dataset
+// =========================
 
 export interface Dataset {
   id: number;
@@ -14,6 +17,9 @@ export interface Dataset {
   file_path: string;
 }
 
+// =========================
+// Dataset Query
+// =========================
 
 export interface DatasetQuery {
   page?: number;
@@ -23,15 +29,25 @@ export interface DatasetQuery {
   order?: "asc" | "desc";
 }
 
+// =========================
+// Dataset List Response
+// =========================
 
-export type DatasetListResponse = Dataset[];
+export interface DatasetListResponse {
+  items: Dataset[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
 
-
+// =========================
+// Get Datasets
+// =========================
 
 export async function getDatasets(
   params: DatasetQuery = {}
 ): Promise<DatasetListResponse> {
-
   const response = await api.get<DatasetListResponse>(
     "/datasets",
     {
@@ -42,13 +58,14 @@ export async function getDatasets(
   return response.data;
 }
 
-
+// =========================
+// Rename Dataset
+// =========================
 
 export async function renameDataset(
   datasetId: number,
   original_filename: string
 ): Promise<Dataset> {
-
   const response = await api.patch<Dataset>(
     `/datasets/${datasetId}`,
     {
@@ -59,24 +76,23 @@ export async function renameDataset(
   return response.data;
 }
 
-
+// =========================
+// Delete Dataset
+// =========================
 
 export async function deleteDataset(
   datasetId: number
-) {
-
-  return api.delete(
-    `/datasets/${datasetId}`
-  );
-
+): Promise<void> {
+  await api.delete(`/datasets/${datasetId}`);
 }
 
-
+// =========================
+// Download Dataset
+// =========================
 
 export async function downloadDataset(
   datasetId: number
-) {
-
+): Promise<void> {
   const response = await api.get(
     `/datasets/${datasetId}/download`,
     {
@@ -84,68 +100,43 @@ export async function downloadDataset(
     }
   );
 
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
 
-  const blob = new Blob(
-    [response.data]
-  );
-
-
-  const url =
-    window.URL.createObjectURL(blob);
-
-
-  const link =
-    document.createElement("a");
-
+  const link = document.createElement("a");
 
   link.href = url;
-
-
-  link.setAttribute(
-    "download",
-    "dataset"
-  );
-
+  link.setAttribute("download", "dataset");
 
   document.body.appendChild(link);
 
-
   link.click();
-
 
   link.remove();
 
-
   window.URL.revokeObjectURL(url);
-
 }
 
-
+// =========================
+// Upload Dataset
+// =========================
 
 export async function uploadDataset(
   file: File
-) {
-
+): Promise<Dataset> {
   const formData = new FormData();
 
+  formData.append("file", file);
 
-  formData.append(
-    "file",
-    file
-  );
-
-
-  const response = await api.post(
+  const response = await api.post<Dataset>(
     "/datasets/upload",
     formData,
     {
-      headers:{
-        "Content-Type":
-          "multipart/form-data",
+      headers: {
+        "Content-Type": "multipart/form-data",
       },
     }
   );
-
 
   return response.data;
 }

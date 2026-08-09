@@ -17,6 +17,7 @@ export interface LoginData {
 
 export interface ForgotPasswordData {
   email: string;
+  password?: string;
 }
 
 export interface LoginResponse {
@@ -32,7 +33,7 @@ export async function register(
   data: RegisterData
 ): Promise<any> {
   const response = await api.post(
-    "/api/v1/auth/register",
+    "/auth/register",
     data
   );
 
@@ -46,7 +47,6 @@ export async function register(
 export async function login(
   data: LoginData
 ): Promise<LoginResponse> {
-
   const formData = new URLSearchParams();
 
   formData.append(
@@ -59,9 +59,8 @@ export async function login(
     data.password
   );
 
-
   const response = await api.post<LoginResponse>(
-    "/api/v1/auth/login",
+    "/auth/login",
     formData,
     {
       headers: {
@@ -71,16 +70,13 @@ export async function login(
     }
   );
 
-
   // Save JWT token
   localStorage.setItem(
     "access_token",
     response.data.access_token
   );
 
-
   return response.data;
-
 }
 
 // =========================
@@ -91,9 +87,10 @@ export async function forgotPassword(
   data: ForgotPasswordData
 ): Promise<any> {
   const response = await api.post(
-    "/api/v1/auth/forgot-password",
+    "/auth/forgot-password",
     data
   );
 
   return response.data;
 }
+
