@@ -76,6 +76,7 @@ export default function MissingValuesChart({
 
               <Bar
                 dataKey="missing"
+                fill="#ef4444"
                 radius={[6, 6, 0, 0]}
               />
             </BarChart>

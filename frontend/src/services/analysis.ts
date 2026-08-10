@@ -15,8 +15,26 @@ export interface MissingValueInfo {
 
 export interface DuplicateInfo {
   count: number;
+  has_duplicates?: boolean;
   percent?: number;
   [key: string]: any;
+}
+
+// =========================
+// Column Information
+// =========================
+
+export interface ColumnInfo {
+  name: string;
+  dtype: string;
+  unique: number;
+  missing: number;
+  missing_percent?: number;
+  memory_usage?: number;
+
+  // Numeric columns
+  mean?: number | null;
+  std?: number | null;
 }
 
 // =========================
@@ -31,10 +49,13 @@ export interface AnalysisData {
     rows: number;
     columns: number;
     memory_usage?: number;
+    missing_cells?: number;
+    duplicate_rows?: number;
     [key: string]: any;
   };
 
-  column_info: Record<string, any>;
+  // Backend returns an array of column information
+  column_info: ColumnInfo[];
 
   statistics: Record<string, any>;
 
