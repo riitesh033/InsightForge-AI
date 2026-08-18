@@ -5,21 +5,62 @@ interface ColumnInfo {
   missing: number;
   missing_percent?: number;
   memory_usage?: number;
+}
+
+interface ColumnStatistics {
   mean?: number | null;
   std?: number | null;
+  [key: string]: any;
 }
 
 interface Props {
   columnInfo: ColumnInfo[];
-  statistics?: Record<string, any>;
+  statistics?: Record<string, ColumnStatistics>;
 }
 
 export default function ColumnInfoTable({
   columnInfo,
+  statistics = {},
 }: Props) {
   const columns = Array.isArray(columnInfo)
     ? columnInfo
     : [];
+
+  const formatNumber = (value: unknown): string => {
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value)
+    ) {
+      return value.toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      });
+    }
+
+    return "-";
+  };
+
+  const formatPercent = (value: unknown): string => {
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value)
+    ) {
+      return `${value.toFixed(2)}%`;
+    }
+
+    return "-";
+  };
+
+  const getMissingClass = (percent: number) => {
+    if (percent === 0) {
+      return "text-green-600 dark:text-green-400";
+    }
+
+    if (percent < 10) {
+      return "text-yellow-600 dark:text-yellow-400";
+    }
+
+    return "text-red-600 dark:text-red-400";
+  };
 
   return (
     <div className="rounded-2xl border bg-card shadow-sm">
@@ -40,33 +81,37 @@ export default function ColumnInfoTable({
       {/* Table */}
       <div className="overflow-x-auto">
 
-        <table className="w-full">
+        <table className="w-full min-w-[800px]">
 
           <thead className="bg-muted/40">
 
             <tr>
 
-              <th className="px-5 py-3 text-left">
+              <th className="px-5 py-3 text-left text-sm font-semibold">
                 Column
               </th>
 
-              <th className="px-5 py-3 text-left">
+              <th className="px-5 py-3 text-left text-sm font-semibold">
                 Data Type
               </th>
 
-              <th className="px-5 py-3 text-center">
+              <th className="px-5 py-3 text-center text-sm font-semibold">
                 Unique
               </th>
 
-              <th className="px-5 py-3 text-center">
+              <th className="px-5 py-3 text-center text-sm font-semibold">
                 Missing
               </th>
 
-              <th className="px-5 py-3 text-center">
+              <th className="px-5 py-3 text-center text-sm font-semibold">
+                Missing %
+              </th>
+
+              <th className="px-5 py-3 text-center text-sm font-semibold">
                 Mean
               </th>
 
-              <th className="px-5 py-3 text-center">
+              <th className="px-5 py-3 text-center text-sm font-semibold">
                 Std
               </th>
 
@@ -81,7 +126,7 @@ export default function ColumnInfoTable({
               <tr>
 
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="py-10 text-center text-muted-foreground"
                 >
                   No column information available.
@@ -95,55 +140,73 @@ export default function ColumnInfoTable({
 
                 const columnName = info.name;
 
-                const isNumeric =
-                  typeof info.mean === "number" ||
-                  typeof info.std === "number";
+                const stats =
+                  statistics[columnName] ?? {};
+
+                const mean = stats.mean;
+
+                const std = stats.std;
+
+                const missing =
+                  typeof info.missing === "number"
+                    ? info.missing
+                    : 0;
+
+                const missingPercent =
+                  typeof info.missing_percent === "number"
+                    ? info.missing_percent
+                    : 0;
 
                 return (
-
                   <tr
                     key={columnName}
                     className="border-t transition-colors hover:bg-muted/30"
                   >
 
-                    {/* Column Name */}
+                    {/* Column */}
                     <td className="px-5 py-4 font-medium">
                       {columnName}
                     </td>
 
                     {/* Data Type */}
                     <td className="px-5 py-4">
-                      {info.dtype ?? "-"}
+
+                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                        {info.dtype || "-"}
+                      </span>
+
                     </td>
 
                     {/* Unique */}
                     <td className="px-5 py-4 text-center">
-                      {info.unique ?? "-"}
+                      {formatNumber(info.unique)}
                     </td>
 
                     {/* Missing */}
                     <td className="px-5 py-4 text-center">
-                      {info.missing ?? 0}
+                      {missing.toLocaleString()}
+                    </td>
+
+                    {/* Missing Percentage */}
+                    <td
+                      className={`px-5 py-4 text-center font-medium ${getMissingClass(
+                        missingPercent
+                      )}`}
+                    >
+                      {formatPercent(missingPercent)}
                     </td>
 
                     {/* Mean */}
                     <td className="px-5 py-4 text-center">
-                      {isNumeric &&
-                      typeof info.mean === "number"
-                        ? info.mean.toFixed(2)
-                        : "-"}
+                      {formatNumber(mean)}
                     </td>
 
                     {/* Standard Deviation */}
                     <td className="px-5 py-4 text-center">
-                      {isNumeric &&
-                      typeof info.std === "number"
-                        ? info.std.toFixed(2)
-                        : "-"}
+                      {formatNumber(std)}
                     </td>
 
                   </tr>
-
                 );
               })
 
@@ -154,6 +217,21 @@ export default function ColumnInfoTable({
         </table>
 
       </div>
+
+      {/* Footer */}
+      {columns.length > 0 && (
+        <div className="border-t px-6 py-4">
+
+          <p className="text-xs text-muted-foreground">
+            Showing {columns.length}{" "}
+            {columns.length === 1
+              ? "column"
+              : "columns"}{" "}
+            from the analyzed dataset.
+          </p>
+
+        </div>
+      )}
 
     </div>
   );

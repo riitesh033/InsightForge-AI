@@ -1,43 +1,90 @@
+import { useState } from "react";
 import {
-  FileDown,
+  Download,
+  Loader2,
 } from "lucide-react";
 
+import api from "@/lib/api";
 
 interface Props {
   datasetId: number;
 }
 
-
 export default function ReportButton({
   datasetId,
 }: Props) {
+  const [loading, setLoading] = useState(false);
 
+  async function downloadReport() {
+    try {
+      setLoading(true);
 
-  function downloadReport() {
+      const response = await api.get(
+        `/analysis/${datasetId}/report`,
+        {
+          responseType: "blob",
+        }
+      );
 
-    window.open(
-      `${import.meta.env.VITE_API_URL}/analysis/${datasetId}/report`,
-      "_blank"
-    );
+      const blob = new Blob(
+        [response.data],
+        {
+          type: "application/pdf",
+        }
+      );
 
+      const url =
+        window.URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+
+      link.download =
+        `insightforge-analysis-${datasetId}.pdf`;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error(
+        "Report download failed:",
+        error
+      );
+
+      alert(
+        "Failed to generate the report. Please try again."
+      );
+
+    } finally {
+      setLoading(false);
+    }
   }
 
-
   return (
-
     <button
+      type="button"
       onClick={downloadReport}
-      className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-primary-foreground hover:opacity-90"
+      disabled={loading}
+      className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
     >
-
-      <FileDown
-        className="h-5 w-5"
-      />
-
-      Generate Report
-
+      {loading ? (
+        <>
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Generating...
+        </>
+      ) : (
+        <>
+          <Download className="h-5 w-5" />
+          Generate Report
+        </>
+      )}
     </button>
-
   );
-
 }
