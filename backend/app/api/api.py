@@ -6,6 +6,7 @@ from app.api.v1.endpoints import dataset
 from app.api.v1.endpoints import health
 from app.api.v1.endpoints import users
 from app.api.v1.endpoints import dashboard
+from app.api.v1.endpoints import chat
 
 api_router = APIRouter()
 
@@ -43,4 +44,10 @@ api_router.include_router(
     dashboard.router,
     prefix="/dashboard",
     tags=["Dashboard"],
+)
+
+api_router.include_router(
+    chat.router,
+    prefix="/chat",
+    tags=["AI Chat"],
 )
