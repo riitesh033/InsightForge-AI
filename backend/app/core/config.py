@@ -18,12 +18,15 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
-    model_config = SettingsConfigDict(
-    env_file=".env",
-    case_sensitive=True,
-    extra="ignore",
-)
+    # Ollama
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_MODEL: str = "qwen3:8b"
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 @lru_cache

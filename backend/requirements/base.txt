@@ -67,3 +67,5 @@ httpx
 # ==========================
 pytest
 pytest-asyncio
+
+ollama
