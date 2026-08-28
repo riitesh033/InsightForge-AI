@@ -1,7 +1,7 @@
 import re
 import json
 
-import ollama
+import ollama  # pyright: ignore[reportMissingImports]
 
 from sqlalchemy.orm import Session
 
