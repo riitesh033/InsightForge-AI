@@ -8,26 +8,30 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
 from app.db.session import get_db
-from app.models.analysis import Analysis
-from app.models.dataset import Dataset
 from app.models.user import User
+from app.models.dataset import Dataset
+from app.models.analysis import Analysis
 from app.services.report import generate_analysis_report
 
 
 router = APIRouter()
 
 
+# ============================================================
+# Generate / Download PDF Report
+# ============================================================
+
 @router.get(
-    "/{dataset_id}/download"
+    "/{dataset_id}/pdf",
 )
 def download_report(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # =========================
-    # Find Dataset
-    # =========================
+    # --------------------------------------------------------
+    # Find dataset owned by current user
+    # --------------------------------------------------------
 
     dataset = (
         db.query(Dataset)
@@ -44,9 +48,9 @@ def download_report(
             detail="Dataset not found.",
         )
 
-    # =========================
-    # Find Analysis
-    # =========================
+    # --------------------------------------------------------
+    # Find analysis
+    # --------------------------------------------------------
 
     analysis = (
         db.query(Analysis)
@@ -59,14 +63,14 @@ def download_report(
     if analysis is None:
         raise HTTPException(
             status_code=404,
-            detail="Analysis not found.",
+            detail="Analysis not found for this dataset.",
         )
 
-    # =========================
+    # --------------------------------------------------------
     # Generate PDF
-    # =========================
+    # --------------------------------------------------------
 
-    pdf = generate_analysis_report(
+    pdf_buffer = generate_analysis_report(
         analysis
     )
 
@@ -76,8 +80,12 @@ def download_report(
         + "_analysis_report.pdf"
     )
 
+    # --------------------------------------------------------
+    # Return PDF
+    # --------------------------------------------------------
+
     return StreamingResponse(
-        pdf,
+        pdf_buffer,
         media_type="application/pdf",
         headers={
             "Content-Disposition": (
