@@ -13,26 +13,53 @@ from app.models.dataset import Dataset
 from app.models.analysis import Analysis
 from app.services.report import generate_analysis_report
 
-
 router = APIRouter()
 
 
-# ============================================================
-# Generate / Download PDF Report
-# ============================================================
+@router.get("/")
+def get_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reports = (
+        db.query(
+            Dataset.id.label("dataset_id"),
+            Dataset.original_filename.label("dataset_name"),
+            Dataset.uploaded_at.label("uploaded_at"),
+            Analysis.id.label("analysis_id"),
+            Analysis.quality_score.label("quality_score"),
+        )
+        .join(
+            Analysis,
+            Analysis.dataset_id == Dataset.id,
+        )
+        .filter(
+            Dataset.owner_id == current_user.id,
+        )
+        .order_by(
+            Dataset.uploaded_at.desc()
+        )
+        .all()
+    )
 
-@router.get(
-    "/{dataset_id}/pdf",
-)
+    return [
+        {
+            "dataset_id": report.dataset_id,
+            "dataset_name": report.dataset_name,
+            "uploaded_at": report.uploaded_at,
+            "analysis_id": report.analysis_id,
+            "quality_score": report.quality_score,
+        }
+        for report in reports
+    ]
+
+
+@router.get("/{dataset_id}/pdf")
 def download_report(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # --------------------------------------------------------
-    # Find dataset owned by current user
-    # --------------------------------------------------------
-
     dataset = (
         db.query(Dataset)
         .filter(
@@ -48,10 +75,6 @@ def download_report(
             detail="Dataset not found.",
         )
 
-    # --------------------------------------------------------
-    # Find analysis
-    # --------------------------------------------------------
-
     analysis = (
         db.query(Analysis)
         .filter(
@@ -66,23 +89,13 @@ def download_report(
             detail="Analysis not found for this dataset.",
         )
 
-    # --------------------------------------------------------
-    # Generate PDF
-    # --------------------------------------------------------
-
-    pdf_buffer = generate_analysis_report(
-        analysis
-    )
+    pdf_buffer = generate_analysis_report(analysis)
 
     filename = (
         f"{dataset.original_filename}"
         .rsplit(".", 1)[0]
         + "_analysis_report.pdf"
     )
-
-    # --------------------------------------------------------
-    # Return PDF
-    # --------------------------------------------------------
 
     return StreamingResponse(
         pdf_buffer,
