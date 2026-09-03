@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import extract
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -119,16 +121,44 @@ def get_uploads_per_month(
     db: Session,
     owner_id: int,
 ):
+    current_date = datetime.utcnow()
+
+    current_year = current_date.year
+    current_month = current_date.month
+
+    # Build the last 12 months.
+    months = []
+
+    for offset in range(11, -1, -1):
+        month = current_month - offset
+        year = current_year
+
+        while month <= 0:
+            month += 12
+            year -= 1
+
+        months.append((year, month))
+
     uploads = (
         db.query(
+            extract("year", Dataset.uploaded_at).label("year"),
             extract("month", Dataset.uploaded_at).label("month"),
             func.count(Dataset.id).label("uploads"),
         )
-        .filter(Dataset.owner_id == owner_id)
-        .group_by(extract("month", Dataset.uploaded_at))
-        .order_by(extract("month", Dataset.uploaded_at))
+        .filter(
+            Dataset.owner_id == owner_id,
+        )
+        .group_by(
+            extract("year", Dataset.uploaded_at),
+            extract("month", Dataset.uploaded_at),
+        )
         .all()
     )
+
+    upload_map = {
+        (int(item.year), int(item.month)): item.uploads
+        for item in uploads
+    }
 
     month_names = [
         "",
@@ -148,10 +178,10 @@ def get_uploads_per_month(
 
     return [
         {
-            "month": month_names[int(item.month)],
-            "uploads": item.uploads,
+            "month": month_names[month],
+            "uploads": upload_map.get((year, month), 0),
         }
-        for item in uploads
+        for year, month in months
     ]
 
 

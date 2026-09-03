@@ -5,7 +5,7 @@ from app.models.chat_session import ChatSession
 
 
 # ============================================================
-# Get Single Session
+# Get Single Chat Session
 # ============================================================
 
 def get_chat_session(
@@ -24,7 +24,7 @@ def get_chat_session(
 
 
 # ============================================================
-# Get Sessions For Dataset
+# Get All Chat Sessions For Dataset
 # ============================================================
 
 def get_chat_sessions_for_dataset(
@@ -38,15 +38,13 @@ def get_chat_sessions_for_dataset(
             ChatSession.dataset_id == dataset_id,
             ChatSession.user_id == user_id,
         )
-        .order_by(
-            ChatSession.updated_at.desc()
-        )
+        .order_by(ChatSession.updated_at.desc())
         .all()
     )
 
 
 # ============================================================
-# Create Session
+# Create Chat Session
 # ============================================================
 
 def create_chat_session(
@@ -69,7 +67,7 @@ def create_chat_session(
 
 
 # ============================================================
-# Delete Session
+# Delete Chat Session
 # ============================================================
 
 def delete_chat_session(
@@ -81,7 +79,7 @@ def delete_chat_session(
 
 
 # ============================================================
-# Create Message
+# Create Chat Message
 # ============================================================
 
 def create_chat_message(
@@ -97,22 +95,6 @@ def create_chat_message(
     )
 
     db.add(message)
-
-    # Update session timestamp so the chat
-    # moves to the top of the sidebar.
-    session = (
-        db.query(ChatSession)
-        .filter(
-            ChatSession.id == session_id
-        )
-        .first()
-    )
-
-    if session:
-        from datetime import datetime
-
-        session.updated_at = datetime.utcnow()
-
     db.commit()
     db.refresh(message)
 
@@ -120,7 +102,7 @@ def create_chat_message(
 
 
 # ============================================================
-# Get Messages
+# Get Chat Messages
 # ============================================================
 
 def get_chat_messages(
@@ -130,10 +112,8 @@ def get_chat_messages(
     return (
         db.query(ChatMessage)
         .filter(
-            ChatMessage.session_id == session_id
+            ChatMessage.session_id == session_id,
         )
-        .order_by(
-            ChatMessage.created_at.asc()
-        )
+        .order_by(ChatMessage.created_at.asc())
         .all()
     )

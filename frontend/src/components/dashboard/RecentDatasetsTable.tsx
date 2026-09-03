@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 import { RecentDataset } from "@/services/dashboard";
 
 interface Props {
@@ -11,12 +13,22 @@ function formatDate(date: string) {
 export default function RecentDatasetsTable({
   datasets,
 }: Props) {
+  const navigate = useNavigate();
+
+  function handleDatasetClick(datasetId: number) {
+    navigate(`/dashboard/analysis/${datasetId}`);
+  }
+
   return (
     <div className="rounded-2xl border bg-card shadow-sm">
       <div className="border-b p-5">
         <h2 className="text-lg font-semibold">
           Recent Datasets
         </h2>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          Recently uploaded datasets
+        </p>
       </div>
 
       <div className="overflow-x-auto">
@@ -59,10 +71,19 @@ export default function RecentDatasetsTable({
               datasets.map((dataset) => (
                 <tr
                   key={dataset.id}
-                  className="border-b last:border-none hover:bg-muted/40"
+                  onClick={() =>
+                    handleDatasetClick(dataset.id)
+                  }
+                  className="cursor-pointer border-b transition-colors last:border-none hover:bg-muted/40"
                 >
-                  <td className="px-4 py-4 font-medium">
-                    {dataset.original_filename}
+                  <td className="px-4 py-4">
+                    <div className="font-medium">
+                      {dataset.original_filename}
+                    </div>
+
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Dataset #{dataset.id}
+                    </div>
                   </td>
 
                   <td className="px-4 py-4 text-center">
@@ -74,7 +95,9 @@ export default function RecentDatasetsTable({
                   </td>
 
                   <td className="px-4 py-4 text-center">
-                    {dataset.quality_score ?? "-"}%
+                    {dataset.quality_score !== null
+                      ? `${dataset.quality_score}%`
+                      : "-"}
                   </td>
 
                   <td className="px-4 py-4 text-center text-sm text-muted-foreground">

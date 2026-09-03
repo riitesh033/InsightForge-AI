@@ -38,8 +38,7 @@ export default function DashboardPage() {
 
       <StatsGrid stats={data.stats} />
 
-      <Charts charts={data.charts} />
-
+      {/* Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-2">
         <RecentDatasetsTable
           datasets={data.recent_datasets}
@@ -49,6 +48,9 @@ export default function DashboardPage() {
           analyses={data.recent_analyses}
         />
       </div>
+
+      {/* Analytics */}
+      <Charts charts={data.charts} />
     </div>
   );
 }

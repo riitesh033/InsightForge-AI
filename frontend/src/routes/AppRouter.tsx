@@ -110,7 +110,7 @@ export default function AppRouter() {
 
         {/* /dashboard/ai-chat */}
         <Route
-          path="ai-chat"
+          path="ai-chat/:datasetId?"
           element={<AIChatPage />}
         />
 

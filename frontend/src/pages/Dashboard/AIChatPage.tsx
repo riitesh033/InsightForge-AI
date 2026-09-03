@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 import {
   Send,
@@ -27,6 +28,13 @@ import {
 
 
 export default function AIChatPage() {
+  const { datasetId: datasetIdParam } =
+    useParams<{ datasetId?: string }>();
+
+  const routeDatasetId = datasetIdParam
+    ? Number(datasetIdParam)
+    : null;
+
 
   // ==========================================================
   // Dataset
@@ -92,27 +100,47 @@ export default function AIChatPage() {
 
 
   async function loadDatasets() {
-
     try {
-
       setLoadingDatasets(true);
       setError("");
 
-      const response =
-        await getDatasets();
+      const response = await getDatasets();
 
       setDatasets(response.items);
 
       if (response.items.length > 0) {
+        /*
+         * If a dataset ID was provided in the URL,
+         * select that dataset.
+         *
+         * Example:
+         * /dashboard/ai-chat/2
+         *
+         * Otherwise select the first dataset.
+         */
+        const datasetFromRoute =
+          routeDatasetId !== null
+            ? response.items.find(
+                (dataset) =>
+                  dataset.id === routeDatasetId
+              )
+            : undefined;
 
-        setSelectedDatasetId(
-          response.items[0].id
-        );
-
+        if (datasetFromRoute) {
+          setSelectedDatasetId(
+            datasetFromRoute.id
+          );
+        } else {
+          setSelectedDatasetId(
+            response.items[0].id
+          );
+        }
+      } else {
+        setSelectedDatasetId("");
+        setSessions([]);
+        setMessages([]);
       }
-
     } catch (err) {
-
       console.error(
         "Dataset loading error:",
         err
@@ -121,11 +149,8 @@ export default function AIChatPage() {
       setError(
         "Failed to load datasets."
       );
-
     } finally {
-
       setLoadingDatasets(false);
-
     }
   }
 
@@ -135,51 +160,40 @@ export default function AIChatPage() {
   // ==========================================================
 
   useEffect(() => {
-
     if (
       typeof selectedDatasetId !== "number"
     ) {
+      setSessions([]);
+      setMessages([]);
+      setSelectedSessionId(null);
       return;
     }
 
-    loadSessions(
-      selectedDatasetId
-    );
-
+    loadSessions(selectedDatasetId);
   }, [selectedDatasetId]);
 
 
   async function loadSessions(
     datasetId: number
   ) {
-
     try {
-
       setLoadingSessions(true);
       setError("");
 
       const chatSessions =
-        await getChatSessions(
-          datasetId
-        );
+        await getChatSessions(datasetId);
 
       setSessions(chatSessions);
 
       if (chatSessions.length > 0) {
-
         setSelectedSessionId(
           chatSessions[0].id
         );
-
       } else {
-
         setSelectedSessionId(null);
         setMessages([]);
-
       }
-
     } catch (err) {
-
       console.error(
         "Chat sessions error:",
         err
@@ -188,11 +202,8 @@ export default function AIChatPage() {
       setError(
         "Failed to load chat sessions."
       );
-
     } finally {
-
       setLoadingSessions(false);
-
     }
   }
 
@@ -202,40 +213,30 @@ export default function AIChatPage() {
   // ==========================================================
 
   useEffect(() => {
-
     if (
       selectedSessionId === null
     ) {
       return;
     }
 
-    loadSession(
-      selectedSessionId
-    );
-
+    loadSession(selectedSessionId);
   }, [selectedSessionId]);
 
 
   async function loadSession(
     sessionId: number
   ) {
-
     try {
-
       setLoadingMessages(true);
       setError("");
 
       const response =
-        await getChatSession(
-          sessionId
-        );
+        await getChatSession(sessionId);
 
       setMessages(
         response.messages
       );
-
     } catch (err) {
-
       console.error(
         "Chat loading error:",
         err
@@ -244,11 +245,8 @@ export default function AIChatPage() {
       setError(
         "Failed to load this chat."
       );
-
     } finally {
-
       setLoadingMessages(false);
-
     }
   }
 
@@ -258,7 +256,6 @@ export default function AIChatPage() {
   // ==========================================================
 
   async function handleNewChat() {
-
     if (
       typeof selectedDatasetId !== "number"
     ) {
@@ -270,7 +267,6 @@ export default function AIChatPage() {
     }
 
     try {
-
       setError("");
 
       const session =
@@ -278,21 +274,17 @@ export default function AIChatPage() {
           selectedDatasetId
         );
 
-      setSessions(
-        previous => [
-          session,
-          ...previous,
-        ]
-      );
+      setSessions((previous) => [
+        session,
+        ...previous,
+      ]);
 
       setSelectedSessionId(
         session.id
       );
 
       setMessages([]);
-
     } catch (err) {
-
       console.error(
         "New chat error:",
         err
@@ -312,9 +304,7 @@ export default function AIChatPage() {
   async function handleDeleteChat(
     sessionId: number
   ) {
-
     try {
-
       setError("");
 
       await deleteChatSession(
@@ -323,37 +313,25 @@ export default function AIChatPage() {
 
       const remaining =
         sessions.filter(
-          session =>
+          (session) =>
             session.id !== sessionId
         );
 
-      setSessions(
-        remaining
-      );
+      setSessions(remaining);
 
       if (
         selectedSessionId === sessionId
       ) {
-
         if (remaining.length > 0) {
-
           setSelectedSessionId(
             remaining[0].id
           );
-
         } else {
-
-          setSelectedSessionId(
-            null
-          );
-
+          setSelectedSessionId(null);
           setMessages([]);
-
         }
       }
-
     } catch (err) {
-
       console.error(
         "Delete chat error:",
         err
@@ -373,7 +351,6 @@ export default function AIChatPage() {
   async function sendMessage(
     customMessage?: string
   ) {
-
     const question =
       customMessage ?? message;
 
@@ -384,7 +361,6 @@ export default function AIChatPage() {
     if (
       typeof selectedDatasetId !== "number"
     ) {
-
       setError(
         "Please select a dataset first."
       );
@@ -392,37 +368,29 @@ export default function AIChatPage() {
       return;
     }
 
-
     let sessionId =
       selectedSessionId;
 
-
     try {
-
       setSending(true);
       setError("");
-
 
       // ------------------------------------------------------
       // Automatically create chat if none exists
       // ------------------------------------------------------
 
       if (sessionId === null) {
-
         const session =
           await createChatSession(
             selectedDatasetId
           );
 
-        sessionId =
-          session.id;
+        sessionId = session.id;
 
-        setSessions(
-          previous => [
-            session,
-            ...previous,
-          ]
-        );
+        setSessions((previous) => [
+          session,
+          ...previous,
+        ]);
 
         setSelectedSessionId(
           session.id
@@ -439,12 +407,10 @@ export default function AIChatPage() {
         content: question.trim(),
       };
 
-      setMessages(
-        previous => [
-          ...previous,
-          userMessage,
-        ]
-      );
+      setMessages((previous) => [
+        ...previous,
+        userMessage,
+      ]);
 
       setMessage("");
 
@@ -459,7 +425,6 @@ export default function AIChatPage() {
           sessionId,
           question.trim()
         );
-
 
       setMessages(
         response.messages
@@ -478,9 +443,7 @@ export default function AIChatPage() {
       setSessions(
         updatedSessions
       );
-
     } catch (err) {
-
       console.error(
         "Chat error:",
         err
@@ -489,11 +452,8 @@ export default function AIChatPage() {
       setError(
         "Failed to get a response from InsightForge AI."
       );
-
     } finally {
-
       setSending(false);
-
     }
   }
 
@@ -505,9 +465,7 @@ export default function AIChatPage() {
   function handleSuggestion(
     prompt: string
   ) {
-
     sendMessage(prompt);
-
   }
 
 
@@ -523,7 +481,6 @@ export default function AIChatPage() {
       ====================================================== */}
 
       <div className="mb-5">
-
         <h1 className="text-3xl font-bold text-foreground">
           AI Chat
         </h1>
@@ -531,7 +488,6 @@ export default function AIChatPage() {
         <p className="mt-1 text-muted-foreground">
           Interact with your AI Data Analyst.
         </p>
-
       </div>
 
 
@@ -541,18 +497,15 @@ export default function AIChatPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 
-
         {/* ===================================================
             Chat Sidebar
         ==================================================== */}
 
         <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-background">
 
-
           {/* Sidebar Header */}
 
           <div className="border-b border-border p-4">
-
             <button
               onClick={handleNewChat}
               disabled={
@@ -576,24 +529,19 @@ export default function AIChatPage() {
                 disabled:opacity-50
               "
             >
-
               <Plus size={18} />
 
               New Chat
-
             </button>
-
           </div>
 
 
           {/* Sidebar Title */}
 
           <div className="px-4 pb-2 pt-5">
-
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Chat History
             </p>
-
           </div>
 
 
@@ -602,13 +550,10 @@ export default function AIChatPage() {
           <div className="flex-1 overflow-y-auto px-2 pb-4">
 
             {loadingSessions ? (
-
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                 Loading chats...
               </div>
-
             ) : sessions.length === 0 ? (
-
               <div className="px-4 py-8 text-center">
 
                 <MessageSquare
@@ -625,14 +570,11 @@ export default function AIChatPage() {
                 </p>
 
               </div>
-
             ) : (
-
               <div className="space-y-1">
 
                 {sessions.map(
-                  session => (
-
+                  (session) => (
                     <div
                       key={session.id}
                       className={`
@@ -645,7 +587,8 @@ export default function AIChatPage() {
                         py-3
                         transition
                         ${
-                          selectedSessionId === session.id
+                          selectedSessionId ===
+                          session.id
                             ? "bg-primary/10 text-primary"
                             : "hover:bg-accent"
                         }
@@ -660,7 +603,6 @@ export default function AIChatPage() {
                         }
                         className="min-w-0 flex-1 text-left"
                       >
-
                         <div className="flex items-center gap-2">
 
                           <MessageSquare
@@ -679,7 +621,6 @@ export default function AIChatPage() {
                             session.updated_at
                           ).toLocaleDateString()}
                         </p>
-
                       </button>
 
 
@@ -702,18 +643,14 @@ export default function AIChatPage() {
                         "
                         title="Delete chat"
                       >
-
                         <Trash2 size={15} />
-
                       </button>
 
                     </div>
-
                   )
                 )}
 
               </div>
-
             )}
 
           </div>
@@ -727,7 +664,6 @@ export default function AIChatPage() {
 
         <section className="flex min-w-0 flex-1 flex-col">
 
-
           {/* Dataset Header */}
 
           <div className="border-b border-border bg-background p-4">
@@ -739,7 +675,6 @@ export default function AIChatPage() {
             <select
               value={selectedDatasetId}
               onChange={(e) => {
-
                 const value =
                   e.target.value
                     ? Number(e.target.value)
@@ -754,7 +689,6 @@ export default function AIChatPage() {
                 setSelectedSessionId(
                   null
                 );
-
               }}
               disabled={
                 loadingDatasets ||
@@ -776,32 +710,24 @@ export default function AIChatPage() {
             >
 
               {loadingDatasets ? (
-
                 <option value="">
                   Loading datasets...
                 </option>
-
               ) : datasets.length === 0 ? (
-
                 <option value="">
                   No datasets available
                 </option>
-
               ) : (
-
                 datasets.map(
-                  dataset => (
-
+                  (dataset) => (
                     <option
                       key={dataset.id}
                       value={dataset.id}
                     >
                       {dataset.original_filename}
                     </option>
-
                   )
                 )
-
               )}
 
             </select>
@@ -812,11 +738,9 @@ export default function AIChatPage() {
           {/* Error */}
 
           {error && (
-
             <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
               {error}
             </div>
-
           )}
 
 
@@ -827,7 +751,6 @@ export default function AIChatPage() {
           <div className="min-h-0 flex-1 overflow-y-auto p-6 lg:p-8">
 
             {loadingMessages ? (
-
               <div className="flex h-full items-center justify-center">
 
                 <p className="text-muted-foreground">
@@ -835,17 +758,13 @@ export default function AIChatPage() {
                 </p>
 
               </div>
-
             ) : messages.length === 0 ? (
-
               <div className="flex h-full items-center justify-center">
 
                 <div className="max-w-xl text-center">
 
                   <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
-
                     <Bot size={30} />
-
                   </div>
 
                   <h2 className="text-2xl font-semibold">
@@ -867,20 +786,16 @@ export default function AIChatPage() {
                 </div>
 
               </div>
-
             ) : (
-
               <div className="mx-auto max-w-4xl space-y-6">
 
                 {messages.map(
                   (chatMessage, index) => {
-
                     const isUser =
                       chatMessage.role ===
                       "user";
 
                     return (
-
                       <div
                         key={
                           chatMessage.id ??
@@ -894,15 +809,10 @@ export default function AIChatPage() {
                       >
 
                         {!isUser && (
-
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-
                             <Bot size={19} />
-
                           </div>
-
                         )}
-
 
                         <div
                           className={
@@ -919,55 +829,39 @@ export default function AIChatPage() {
                                 : "rounded-2xl rounded-bl-md bg-muted px-5 py-4 text-foreground"
                             }
                           >
-
                             <p className="whitespace-pre-wrap text-[15px] leading-7">
                               {chatMessage.content}
                             </p>
-
                           </div>
 
-
                           {isUser && (
-
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-
                               <User size={19} />
-
                             </div>
-
                           )}
 
                         </div>
 
                       </div>
-
                     );
                   }
                 )}
 
-
                 {sending && (
-
                   <div className="flex items-start gap-3">
 
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-
                       <Bot size={19} />
-
                     </div>
 
                     <div className="rounded-2xl rounded-bl-md bg-muted px-5 py-4 text-muted-foreground">
-
                       Thinking...
-
                     </div>
 
                   </div>
-
                 )}
 
               </div>
-
             )}
 
           </div>
@@ -989,18 +883,13 @@ export default function AIChatPage() {
                   )
                 }
                 onKeyDown={(e) => {
-
                   if (
                     e.key === "Enter" &&
                     !e.shiftKey
                   ) {
-
                     e.preventDefault();
-
                     sendMessage();
-
                   }
-
                 }}
                 disabled={
                   sending ||
@@ -1027,7 +916,6 @@ export default function AIChatPage() {
                 "
               />
 
-
               <button
                 onClick={() =>
                   sendMessage()
@@ -1053,13 +941,11 @@ export default function AIChatPage() {
                   disabled:opacity-50
                 "
               >
-
                 <Send size={18} />
 
                 {sending
                   ? "Sending..."
                   : "Send"}
-
               </button>
 
             </div>
@@ -1100,14 +986,11 @@ export default function AIChatPage() {
             "Find outliers",
             "Generate business insights",
             "Recommend cleaning steps",
-          ].map(prompt => (
-
+          ].map((prompt) => (
             <button
               key={prompt}
               onClick={() =>
-                handleSuggestion(
-                  prompt
-                )
+                handleSuggestion(prompt)
               }
               disabled={
                 sending ||
@@ -1130,7 +1013,6 @@ export default function AIChatPage() {
             >
               {prompt}
             </button>
-
           ))}
 
         </div>

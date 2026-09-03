@@ -1,5 +1,6 @@
 import re
 import json
+from typing import Any
 
 import ollama  # pyright: ignore[reportMissingImports]
 
@@ -45,6 +46,7 @@ def get_dataset_context(
         .filter(
             Analysis.dataset_id == dataset_id,
         )
+        .order_by(Analysis.id.desc())
         .first()
     )
 
@@ -66,6 +68,40 @@ def normalize_question(question: str) -> str:
     )
 
 
+def safe_number(value: Any) -> float | None:
+    """
+    Safely convert a value to a number.
+    Returns None when conversion is not possible.
+    """
+
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_number(value: Any) -> str:
+    """
+    Format numeric values cleanly.
+    """
+
+    number = safe_number(value)
+
+    if number is None:
+        return str(value)
+
+    if number.is_integer():
+        return str(int(number))
+
+    return f"{number:.4f}".rstrip("0").rstrip(".")
+
+
 def get_total_missing_values(analysis) -> int:
     if not analysis or not analysis.summary:
         return 0
@@ -73,9 +109,17 @@ def get_total_missing_values(analysis) -> int:
     summary = analysis.summary
 
     if isinstance(summary, dict):
-        return int(
-            summary.get("missing_cells", 0) or 0
+        value = (
+            summary.get("missing_cells")
+            or summary.get("missing_values")
+            or summary.get("missing")
+            or 0
         )
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     return 0
 
@@ -87,9 +131,16 @@ def get_duplicate_count(analysis) -> int:
     duplicates = analysis.duplicates
 
     if isinstance(duplicates, dict):
-        return int(
-            duplicates.get("count", 0) or 0
+        value = (
+            duplicates.get("count")
+            or duplicates.get("duplicate_count")
+            or 0
         )
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     return 0
 
@@ -101,22 +152,26 @@ def get_duplicate_count(analysis) -> int:
 def get_column_names(analysis) -> list[str]:
     """
     Safely extract column names from column_info.
-    Supports several possible JSON structures.
+
+    Supports:
+
+    [
+        {"name": "age"},
+        {"name": "salary"}
+    ]
+
+    and:
+
+    {
+        "age": {...},
+        "salary": {...}
+    }
     """
 
     if not analysis or not analysis.column_info:
         return []
 
     column_info = analysis.column_info
-
-    # --------------------------------------------------------
-    # List format
-    #
-    # [
-    #   {"name": "age", ...},
-    #   {"name": "salary", ...}
-    # ]
-    # --------------------------------------------------------
 
     if isinstance(column_info, list):
 
@@ -137,16 +192,8 @@ def get_column_names(analysis) -> list[str]:
 
         return result
 
-    # --------------------------------------------------------
-    # Dictionary format
-    #
-    # {
-    #   "age": {...},
-    #   "salary": {...}
-    # }
-    # --------------------------------------------------------
-
     if isinstance(column_info, dict):
+
         return [
             str(key)
             for key in column_info.keys()
@@ -183,6 +230,147 @@ def find_column_in_question(
     return None
 
 
+def find_columns_in_question(
+    question: str,
+    analysis,
+) -> list[str]:
+
+    q = normalize_question(question)
+
+    columns = get_column_names(analysis)
+
+    columns = sorted(
+        columns,
+        key=len,
+        reverse=True,
+    )
+
+    found = []
+
+    for column in columns:
+
+        if column.lower() in q:
+            found.append(column)
+
+    return found
+
+
+# ============================================================
+# Correlation Helpers
+# ============================================================
+
+def get_correlation_pairs(
+    correlations: Any,
+) -> list[dict]:
+
+    """
+    Convert a correlation matrix into unique pairs.
+
+    Example:
+
+    {
+        "age": {
+            "age": 1.0,
+            "salary": 0.838
+        },
+        "salary": {
+            "age": 0.838,
+            "salary": 1.0
+        }
+    }
+
+    becomes:
+
+    [
+        {
+            "first": "age",
+            "second": "salary",
+            "value": 0.838
+        }
+    ]
+    """
+
+    if not isinstance(correlations, dict):
+        return []
+
+    pairs = []
+    seen = set()
+
+    for first, values in correlations.items():
+
+        if not isinstance(values, dict):
+            continue
+
+        for second, value in values.items():
+
+            if str(first) == str(second):
+                continue
+
+            numeric_value = safe_number(value)
+
+            if numeric_value is None:
+                continue
+
+            pair_key = frozenset(
+                [str(first), str(second)]
+            )
+
+            if pair_key in seen:
+                continue
+
+            seen.add(pair_key)
+
+            pairs.append(
+                {
+                    "first": str(first),
+                    "second": str(second),
+                    "value": numeric_value,
+                }
+            )
+
+    return pairs
+
+
+def get_strongest_correlation(
+    analysis,
+) -> dict | None:
+
+    if not analysis or not analysis.correlations:
+        return None
+
+    pairs = get_correlation_pairs(
+        analysis.correlations
+    )
+
+    if not pairs:
+        return None
+
+    return max(
+        pairs,
+        key=lambda pair: abs(pair["value"]),
+    )
+
+
+def get_weakest_correlation(
+    analysis,
+) -> dict | None:
+
+    if not analysis or not analysis.correlations:
+        return None
+
+    pairs = get_correlation_pairs(
+        analysis.correlations
+    )
+
+    if not pairs:
+        return None
+
+    return min(
+        pairs,
+        key=lambda pair: abs(pair["value"]),
+    )
+
+
 # ============================================================
 # Correlation Context
 # ============================================================
@@ -216,28 +404,17 @@ def get_correlation_context(
 
     correlations = analysis.correlations
 
-    # --------------------------------------------------------
-    # Make sure correlations is a dictionary
-    # --------------------------------------------------------
-
     if not isinstance(correlations, dict):
+
         return {
             "type": "all",
             "values": correlations,
         }
 
-    # --------------------------------------------------------
-    # Find mentioned columns
-    # --------------------------------------------------------
-
-    mentioned_columns = []
-
-    for column in correlations.keys():
-
-        if str(column).lower() in q:
-            mentioned_columns.append(
-                str(column)
-            )
+    mentioned_columns = find_columns_in_question(
+        question,
+        analysis,
+    )
 
     # --------------------------------------------------------
     # Specific pair
@@ -268,7 +445,6 @@ def get_correlation_context(
                     "value": value,
                 }
 
-        # Try reverse direction
         second_values = correlations.get(
             second,
             {},
@@ -328,6 +504,62 @@ def get_correlation_context(
 
 
 # ============================================================
+# Outlier Helpers
+# ============================================================
+
+def get_outlier_counts(
+    analysis,
+) -> dict[str, int]:
+
+    if not analysis or not analysis.outliers:
+        return {}
+
+    outliers = analysis.outliers
+
+    if not isinstance(outliers, dict):
+        return {}
+
+    result = {}
+
+    for column, count in outliers.items():
+
+        try:
+            result[str(column)] = int(count or 0)
+        except (TypeError, ValueError):
+            continue
+
+    return result
+
+
+def get_total_outliers(
+    analysis,
+) -> int:
+
+    counts = get_outlier_counts(
+        analysis
+    )
+
+    return sum(counts.values())
+
+
+def get_strongest_outlier_column(
+    analysis,
+) -> tuple[str, int] | None:
+
+    counts = get_outlier_counts(
+        analysis
+    )
+
+    if not counts:
+        return None
+
+    return max(
+        counts.items(),
+        key=lambda item: item[1],
+    )
+
+
+# ============================================================
 # Outlier Context
 # ============================================================
 
@@ -358,10 +590,6 @@ def get_outlier_context(
 
     outliers = analysis.outliers
 
-    # --------------------------------------------------------
-    # Specific column
-    # --------------------------------------------------------
-
     column = find_column_in_question(
         question,
         analysis,
@@ -378,10 +606,6 @@ def get_outlier_context(
             "column": column,
             "count": outliers[column],
         }
-
-    # --------------------------------------------------------
-    # All outliers
-    # --------------------------------------------------------
 
     return {
         "type": "all",
@@ -462,9 +686,9 @@ def generate_fast_answer(
 
     q = normalize_question(question)
 
-    # --------------------------------------------------------
+    # ========================================================
     # Missing values
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         "missing" in q
@@ -482,9 +706,9 @@ def generate_fast_answer(
             f"{total_missing} missing values."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # Duplicate rows
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         "duplicate" in q
@@ -497,6 +721,7 @@ def generate_fast_answer(
         )
 
         if duplicate_count == 0:
+
             return (
                 "The dataset does not contain "
                 "any duplicate rows."
@@ -507,9 +732,157 @@ def generate_fast_answer(
             f"{duplicate_count} duplicate rows."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
+    # Strongest correlation
+    # ========================================================
+
+    strongest_correlation_phrases = [
+        "strongest correlation",
+        "highest correlation",
+        "most correlated",
+        "strongest relationship",
+        "highest relationship",
+        "most related",
+        "strongest relation",
+        "highest relation",
+    ]
+
+    if any(
+        phrase in q
+        for phrase in strongest_correlation_phrases
+    ):
+
+        strongest = get_strongest_correlation(
+            analysis
+        )
+
+        if strongest is None:
+            return (
+                "No correlation data is available "
+                "for this dataset."
+            )
+
+        first = strongest["first"]
+        second = strongest["second"]
+        value = strongest["value"]
+
+        direction = (
+            "positive"
+            if value > 0
+            else "negative"
+            if value < 0
+            else "near-zero"
+        )
+
+        return (
+            f"The strongest correlation is between "
+            f"{first} and {second}, with a correlation "
+            f"coefficient of {format_number(value)}. "
+            f"This is a {direction} correlation."
+        )
+
+    # ========================================================
+    # Weakest correlation
+    # ========================================================
+
+    weakest_correlation_phrases = [
+        "weakest correlation",
+        "lowest correlation",
+        "least correlated",
+        "weakest relationship",
+        "least related",
+    ]
+
+    if any(
+        phrase in q
+        for phrase in weakest_correlation_phrases
+    ):
+
+        weakest = get_weakest_correlation(
+            analysis
+        )
+
+        if weakest is None:
+            return (
+                "No correlation data is available "
+                "for this dataset."
+            )
+
+        first = weakest["first"]
+        second = weakest["second"]
+        value = weakest["value"]
+
+        return (
+            f"The weakest correlation is between "
+            f"{first} and {second}, with a correlation "
+            f"coefficient of {format_number(value)}."
+        )
+
+    # ========================================================
+    # Total outliers
+    # ========================================================
+
+    total_outlier_phrases = [
+        "total outliers",
+        "how many outliers",
+        "number of outliers",
+        "how many anomalies",
+        "total anomalies",
+        "number of anomalies",
+    ]
+
+    if any(
+        phrase in q
+        for phrase in total_outlier_phrases
+    ):
+
+        total_outliers = get_total_outliers(
+            analysis
+        )
+
+        return (
+            f"The dataset contains "
+            f"{total_outliers} outliers in total."
+        )
+
+    # ========================================================
+    # Column with most outliers
+    # ========================================================
+
+    most_outlier_phrases = [
+        "most outliers",
+        "highest number of outliers",
+        "maximum outliers",
+        "most anomalies",
+    ]
+
+    if any(
+        phrase in q
+        for phrase in most_outlier_phrases
+    ):
+
+        strongest_outlier = (
+            get_strongest_outlier_column(
+                analysis
+            )
+        )
+
+        if strongest_outlier is None:
+            return (
+                "No outlier data is available "
+                "for this dataset."
+            )
+
+        column, count = strongest_outlier
+
+        return (
+            f"The column with the most outliers is "
+            f"{column}, with {count} outliers."
+        )
+
+    # ========================================================
     # Rows
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         ("how many" in q or "number of" in q)
@@ -521,9 +894,9 @@ def generate_fast_answer(
             f"{dataset.rows} rows."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # Columns
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         ("how many" in q or "number of" in q)
@@ -538,9 +911,9 @@ def generate_fast_answer(
             f"{dataset.columns} columns."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # Dataset name
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         "dataset name" in q
@@ -553,9 +926,9 @@ def generate_fast_answer(
             f"{dataset.original_filename}."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # Quality
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         "quality score" in q
@@ -568,9 +941,9 @@ def generate_fast_answer(
             f"score of {analysis.quality_score}/100."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # Memory
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         "memory" in q
@@ -587,13 +960,17 @@ def generate_fast_answer(
             dict,
         ):
 
-            memory_kb = (
-                analysis.summary.get(
-                    "memory_usage",
-                    0,
-                )
-                / 1024
+            memory_value = analysis.summary.get(
+                "memory_usage",
+                0,
             )
+
+            numeric_memory = safe_number(
+                memory_value
+            )
+
+            if numeric_memory is not None:
+                memory_kb = numeric_memory / 1024
 
         return (
             f"The dataset uses approximately "
@@ -635,7 +1012,7 @@ The user is asking about correlations.
 
 Use ONLY the correlation data provided below.
 
-Do not calculate or invent any values.
+Do not calculate, modify, or invent any values.
 
 Correlation data:
 {json.dumps(
@@ -652,20 +1029,19 @@ User question:
 
 Explain the correlation in simple language.
 
-If the correlation value is positive:
-explain that the variables tend to increase together.
+A correlation close to +1 means a strong positive
+linear relationship.
 
-If the correlation value is negative:
-explain that one tends to increase when the other decreases.
+A correlation close to -1 means a strong negative
+linear relationship.
 
-If the value is close to zero:
-explain that there is little linear relationship.
+A correlation close to 0 means little linear
+relationship.
 
-Do not claim causation.
+Do not claim that correlation means causation.
 
 Keep the answer concise.
 """
-
 
     # ========================================================
     # Outliers
@@ -689,7 +1065,7 @@ The user is asking about outliers.
 
 Use ONLY the outlier information provided below.
 
-Do not invent values.
+Do not invent values or row numbers.
 
 Outlier data:
 {json.dumps(
@@ -712,7 +1088,6 @@ do not invent the actual row values.
 
 Keep the answer concise and useful.
 """
-
 
     # ========================================================
     # Column statistics
@@ -756,7 +1131,6 @@ Explain the result in simple language.
 
 Keep the answer concise.
 """
-
 
     # ========================================================
     # General dataset question
@@ -870,13 +1244,14 @@ def generate_chat_answer(
     analysis = context["analysis"]
 
     if analysis is None:
+
         return (
             "I found the dataset, but its analysis "
             "is not available yet."
         )
 
     # ========================================================
-    # Fast answer
+    # Fast deterministic answer
     # ========================================================
 
     fast_answer = generate_fast_answer(
