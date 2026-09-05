@@ -42,6 +42,49 @@ export interface DatasetListResponse {
 }
 
 // =========================
+// Cleaning
+// =========================
+
+export interface CleaningChange {
+  column: string | null;
+  action: string;
+  count: number;
+  replacement_value?: string | number;
+}
+
+export interface CleaningPreview {
+  rows_before: number;
+  rows_after: number;
+  columns: number;
+
+  empty_strings_replaced: number;
+  whitespace_cleaned: number;
+
+  missing_values_before: number;
+  missing_values_after: number;
+  missing_values_filled: number;
+
+  duplicates_removed: number;
+
+  outliers_detected: Record<string, number>;
+
+  changes: CleaningChange[];
+
+  warnings: string[];
+
+  cleaned_filename?: string;
+  cleaned_file_path?: string;
+}
+
+export interface CleaningResponse {
+  dataset_id: number;
+  original_filename: string;
+  cleaned_filename: string | null;
+  download_available: boolean;
+  preview: CleaningPreview;
+}
+
+// =========================
 // Get Datasets
 // =========================
 
@@ -87,7 +130,7 @@ export async function deleteDataset(
 }
 
 // =========================
-// Download Dataset
+// Download Original Dataset
 // =========================
 
 export async function downloadDataset(
@@ -101,12 +144,79 @@ export async function downloadDataset(
   );
 
   const blob = new Blob([response.data]);
+
   const url = window.URL.createObjectURL(blob);
 
   const link = document.createElement("a");
 
   link.href = url;
   link.setAttribute("download", "dataset");
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+
+  window.URL.revokeObjectURL(url);
+}
+
+// =========================
+// Preview Cleaning
+// =========================
+
+export async function previewCleaning(
+  datasetId: number
+): Promise<CleaningResponse> {
+  const response = await api.post<CleaningResponse>(
+    `/cleaning/${datasetId}/preview`
+  );
+
+  return response.data;
+}
+
+// =========================
+// Apply Cleaning
+// =========================
+
+export async function applyCleaning(
+  datasetId: number
+): Promise<CleaningResponse> {
+  const response = await api.post<CleaningResponse>(
+    `/cleaning/${datasetId}/apply`
+  );
+
+  return response.data;
+}
+
+// =========================
+// Download Cleaned Dataset
+// =========================
+
+export async function downloadCleanedDataset(
+  datasetId: number
+): Promise<void> {
+  const response = await api.get(
+    `/cleaning/${datasetId}/download`,
+    {
+      responseType: "blob",
+    }
+  );
+
+  const blob = new Blob([response.data]);
+
+  const url = window.URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+
+  // The backend sends the correct file through FileResponse.
+  // This filename is only a fallback.
+  link.setAttribute(
+    "download",
+    "cleaned_dataset"
+  );
 
   document.body.appendChild(link);
 
