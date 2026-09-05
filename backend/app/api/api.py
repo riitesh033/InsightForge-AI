@@ -63,5 +63,5 @@ api_router.include_router(
 api_router.include_router(
     cleaning.router,
     prefix="/cleaning",
-    tags=["Data Cleaning"],
+    tags=["Cleaning"],
 )

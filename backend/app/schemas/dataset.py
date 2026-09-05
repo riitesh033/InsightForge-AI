@@ -23,6 +23,10 @@ class DatasetResponse(DatasetBase):
     file_path: str
     uploaded_at: datetime
 
+    # Cleaning status
+    cleaned_available: bool = False
+    cleaned_filename: str | None = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

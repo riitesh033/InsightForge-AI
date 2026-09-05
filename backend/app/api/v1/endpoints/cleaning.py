@@ -1,103 +1,84 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
-from app.crud.crud_dataset import get_dataset
 from app.db.session import get_db
+from app.models.dataset import Dataset
 from app.models.user import User
-from app.schemas.cleaning import CleaningResponse
 from app.services.cleaning import (
     apply_cleaning,
     get_cleaned_file_path,
     preview_cleaning,
 )
 
-
 router = APIRouter()
 
 
-@router.post(
-    "/{dataset_id}/preview",
-    response_model=CleaningResponse,
-)
+def get_user_dataset(
+    dataset_id: int,
+    db: Session,
+    current_user: User,
+) -> Dataset:
+    dataset = (
+        db.query(Dataset)
+        .filter(
+            Dataset.id == dataset_id,
+            Dataset.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found.",
+        )
+
+    return dataset
+
+
+@router.post("/{dataset_id}/preview")
 def preview_cleaning_route(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
+    dataset = get_user_dataset(
+        dataset_id,
+        db,
+        current_user,
     )
 
-    if dataset is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
-
-    result = preview_cleaning(dataset)
-
-    return {
-        **result,
-        "cleaned_filename": None,
-        "download_available": False,
-    }
+    return preview_cleaning(dataset)
 
 
-@router.post(
-    "/{dataset_id}/apply",
-    response_model=CleaningResponse,
-)
+@router.post("/{dataset_id}/apply")
 def apply_cleaning_route(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
+    dataset = get_user_dataset(
+        dataset_id,
+        db,
+        current_user,
     )
 
-    if dataset is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
-
-    result = apply_cleaning(dataset)
-
-    return result
+    return apply_cleaning(dataset)
 
 
-@router.get(
-    "/{dataset_id}/download",
-)
-def download_cleaned_dataset_route(
+@router.get("/{dataset_id}/download")
+def download_cleaned_dataset(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    dataset = get_dataset(
-        db=db,
-        dataset_id=dataset_id,
-        owner_id=current_user.id,
+    dataset = get_user_dataset(
+        dataset_id,
+        db,
+        current_user,
     )
-
-    if dataset is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
 
     cleaned_path = get_cleaned_file_path(dataset)
 
