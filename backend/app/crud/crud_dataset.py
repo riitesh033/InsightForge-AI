@@ -24,17 +24,9 @@ def get_cleaned_file_info(
 ):
     """
     Check whether a cleaned version of the dataset exists.
+    The cleaned file is stored beside the original file using:
 
-    Examples:
-
-        sales.csv
-        sales_cleaned.csv
-
-        sales.xlsx
-        sales_cleaned.xlsx
-
-        sales.xls
-        sales_cleaned.xlsx
+        original_name_cleaned.extension
     """
 
     original_path = Path(dataset.file_path)
@@ -47,7 +39,7 @@ def get_cleaned_file_info(
 
     original_extension = original_path.suffix.lower()
 
-    # The cleaning service converts .xls files to .xlsx.
+    # .xls files are converted to .xlsx during cleaning
     if original_extension == ".xls":
         cleaned_extension = ".xlsx"
     else:
@@ -81,14 +73,8 @@ def get_datasets(
 ):
     query = (
         db.query(Dataset)
-        .filter(
-            Dataset.owner_id == owner_id
-        )
+        .filter(Dataset.owner_id == owner_id)
     )
-
-    # -------------------------
-    # Search
-    # -------------------------
 
     if search:
         query = query.filter(
@@ -96,10 +82,6 @@ def get_datasets(
                 f"%{search}%"
             )
         )
-
-    # -------------------------
-    # Sorting
-    # -------------------------
 
     sortable_columns = {
         "uploaded_at": Dataset.uploaded_at,
@@ -123,35 +105,19 @@ def get_datasets(
             desc(sort_column)
         )
 
-    # -------------------------
-    # Total count
-    # -------------------------
-
     total = (
         query
         .order_by(None)
-        .with_entities(
-            func.count(Dataset.id)
-        )
+        .with_entities(func.count(Dataset.id))
         .scalar()
     )
 
-    # -------------------------
-    # Pagination
-    # -------------------------
-
     datasets = (
         query
-        .offset(
-            (page - 1) * page_size
-        )
+        .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-
-    # -------------------------
-    # Build response items
-    # -------------------------
 
     items = []
 
@@ -172,16 +138,12 @@ def get_datasets(
                 "rows": dataset.rows,
                 "columns": dataset.columns,
                 "uploaded_at": dataset.uploaded_at,
-                "cleaned_available": (
-                    cleaning_info[
-                        "cleaned_available"
-                    ]
-                ),
-                "cleaned_filename": (
-                    cleaning_info[
-                        "cleaned_filename"
-                    ]
-                ),
+                "cleaned_available": cleaning_info[
+                    "cleaned_available"
+                ],
+                "cleaned_filename": cleaning_info[
+                    "cleaned_filename"
+                ],
             }
         )
 
@@ -223,19 +185,13 @@ def rename_dataset(
 
     Example:
 
-        Before:
-            sales.csv
-            sales_cleaned.csv
+        sales.csv
+        sales_cleaned.csv
 
-        Rename to:
-            company_sales.csv
+    becomes:
 
-        After:
-            company_sales.csv
-            company_sales_cleaned.csv
-
-    The database file_path is also updated so future
-    downloads continue to work.
+        company_sales.csv
+        company_sales_cleaned.csv
     """
 
     original_path = Path(
@@ -245,50 +201,29 @@ def rename_dataset(
     old_stem = original_path.stem
     old_extension = original_path.suffix.lower()
 
-    # -------------------------
-    # Determine cleaned extension
-    # -------------------------
-
+    # Cleaning converts .xls -> .xlsx
     if old_extension == ".xls":
         cleaned_extension = ".xlsx"
     else:
         cleaned_extension = old_extension
 
-    # -------------------------
-    # Existing cleaned file
-    # -------------------------
-
     old_cleaned_path = (
         original_path.parent
-        / f"{old_stem}_cleaned{cleaned_extension}"
+        / f"{old_stem}_cleaned"
+        f"{cleaned_extension}"
     )
 
-    # -------------------------
-    # Validate new name
-    # -------------------------
+    requested_name = Path(new_name)
 
-    new_name = new_name.strip()
-
-    if not new_name:
-        raise ValueError(
-            "Dataset name cannot be empty."
-        )
-
-    new_name_path = Path(new_name)
-
-    # Keep the original extension if the user
-    # does not provide one.
-    if new_name_path.suffix:
-        new_extension = (
-            new_name_path.suffix
-        )
+    # If user doesn't provide an extension,
+    # preserve the original extension.
+    if requested_name.suffix:
+        new_extension = requested_name.suffix
     else:
-        new_extension = (
-            original_path.suffix
-        )
+        new_extension = original_path.suffix
 
     new_filename = (
-        f"{new_name_path.stem}"
+        f"{requested_name.stem}"
         f"{new_extension}"
     )
 
@@ -297,22 +232,7 @@ def rename_dataset(
         / new_filename
     )
 
-    # -------------------------
-    # Prevent accidental overwrite
-    # -------------------------
-
-    if (
-        new_original_path != original_path
-        and new_original_path.exists()
-    ):
-        raise ValueError(
-            "A file with this name already exists."
-        )
-
-    # -------------------------
-    # Rename original file
-    # -------------------------
-
+    # Rename original physical file
     if (
         original_path.exists()
         and original_path != new_original_path
@@ -321,47 +241,25 @@ def rename_dataset(
             new_original_path
         )
 
-    # -------------------------
-    # Rename cleaned file
-    # -------------------------
-
+    # Rename cleaned physical file
     if old_cleaned_path.exists():
+
         new_cleaned_path = (
             new_original_path.parent
-            / (
-                f"{new_original_path.stem}"
-                f"_cleaned"
-                f"{cleaned_extension}"
-            )
+            / f"{new_original_path.stem}"
+            f"_cleaned"
+            f"{cleaned_extension}"
         )
 
         if (
-            old_cleaned_path != new_cleaned_path
-            and new_cleaned_path.exists()
-        ):
-            # Roll back the original rename if
-            # the cleaned destination already exists.
-            if new_original_path.exists():
-                new_original_path.rename(
-                    original_path
-                )
-
-            raise ValueError(
-                "A cleaned file with this name "
-                "already exists."
-            )
-
-        if (
-            old_cleaned_path != new_cleaned_path
+            old_cleaned_path
+            != new_cleaned_path
         ):
             old_cleaned_path.rename(
                 new_cleaned_path
             )
 
-    # -------------------------
-    # Update database
-    # -------------------------
-
+    # Update database record
     dataset.original_filename = new_name
     dataset.filename = new_filename
     dataset.file_path = str(
@@ -379,36 +277,25 @@ def delete_dataset(
     dataset: Dataset,
 ):
     """
-    Delete the dataset, its analysis records,
+    Delete the dataset, its analysis,
     original file, and cleaned file.
     """
 
-    # -------------------------
     # Delete analysis records
-    # -------------------------
-
     db.query(Analysis).filter(
         Analysis.dataset_id == dataset.id
     ).delete()
-
-    # -------------------------
-    # Original file
-    # -------------------------
 
     original_path = Path(
         dataset.file_path
     )
 
+    # Delete original file
     if original_path.exists():
         original_path.unlink()
 
-    # -------------------------
-    # Cleaned file
-    # -------------------------
-
-    extension = (
-        original_path.suffix.lower()
-    )
+    # Determine cleaned extension
+    extension = original_path.suffix.lower()
 
     if extension == ".xls":
         cleaned_extension = ".xlsx"
@@ -417,19 +304,15 @@ def delete_dataset(
 
     cleaned_path = (
         original_path.parent
-        / (
-            f"{original_path.stem}"
-            f"_cleaned"
-            f"{cleaned_extension}"
-        )
+        / f"{original_path.stem}"
+        f"_cleaned"
+        f"{cleaned_extension}"
     )
 
+    # Delete cleaned file
     if cleaned_path.exists():
         cleaned_path.unlink()
 
-    # -------------------------
     # Delete database record
-    # -------------------------
-
     db.delete(dataset)
     db.commit()
