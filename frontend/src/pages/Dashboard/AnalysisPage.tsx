@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Download,
+  FileCheck2,
   Loader2,
   MessageSquare,
   Sparkles,
@@ -18,7 +19,8 @@ import {
   getDatasets,
   previewCleaning,
   applyCleaning,
-  downloadCleanedDataset,
+  downloadDatasetFile,
+  DownloadFormat,
   CleaningResponse,
 } from "@/services/dataset";
 
@@ -32,7 +34,6 @@ import DuplicateCard from "@/components/analysis/DuplicateCard";
 import CorrelationHeatmap from "@/components/analysis/CorrelationHeatmap";
 import OutlierCard from "@/components/analysis/OutlierCard";
 import AIInsights from "@/components/analysis/AIInsights";
-import ReportButton from "@/components/analysis/ReportButton";
 
 
 export default function AnalysisPage() {
@@ -60,6 +61,20 @@ export default function AnalysisPage() {
 
 
   // ==========================================================
+  // Download State
+  // ==========================================================
+
+  const [downloadFormat, setDownloadFormat] =
+    useState<DownloadFormat>("pdf");
+
+  const [downloading, setDownloading] =
+    useState(false);
+
+  const [downloadError, setDownloadError] =
+    useState<string | null>(null);
+
+
+  // ==========================================================
   // Cleaning State
   // ==========================================================
 
@@ -70,9 +85,6 @@ export default function AnalysisPage() {
     useState(false);
 
   const [cleaningApplying, setCleaningApplying] =
-    useState(false);
-
-  const [cleaningDownloading, setCleaningDownloading] =
     useState(false);
 
   const [cleaningError, setCleaningError] =
@@ -137,6 +149,8 @@ export default function AnalysisPage() {
       setCleaningLoading(true);
       setCleaningError(null);
       setCleaningApplied(false);
+      setDownloadError(null);
+      setDownloadFormat("pdf");
 
       const response =
         await previewCleaning(
@@ -167,7 +181,13 @@ export default function AnalysisPage() {
   // ==========================================================
 
   async function handleApplyCleaning() {
-    if (!datasetId) {
+    if (!datasetId || !cleaningData) {
+      return;
+    }
+
+    if (
+      cleaningData.preview.changes.length === 0
+    ) {
       return;
     }
 
@@ -201,35 +221,47 @@ export default function AnalysisPage() {
 
 
   // ==========================================================
-  // Download Cleaned Dataset
+  // Unified Download
   // ==========================================================
 
-  async function handleDownloadCleanedDataset() {
+  async function handleDownload() {
     if (!datasetId) {
       return;
     }
 
-    try {
-      setCleaningDownloading(true);
-      setCleaningError(null);
+    if (
+      downloadFormat !== "pdf" &&
+      !cleaningApplied
+    ) {
+      setDownloadError(
+        "Apply cleaning before downloading the cleaned dataset."
+      );
 
-      await downloadCleanedDataset(
-        Number(datasetId)
+      return;
+    }
+
+    try {
+      setDownloading(true);
+      setDownloadError(null);
+
+      await downloadDatasetFile(
+        Number(datasetId),
+        downloadFormat
       );
 
     } catch (error: any) {
       console.error(
-        "Failed to download cleaned dataset:",
+        "Failed to download file:",
         error
       );
 
-      setCleaningError(
+      setDownloadError(
         error?.response?.data?.detail ??
-        "Unable to download cleaned dataset."
+        "Unable to download the selected file."
       );
 
     } finally {
-      setCleaningDownloading(false);
+      setDownloading(false);
     }
   }
 
@@ -242,11 +274,16 @@ export default function AnalysisPage() {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+
+          <Loader2
+            size={32}
+            className="mx-auto mb-3 animate-spin text-primary"
+          />
 
           <p className="text-muted-foreground">
             Loading analysis...
           </p>
+
         </div>
       </div>
     );
@@ -277,12 +314,21 @@ export default function AnalysisPage() {
           "
         >
           <ArrowLeft size={16} />
-
           Back to Datasets
         </button>
 
 
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+        <div className="
+          rounded-xl
+          border
+          border-red-200
+          bg-red-50
+          p-5
+          text-red-600
+          dark:border-red-900
+          dark:bg-red-950
+          dark:text-red-400
+        ">
           {error}
         </div>
 
@@ -315,12 +361,16 @@ export default function AnalysisPage() {
           "
         >
           <ArrowLeft size={16} />
-
           Back to Datasets
         </button>
 
 
-        <div className="rounded-xl border p-8 text-center">
+        <div className="
+          rounded-xl
+          border
+          p-8
+          text-center
+        ">
           <h2 className="text-lg font-semibold">
             No analysis found
           </h2>
@@ -362,6 +412,12 @@ export default function AnalysisPage() {
         )
       : 0;
 
+  const hasCleaningChanges =
+    Boolean(
+      cleaningPreview &&
+      cleaningPreview.changes.length > 0
+    );
+
 
   // ==========================================================
   // Main
@@ -394,14 +450,20 @@ export default function AnalysisPage() {
           "
         >
           <ArrowLeft size={16} />
-
           Back to Datasets
         </button>
 
 
         {/* Header Content */}
 
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="
+          flex
+          flex-col
+          gap-5
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        ">
 
           <div className="min-w-0">
 
@@ -409,7 +471,12 @@ export default function AnalysisPage() {
               Dataset Analysis
             </p>
 
-            <h1 className="truncate text-3xl font-bold tracking-tight">
+            <h1 className="
+              truncate
+              text-3xl
+              font-bold
+              tracking-tight
+            ">
               {datasetName}
             </h1>
 
@@ -420,9 +487,15 @@ export default function AnalysisPage() {
           </div>
 
 
-          {/* Actions */}
+          {/* Header Actions */}
 
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <div className="
+            flex
+            shrink-0
+            flex-wrap
+            items-center
+            gap-3
+          ">
 
             {/* AI Chat */}
 
@@ -451,20 +524,133 @@ export default function AnalysisPage() {
               "
             >
               <MessageSquare size={17} />
-
               AI Chat
             </button>
 
 
-            {/* Report */}
+            {/* Download Format */}
 
-            <ReportButton
-              datasetId={data.dataset_id}
-            />
+            <select
+              value={downloadFormat}
+              onChange={(event) =>
+                setDownloadFormat(
+                  event.target.value as DownloadFormat
+                )
+              }
+              className="
+                rounded-lg
+                border
+                border-border
+                bg-card
+                px-3
+                py-2.5
+                text-sm
+                font-medium
+                text-foreground
+                outline-none
+                transition
+                focus:ring-2
+                focus:ring-primary/30
+              "
+            >
+              <option value="pdf">
+                PDF Report
+              </option>
+
+              <option
+                value="csv"
+                disabled={!cleaningApplied}
+              >
+                CSV
+                {!cleaningApplied
+                  ? " — Apply Cleaning"
+                  : ""}
+              </option>
+
+              <option
+                value="xlsx"
+                disabled={!cleaningApplied}
+              >
+                XLSX
+                {!cleaningApplied
+                  ? " — Apply Cleaning"
+                  : ""}
+              </option>
+            </select>
+
+
+            {/* Download */}
+
+            <button
+              onClick={handleDownload}
+              disabled={
+                downloading ||
+                (
+                  downloadFormat !== "pdf" &&
+                  !cleaningApplied
+                )
+              }
+              className="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-lg
+                bg-primary
+                px-4
+                py-2.5
+                text-sm
+                font-medium
+                text-primary-foreground
+                transition
+                hover:opacity-90
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+              "
+            >
+
+              {downloading ? (
+                <>
+                  <Loader2
+                    size={17}
+                    className="animate-spin"
+                  />
+
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download size={17} />
+
+                  Download
+                </>
+              )}
+
+            </button>
 
           </div>
 
         </div>
+
+
+        {/* Download Error */}
+
+        {downloadError && (
+          <div className="
+            rounded-lg
+            border
+            border-red-200
+            bg-red-50
+            p-3
+            text-sm
+            text-red-600
+            dark:border-red-900
+            dark:bg-red-950
+            dark:text-red-400
+          ">
+            {downloadError}
+          </div>
+        )}
 
       </div>
 
@@ -482,48 +668,42 @@ export default function AnalysisPage() {
           Data Cleaning
       ====================================================== */}
 
-      <section
-        className="
-          overflow-hidden
-          rounded-2xl
-          border
-          border-border
-          bg-card
-          shadow-sm
-        "
-      >
+      <section className="
+        overflow-hidden
+        rounded-2xl
+        border
+        border-border
+        bg-card
+        shadow-sm
+      ">
 
         {/* Cleaning Header */}
 
-        <div
-          className="
-            flex
-            flex-col
-            gap-4
-            border-b
-            border-border
-            p-6
-            sm:flex-row
-            sm:items-center
-            sm:justify-between
-          "
-        >
+        <div className="
+          flex
+          flex-col
+          gap-4
+          border-b
+          border-border
+          p-6
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        ">
 
           <div className="flex items-start gap-3">
 
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                shrink-0
-                items-center
-                justify-center
-                rounded-lg
-                bg-primary/10
-                text-primary
-              "
-            >
+            <div className="
+              flex
+              h-10
+              w-10
+              shrink-0
+              items-center
+              justify-center
+              rounded-lg
+              bg-primary/10
+              text-primary
+            ">
               <Sparkles size={20} />
             </div>
 
@@ -542,6 +722,8 @@ export default function AnalysisPage() {
 
           </div>
 
+
+          {/* Preview Button */}
 
           {!cleaningData && (
             <button
@@ -593,22 +775,20 @@ export default function AnalysisPage() {
         {/* Cleaning Error */}
 
         {cleaningError && (
-          <div
-            className="
-              mx-6
-              mt-6
-              rounded-lg
-              border
-              border-red-200
-              bg-red-50
-              p-4
-              text-sm
-              text-red-600
-              dark:border-red-900
-              dark:bg-red-950
-              dark:text-red-400
-            "
-          >
+          <div className="
+            mx-6
+            mt-6
+            rounded-lg
+            border
+            border-red-200
+            bg-red-50
+            p-4
+            text-sm
+            text-red-600
+            dark:border-red-900
+            dark:bg-red-950
+            dark:text-red-400
+          ">
             {cleaningError}
           </div>
         )}
@@ -619,91 +799,351 @@ export default function AnalysisPage() {
         {cleaningPreview && (
           <div className="space-y-6 p-6">
 
-            {/* Summary */}
+            {/* =================================================
+                Cleaning Status
+            ================================================== */}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {cleaningApplied ? (
+              <div className="
+                flex
+                items-start
+                gap-3
+                rounded-xl
+                border
+                border-primary/20
+                bg-primary/5
+                p-5
+              ">
 
-              <div className="rounded-xl border border-border bg-background p-4">
+                <div className="
+                  flex
+                  h-10
+                  w-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-primary/10
+                  text-primary
+                ">
+                  <FileCheck2 size={20} />
+                </div>
 
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Rows
-                </p>
+                <div className="min-w-0">
 
-                <div className="mt-2 flex items-end gap-2">
+                  <p className="font-semibold">
+                    Cleaned dataset created successfully
+                  </p>
 
-                  <span className="text-2xl font-bold">
-                    {cleaningPreview.rows_after.toLocaleString()}
-                  </span>
+                  <p className="
+                    mt-1
+                    text-sm
+                    text-muted-foreground
+                  ">
+                    Your original dataset remains unchanged.
+                    The cleaned version is ready to download.
+                  </p>
 
-                  {cleaningPreview.rows_before !==
-                    cleaningPreview.rows_after && (
-                    <span className="mb-1 text-xs text-muted-foreground">
-                      from{" "}
-                      {cleaningPreview.rows_before.toLocaleString()}
-                    </span>
+                  {cleaningData.cleaned_filename && (
+                    <p className="
+                      mt-2
+                      break-all
+                      text-sm
+                      font-medium
+                      text-primary
+                    ">
+                      {cleaningData.cleaned_filename}
+                    </p>
                   )}
 
                 </div>
 
               </div>
+            ) : (
+              <div className="
+                rounded-xl
+                border
+                border-border
+                bg-background
+                p-4
+              ">
 
+                <div className="flex items-start gap-3">
 
-              <div className="rounded-xl border border-border bg-background p-4">
+                  <Sparkles
+                    size={19}
+                    className="
+                      mt-0.5
+                      shrink-0
+                      text-primary
+                    "
+                  />
 
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Missing Values
-                </p>
+                  <div>
 
-                <div className="mt-2">
+                    <p className="font-medium">
+                      Cleaning preview ready
+                    </p>
 
-                  <span className="text-2xl font-bold">
-                    {cleaningPreview.missing_values_after}
-                  </span>
+                    <p className="
+                      mt-1
+                      text-sm
+                      text-muted-foreground
+                    ">
+                      Review the proposed changes below
+                      before creating the cleaned dataset.
+                    </p>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {cleaningPreview.missing_values_filled} fixed
-                  </p>
+                  </div>
 
                 </div>
 
               </div>
+            )}
 
 
-              <div className="rounded-xl border border-border bg-background p-4">
+            {/* =================================================
+                Summary
+            ================================================== */}
 
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Duplicates
+            <div>
+
+              <div className="mb-3">
+
+                <h3 className="font-semibold">
+                  Cleaning Summary
+                </h3>
+
+                <p className="
+                  mt-1
+                  text-sm
+                  text-muted-foreground
+                ">
+                  What InsightForge found and what it can safely fix.
                 </p>
 
-                <div className="mt-2">
+              </div>
 
-                  <span className="text-2xl font-bold">
+
+              <div className="
+                grid
+                gap-4
+                sm:grid-cols-2
+                lg:grid-cols-3
+                xl:grid-cols-6
+              ">
+
+                {/* Rows */}
+
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
+
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Rows
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold">
+                    {cleaningPreview.rows_after.toLocaleString()}
+                  </p>
+
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
+                    {cleaningPreview.rows_before ===
+                    cleaningPreview.rows_after
+                      ? "No rows removed"
+                      : `${(
+                          cleaningPreview.rows_before -
+                          cleaningPreview.rows_after
+                        ).toLocaleString()} removed`}
+                  </p>
+
+                </div>
+
+
+                {/* Missing Values */}
+
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
+
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Missing
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold">
+                    {cleaningPreview.missing_values_after}
+                  </p>
+
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
+                    {cleaningPreview.missing_values_before} before
+                  </p>
+
+                </div>
+
+
+                {/* Missing Filled */}
+
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
+
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Filled
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold">
+                    {cleaningPreview.missing_values_filled}
+                  </p>
+
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
+                    missing values fixed
+                  </p>
+
+                </div>
+
+
+                {/* Duplicates */}
+
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
+
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Duplicates
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold">
                     {cleaningPreview.duplicates_removed}
-                  </span>
+                  </p>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
                     rows removed
                   </p>
 
                 </div>
 
-              </div>
+
+                {/* Whitespace */}
+
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
+
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Whitespace
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold">
+                    {cleaningPreview.whitespace_cleaned}
+                  </p>
+
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
+                    values cleaned
+                  </p>
+
+                </div>
 
 
-              <div className="rounded-xl border border-border bg-background p-4">
+                {/* Empty Strings */}
 
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Outliers
-                </p>
+                <div className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                ">
 
-                <div className="mt-2">
+                  <p className="
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  ">
+                    Empty Values
+                  </p>
 
-                  <span className="text-2xl font-bold">
-                    {totalOutliers}
-                  </span>
+                  <p className="mt-2 text-2xl font-bold">
+                    {cleaningPreview.empty_strings_replaced}
+                  </p>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    detected, not removed
+                  <p className="
+                    mt-1
+                    text-xs
+                    text-muted-foreground
+                  ">
+                    converted to missing
                   </p>
 
                 </div>
@@ -713,103 +1153,168 @@ export default function AnalysisPage() {
             </div>
 
 
-            {/* Changes */}
+            {/* =================================================
+                Proposed Changes
+            ================================================== */}
 
-            {cleaningPreview.changes.length > 0 ? (
+            {hasCleaningChanges ? (
               <div>
 
-                <div className="mb-3 flex items-center gap-2">
+                <div className="mb-3 flex items-start gap-2">
 
                   <CheckCircle2
-                    size={18}
-                    className="text-primary"
+                    size={19}
+                    className="mt-0.5 shrink-0 text-primary"
                   />
 
-                  <h3 className="font-semibold">
-                    Proposed Changes
-                  </h3>
+                  <div>
+
+                    <h3 className="font-semibold">
+                      Proposed Changes
+                    </h3>
+
+                    <p className="
+                      mt-1
+                      text-sm
+                      text-muted-foreground
+                    ">
+                      These changes are considered safe to apply automatically.
+                    </p>
+
+                  </div>
 
                 </div>
 
 
-                <div className="space-y-2">
+                <div className="space-y-3">
 
                   {cleaningPreview.changes.map(
-                    (change, index) => (
-                      <div
-                        key={`${change.action}-${change.column}-${index}`}
-                        className="
-                          flex
-                          flex-col
-                          gap-2
-                          rounded-lg
-                          border
-                          border-border
-                          bg-background
-                          p-4
-                          sm:flex-row
-                          sm:items-center
-                          sm:justify-between
-                        "
-                      >
+                    (change, index) => {
 
-                        <div>
+                      const actionLabel =
+                        change.action
+                          .replace(/_/g, " ")
+                          .replace(
+                            /^./,
+                            (char: string) =>
+                              char.toUpperCase()
+                          );
 
-                          <p className="text-sm font-medium">
+                      return (
+                        <div
+                          key={`${change.action}-${change.column}-${index}`}
+                          className="
+                            rounded-xl
+                            border
+                            border-border
+                            bg-background
+                            p-4
+                            transition
+                            hover:border-primary/30
+                          "
+                        >
 
-                            {change.column
-                              ? change.column
-                              : "Dataset"}
+                          <div className="
+                            flex
+                            flex-col
+                            gap-4
+                            sm:flex-row
+                            sm:items-center
+                            sm:justify-between
+                          ">
 
-                          </p>
+                            <div className="
+                              flex
+                              items-start
+                              gap-3
+                            ">
 
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {change.action
-                              .replace(/_/g, " ")
-                              .replace(
-                                /^./,
-                                (char: string) =>
-                                  char.toUpperCase()
-                              )}
-                          </p>
+                              <div className="
+                                mt-0.5
+                                flex
+                                h-8
+                                w-8
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                bg-primary/10
+                                text-primary
+                              ">
+                                <CheckCircle2 size={16} />
+                              </div>
+
+                              <div>
+
+                                <p className="font-medium">
+                                  {change.column ||
+                                    "Dataset"}
+                                </p>
+
+                                <p className="
+                                  mt-1
+                                  text-sm
+                                  text-muted-foreground
+                                ">
+                                  {actionLabel}
+                                </p>
+
+                              </div>
+
+                            </div>
+
+
+                            <div className="
+                              rounded-lg
+                              bg-muted
+                              px-3
+                              py-2
+                              text-sm
+                              font-semibold
+                              sm:text-right
+                            ">
+
+                              {change.count}
+
+                              <span className="
+                                ml-1
+                                font-normal
+                                text-muted-foreground
+                              ">
+                                affected
+                              </span>
+
+                            </div>
+
+                          </div>
 
                         </div>
-
-
-                        <div className="text-sm font-semibold">
-
-                          {change.count}
-
-                          <span className="ml-1 font-normal text-muted-foreground">
-                            affected
-                          </span>
-
-                        </div>
-
-                      </div>
-                    )
+                      );
+                    }
                   )}
 
                 </div>
 
               </div>
             ) : (
-              <div
-                className="
-                  flex
-                  items-start
-                  gap-3
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                "
-              >
+              <div className="
+                flex
+                items-start
+                gap-3
+                rounded-xl
+                border
+                border-border
+                bg-background
+                p-5
+              ">
 
                 <CheckCircle2
-                  size={20}
-                  className="mt-0.5 shrink-0 text-primary"
+                  size={21}
+                  className="
+                    mt-0.5
+                    shrink-0
+                    text-primary
+                  "
                 />
 
                 <div>
@@ -818,10 +1323,13 @@ export default function AnalysisPage() {
                     No automatic cleaning required
                   </p>
 
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Your dataset does not contain any
-                    issues that InsightForge can safely
-                    fix automatically.
+                  <p className="
+                    mt-1
+                    text-sm
+                    text-muted-foreground
+                  ">
+                    Your dataset does not contain issues
+                    that InsightForge can safely fix automatically.
                   </p>
 
                 </div>
@@ -830,43 +1338,73 @@ export default function AnalysisPage() {
             )}
 
 
-            {/* Warnings */}
+            {/* =================================================
+                Warnings
+            ================================================== */}
 
             {cleaningPreview.warnings.length > 0 && (
-              <div
-                className="
-                  rounded-xl
-                  border
-                  border-yellow-200
-                  bg-yellow-50
-                  p-4
-                  dark:border-yellow-900
-                  dark:bg-yellow-950/40
-                "
-              >
+              <div className="
+                rounded-xl
+                border
+                border-yellow-200
+                bg-yellow-50
+                p-5
+                dark:border-yellow-900
+                dark:bg-yellow-950/40
+              ">
 
                 <div className="flex items-start gap-3">
 
                   <AlertTriangle
-                    size={19}
-                    className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400"
+                    size={20}
+                    className="
+                      mt-0.5
+                      shrink-0
+                      text-yellow-600
+                      dark:text-yellow-400
+                    "
                   />
 
-                  <div>
+                  <div className="min-w-0">
 
-                    <p className="font-medium text-yellow-800 dark:text-yellow-300">
+                    <p className="
+                      font-semibold
+                      text-yellow-800
+                      dark:text-yellow-300
+                    ">
                       Cleaning warnings
                     </p>
 
-                    <ul className="mt-2 space-y-1">
+                    <p className="
+                      mt-1
+                      text-sm
+                      text-yellow-700
+                      dark:text-yellow-400
+                    ">
+                      These issues were detected but were not
+                      automatically changed.
+                    </p>
+
+                    <ul className="mt-3 space-y-2">
 
                       {cleaningPreview.warnings.map(
                         (warning, index) => (
                           <li
                             key={index}
-                            className="text-sm text-yellow-700 dark:text-yellow-400"
+                            className="
+                              flex
+                              items-start
+                              gap-2
+                              text-sm
+                              text-yellow-700
+                              dark:text-yellow-400
+                            "
                           >
-                            {warning}
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+
+                            <span>
+                              {warning}
+                            </span>
                           </li>
                         )
                       )}
@@ -881,135 +1419,131 @@ export default function AnalysisPage() {
             )}
 
 
-            {/* Actions */}
+            {/* =================================================
+                Cleaning Actions
+            ================================================== */}
 
-            <div
-              className="
-                flex
-                flex-col
-                gap-3
-                border-t
-                border-border
-                pt-6
-                sm:flex-row
-                sm:items-center
-                sm:justify-between
-              "
-            >
+            <div className="
+              flex
+              flex-col
+              gap-4
+              border-t
+              border-border
+              pt-6
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+            ">
 
               <div>
 
                 {cleaningApplied ? (
-                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <div className="
+                    flex
+                    items-start
+                    gap-2
+                    text-sm
+                    font-medium
+                    text-primary
+                  ">
 
-                    <CheckCircle2 size={17} />
+                    <CheckCircle2
+                      size={18}
+                      className="mt-0.5 shrink-0"
+                    />
 
-                    Cleaned dataset created successfully
+                    <div>
+
+                      <p>
+                        Cleaning completed
+                      </p>
+
+                      <p className="
+                        mt-1
+                        font-normal
+                        text-muted-foreground
+                      ">
+                        Select CSV or XLSX above to download
+                        the cleaned dataset.
+                      </p>
+
+                    </div>
 
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    The original dataset will not be modified.
-                  </p>
+                  <div>
+
+                    <p className="
+                      text-sm
+                      font-medium
+                    ">
+                      Ready to apply
+                    </p>
+
+                    <p className="
+                      mt-1
+                      text-sm
+                      text-muted-foreground
+                    ">
+                      The original dataset will not be modified.
+                    </p>
+
+                  </div>
                 )}
 
               </div>
 
 
-              <div className="flex flex-wrap gap-3">
+              {!cleaningApplied && (
+                <button
+                  onClick={handleApplyCleaning}
+                  disabled={
+                    cleaningApplying ||
+                    !hasCleaningChanges
+                  }
+                  title={
+                    !hasCleaningChanges
+                      ? "There are no automatic changes to apply."
+                      : undefined
+                  }
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-lg
+                    bg-primary
+                    px-5
+                    py-2.5
+                    text-sm
+                    font-medium
+                    text-primary-foreground
+                    transition
+                    hover:opacity-90
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                >
 
-                {!cleaningApplied && (
-                  <button
-                    onClick={handleApplyCleaning}
-                    disabled={cleaningApplying}
-                    className="
-                      inline-flex
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-lg
-                      bg-primary
-                      px-4
-                      py-2.5
-                      text-sm
-                      font-medium
-                      text-primary-foreground
-                      transition
-                      hover:opacity-90
-                      disabled:cursor-not-allowed
-                      disabled:opacity-60
-                    "
-                  >
+                  {cleaningApplying ? (
+                    <>
+                      <Loader2
+                        size={17}
+                        className="animate-spin"
+                      />
 
-                    {cleaningApplying ? (
-                      <>
-                        <Loader2
-                          size={17}
-                          className="animate-spin"
-                        />
+                      Cleaning...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={17} />
 
-                        Cleaning...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={17} />
+                      Apply Cleaning
+                    </>
+                  )}
 
-                        Apply Cleaning
-                      </>
-                    )}
-
-                  </button>
-                )}
-
-
-                {cleaningApplied && (
-                  <button
-                    onClick={
-                      handleDownloadCleanedDataset
-                    }
-                    disabled={cleaningDownloading}
-                    className="
-                      inline-flex
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-lg
-                      border
-                      border-border
-                      bg-background
-                      px-4
-                      py-2.5
-                      text-sm
-                      font-medium
-                      text-foreground
-                      transition
-                      hover:bg-accent
-                      disabled:cursor-not-allowed
-                      disabled:opacity-60
-                    "
-                  >
-
-                    {cleaningDownloading ? (
-                      <>
-                        <Loader2
-                          size={17}
-                          className="animate-spin"
-                        />
-
-                        Downloading...
-                      </>
-                    ) : (
-                      <>
-                        <Download size={17} />
-
-                        Download Cleaned Dataset
-                      </>
-                    )}
-
-                  </button>
-                )}
-
-              </div>
+                </button>
+              )}
 
             </div>
 

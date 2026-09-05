@@ -15,6 +15,8 @@ export interface Dataset {
   uploaded_at: string;
   owner_id: number;
   file_path: string;
+  cleaned_available: boolean;
+  cleaned_filename: string | null;
 }
 
 // =========================
@@ -85,18 +87,21 @@ export interface CleaningResponse {
 }
 
 // =========================
+// Download Format
+// =========================
+
+export type DownloadFormat = "xlsx" | "csv" | "pdf";
+
+// =========================
 // Get Datasets
 // =========================
 
 export async function getDatasets(
   params: DatasetQuery = {}
 ): Promise<DatasetListResponse> {
-  const response = await api.get<DatasetListResponse>(
-    "/datasets",
-    {
-      params,
-    }
-  );
+  const response = await api.get<DatasetListResponse>("/datasets", {
+    params,
+  });
 
   return response.data;
 }
@@ -130,16 +135,39 @@ export async function deleteDataset(
 }
 
 // =========================
+// Upload Dataset
+// =========================
+
+export async function uploadDataset(
+  file: File
+): Promise<Dataset> {
+  const formData = new FormData();
+
+  formData.append("file", file);
+
+  const response = await api.post<Dataset>(
+    "/datasets/upload",
+    formData
+  );
+
+  return response.data;
+}
+
+// =========================
 // Download Original Dataset
 // =========================
 
 export async function downloadDataset(
-  datasetId: number
+  datasetId: number,
+  format: DownloadFormat
 ): Promise<void> {
   const response = await api.get(
     `/datasets/${datasetId}/download`,
     {
       responseType: "blob",
+      params: {
+        format,
+      },
     }
   );
 
@@ -150,7 +178,7 @@ export async function downloadDataset(
   const link = document.createElement("a");
 
   link.href = url;
-  link.setAttribute("download", "dataset");
+  link.download = `dataset_${datasetId}.${format}`;
 
   document.body.appendChild(link);
 
@@ -194,29 +222,27 @@ export async function applyCleaning(
 // =========================
 
 export async function downloadCleanedDataset(
-  datasetId: number
+  datasetId: number,
+  format: "xlsx" | "csv"
 ): Promise<void> {
   const response = await api.get(
     `/cleaning/${datasetId}/download`,
     {
       responseType: "blob",
+      params: {
+        format,
+      },
     }
   );
 
   const blob = new Blob([response.data]);
 
-  const url = window.URL.createObjectURL(blob);
+  const objectUrl = window.URL.createObjectURL(blob);
 
   const link = document.createElement("a");
 
-  link.href = url;
-
-  // The backend sends the correct file through FileResponse.
-  // This filename is only a fallback.
-  link.setAttribute(
-    "download",
-    "cleaned_dataset"
-  );
+  link.href = objectUrl;
+  link.download = `dataset_${datasetId}_cleaned.${format}`;
 
   document.body.appendChild(link);
 
@@ -224,29 +250,56 @@ export async function downloadCleanedDataset(
 
   link.remove();
 
-  window.URL.revokeObjectURL(url);
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 // =========================
-// Upload Dataset
+// Download Analysis Report
 // =========================
 
-export async function uploadDataset(
-  file: File
-): Promise<Dataset> {
-  const formData = new FormData();
-
-  formData.append("file", file);
-
-  const response = await api.post<Dataset>(
-    "/datasets/upload",
-    formData,
+export async function downloadAnalysisReport(
+  datasetId: number
+): Promise<void> {
+  const response = await api.get(
+    `/reports/${datasetId}/pdf`,
     {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+      responseType: "blob",
     }
   );
 
-  return response.data;
+  const blob = new Blob([response.data], {
+    type: "application/pdf",
+  });
+
+  const objectUrl = window.URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = objectUrl;
+  link.download = `dataset_${datasetId}_analysis_report.pdf`;
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+
+  window.URL.revokeObjectURL(objectUrl);
 }
+
+// =========================
+// Unified Download
+// =========================
+
+export async function downloadDatasetFile(
+  datasetId: number,
+  format: DownloadFormat
+): Promise<void> {
+  if (format === "pdf") {
+    await downloadAnalysisReport(datasetId);
+    return;
+  }
+
+  await downloadCleanedDataset(datasetId, format);
+}
+
