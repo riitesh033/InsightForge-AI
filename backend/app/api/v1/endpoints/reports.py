@@ -1,8 +1,4 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-)
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -15,6 +11,10 @@ from app.services.report import generate_analysis_report
 
 router = APIRouter()
 
+
+# ============================================================
+# GET ALL REPORTS
+# ============================================================
 
 @router.get("/")
 def get_reports(
@@ -54,12 +54,20 @@ def get_reports(
     ]
 
 
+# ============================================================
+# DOWNLOAD PDF REPORT
+# ============================================================
+
 @router.get("/{dataset_id}/pdf")
 def download_report(
     dataset_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # --------------------------------------------------------
+    # Find dataset belonging to current user
+    # --------------------------------------------------------
+
     dataset = (
         db.query(Dataset)
         .filter(
@@ -75,6 +83,10 @@ def download_report(
             detail="Dataset not found.",
         )
 
+    # --------------------------------------------------------
+    # Find analysis for dataset
+    # --------------------------------------------------------
+
     analysis = (
         db.query(Analysis)
         .filter(
@@ -89,13 +101,55 @@ def download_report(
             detail="Analysis not found for this dataset.",
         )
 
-    pdf_buffer = generate_analysis_report(analysis)
+    # --------------------------------------------------------
+    # Generate professional PDF report
+    #
+    # IMPORTANT:
+    # The report generator requires BOTH:
+    #   dataset
+    #   analysis
+    # --------------------------------------------------------
 
-    filename = (
-        f"{dataset.original_filename}"
-        .rsplit(".", 1)[0]
-        + "_analysis_report.pdf"
-    )
+    try:
+        pdf_buffer = generate_analysis_report(
+            dataset=dataset,
+            analysis=analysis,
+        )
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate analysis report: {str(exc)}",
+        )
+
+    # --------------------------------------------------------
+    # Build download filename
+    # --------------------------------------------------------
+
+    original_name = dataset.original_filename or "dataset"
+
+    if "." in original_name:
+        report_name = original_name.rsplit(".", 1)[0]
+    else:
+        report_name = original_name
+
+    filename = f"{report_name}_analysis_report.pdf"
+
+    # --------------------------------------------------------
+    # Return PDF
+    # --------------------------------------------------------
 
     return StreamingResponse(
         pdf_buffer,
