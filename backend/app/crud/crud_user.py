@@ -81,3 +81,25 @@ def update_password(
     db.refresh(user)
 
     return user
+
+def update_user(
+    db: Session,
+    user: User,
+    full_name: str,
+    email: str,
+):
+    user.full_name = full_name
+    user.email = email
+
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+def delete_user(
+    db: Session,
+    user: User,
+):
+    db.delete(user)
+    db.commit()

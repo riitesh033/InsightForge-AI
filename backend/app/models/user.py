@@ -36,6 +36,11 @@ class User(Base):
         nullable=False,
     )
 
+    profile_picture: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

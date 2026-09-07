@@ -4,12 +4,21 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserBase(BaseModel):
-    full_name: str = Field(..., min_length=2, max_length=100)
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+    )
+
     email: EmailStr
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+    )
 
 
 class UserLogin(BaseModel):
@@ -21,10 +30,31 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_superuser: bool
+    profile_picture: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(
         from_attributes=True
+    )
+
+
+class UserUpdate(BaseModel):
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+    )
+
+    email: EmailStr
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
     )
 
 
@@ -37,12 +67,15 @@ class TokenPayload(BaseModel):
     sub: str
 
 
-# ---------- Forgot Password ----------
-
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8, max_length=128)
+
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+    )
