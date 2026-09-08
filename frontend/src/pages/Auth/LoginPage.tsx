@@ -14,22 +14,28 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    // =========================
+    // Validation
+    // =========================
+
+    const cleanEmail = email.trim();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!email.trim()) {
+    if (!cleanEmail) {
       showError("Email is required.");
       return;
     }
 
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanEmail)) {
       showError("Please enter a valid email address.");
       return;
     }
 
-    if (!password.trim()) {
+    if (!password) {
       showError("Password is required.");
       return;
     }
@@ -39,23 +45,54 @@ export default function LoginPage() {
       return;
     }
 
+    // =========================
+    // Login
+    // =========================
+
     try {
       setLoading(true);
 
-      await login(email, password);
+      await login(cleanEmail, password);
 
       showSuccess("Welcome back!");
 
       navigate("/dashboard");
-
     } catch (error: any) {
-      console.error(error);
+      console.error("Login error:", error);
 
-      showError(
-        error.response?.data?.detail ??
-        "Invalid email or password."
-      );
+      // =========================
+      // FastAPI / Axios Error
+      // =========================
 
+      const detail = error?.response?.data?.detail;
+
+      if (Array.isArray(detail)) {
+        const message = detail
+          .map((item: any) => {
+            if (typeof item === "string") {
+              return item;
+            }
+
+            if (item?.msg) {
+              return item.msg;
+            }
+
+            return "Invalid login information.";
+          })
+          .join(", ");
+
+        showError(message);
+      } else if (typeof detail === "string") {
+        showError(detail);
+      } else if (error?.response?.status === 401) {
+        showError("Invalid email or password.");
+      } else if (error?.response?.status === 422) {
+        showError("Please check your email and password.");
+      } else if (error?.response?.data?.message) {
+        showError(error.response.data.message);
+      } else {
+        showError("Unable to login. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -63,7 +100,6 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
-
       <h1 className="text-3xl font-bold text-foreground">
         Welcome Back
       </h1>
@@ -76,17 +112,27 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="mt-8 space-y-5"
       >
+        {/* =========================
+            Email
+        ========================= */}
+
         <div>
-          <label className="text-sm font-medium text-foreground">
+          <label
+            htmlFor="email"
+            className="text-sm font-medium text-foreground"
+          >
             Email
           </label>
 
           <input
+            id="email"
             required
             type="email"
+            autoComplete="email"
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
             className="
               mt-2
               w-full
@@ -102,22 +148,34 @@ export default function LoginPage() {
               focus:outline-none
               focus:ring-2
               focus:ring-primary/20
+              disabled:cursor-not-allowed
+              disabled:opacity-60
             "
           />
         </div>
 
+        {/* =========================
+            Password
+        ========================= */}
+
         <div>
-          <label className="text-sm font-medium text-foreground">
+          <label
+            htmlFor="password"
+            className="text-sm font-medium text-foreground"
+          >
             Password
           </label>
 
           <div className="relative mt-2">
             <input
+              id="password"
               required
               type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
               className="
                 w-full
                 rounded-lg
@@ -133,12 +191,15 @@ export default function LoginPage() {
                 focus:outline-none
                 focus:ring-2
                 focus:ring-primary/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
               "
             />
 
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              onClick={() => setShowPassword((prev) => !prev)}
+              disabled={loading}
               className="
                 absolute
                 right-3
@@ -148,9 +209,13 @@ export default function LoginPage() {
                 transition-colors
                 hover:text-foreground
                 focus:outline-none
+                disabled:cursor-not-allowed
+                disabled:opacity-50
               "
               aria-label={
-                showPassword ? "Hide password" : "Show password"
+                showPassword
+                  ? "Hide password"
+                  : "Show password"
               }
             >
               {showPassword ? (
@@ -161,6 +226,10 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+
+        {/* =========================
+            Login Button
+        ========================= */}
 
         <button
           type="submit"
@@ -184,6 +253,10 @@ export default function LoginPage() {
         </button>
       </form>
 
+      {/* =========================
+          Forgot Password
+      ========================= */}
+
       <div className="mt-6 text-center">
         <Link
           to="/forgot-password"
@@ -192,6 +265,10 @@ export default function LoginPage() {
           Forgot Password?
         </Link>
       </div>
+
+      {/* =========================
+          Register
+      ========================= */}
 
       <div className="mt-3 text-center text-foreground">
         Don't have an account?
@@ -203,8 +280,6 @@ export default function LoginPage() {
           Register
         </Link>
       </div>
-
     </div>
   );
 }
-

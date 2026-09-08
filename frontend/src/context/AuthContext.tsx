@@ -1,119 +1,229 @@
 import {
   createContext,
-  ReactNode,
   useEffect,
   useState,
+  type ReactNode,
 } from "react";
 
-import api from "@/services/api";
+import type {
+  AuthContextType,
+  User,
+} from "@/types/auth";
+
+import {
+  getToken as getStoredToken,
+  getUser as getStoredUser,
+  saveToken,
+  saveUser,
+  clearAuthStorage,
+} from "@/utils/storage";
 
 import {
   login as loginService,
   register as registerService,
 } from "@/services/auth";
 
-import {
-  AuthContextType,
-  LoginResponse,
-  User,
-} from "@/types/auth";
+import api from "@/services/api";
 
-import {
-  clearAuthStorage,
-  getToken,
-  getUser,
-  saveToken,
-  saveUser,
-} from "@/utils/storage";
 
 export const AuthContext =
-  createContext<AuthContextType>(
-    {} as AuthContextType
-  );
+  createContext<AuthContextType | undefined>(undefined);
 
-type Props = {
+
+interface AuthProviderProps {
   children: ReactNode;
-};
+}
+
 
 export function AuthProvider({
   children,
-}: Props) {
-  const [user, setUser] =
-    useState<User | null>(null);
+}: AuthProviderProps) {
 
-  const [token, setToken] =
-    useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [token, setToken] = useState<string | null>(
+    getStoredToken()
+  );
 
+  const [loading, setLoading] = useState(true);
+
+
+  /*
+   * Fetch the currently authenticated user
+   * from the backend.
+   */
+  async function fetchCurrentUser(): Promise<User> {
+    try {
+      const response = await api.get<User>(
+        "/users/me"
+      );
+
+      const currentUser = response.data;
+
+      setUser(currentUser);
+      saveUser(currentUser);
+
+      return currentUser;
+
+    } catch (error) {
+      console.error(
+        "Failed to fetch current user:",
+        error
+      );
+
+      clearAuthStorage();
+
+      delete api.defaults.headers.common.Authorization;
+
+      setUser(null);
+      setToken(null);
+
+      throw error;
+    }
+  }
+
+
+  /*
+   * Restore authentication when the application starts.
+   */
   useEffect(() => {
-    const storedToken = getToken();
-    const storedUser = getUser<User>();
 
-    if (storedToken) {
-      setToken(storedToken);
+    async function restoreSession() {
 
+      const storedToken = getStoredToken();
+      const storedUser = getStoredUser<User>();
+
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+
+
+      /*
+       * Set token in Axios before requesting /users/me.
+       */
       api.defaults.headers.common.Authorization =
         `Bearer ${storedToken}`;
+
+      setToken(storedToken);
+
+
+      /*
+       * Show stored user immediately if available.
+       */
+      if (storedUser) {
+        setUser(storedUser);
+      }
+
+
+      /*
+       * Verify token with backend.
+       */
+      try {
+        await fetchCurrentUser();
+      } catch {
+        // Session has already been cleared.
+      }
+
+
+      setLoading(false);
     }
 
-    if (storedUser) {
-      setUser(storedUser);
-    }
 
-    setLoading(false);
+    restoreSession();
+
   }, []);
 
+
+  /*
+   * Login
+   */
   async function login(
     email: string,
     password: string
-  ) {
-    const response: LoginResponse =
-      await loginService({
-        email,
-        password,
-      });
+  ): Promise<void> {
 
-    saveToken(response.access_token);
+    const response = await loginService(
+      email,
+      password
+    );
 
-    setToken(response.access_token);
+    const accessToken =
+      response.access_token;
 
-    api.defaults.headers.common.Authorization =
-      `Bearer ${response.access_token}`;
 
     /*
-      Later we will fetch the current user
-      from the backend.
+     * Save token.
+     */
+    saveToken(accessToken);
+    setToken(accessToken);
 
-      For now we only store the email.
-    */
 
-    const currentUser: User = {
-      id: 0,
-      full_name: "",
-      email,
-      is_active: true,
-    };
+    /*
+     * Configure Axios for authenticated requests.
+     */
+    api.defaults.headers.common.Authorization =
+      `Bearer ${accessToken}`;
 
-    saveUser(currentUser);
 
-    setUser(currentUser);
+    /*
+     * Get the real user from backend.
+     */
+    try {
+      const currentUser =
+        await fetchCurrentUser();
+
+      setUser(currentUser);
+
+    } catch (error) {
+
+      /*
+       * If token is valid but /users/me fails,
+       * remove the authentication state.
+       */
+      clearAuthStorage();
+
+      delete api.defaults.headers.common.Authorization;
+
+      setUser(null);
+      setToken(null);
+
+      throw error;
+    }
   }
 
+
+  /*
+   * Register
+   */
   async function register(
     full_name: string,
     email: string,
     password: string
-  ) {
-    await registerService({
+  ): Promise<void> {
+
+    await registerService(
       full_name,
       email,
-      password,
-    });
+      password
+    );
+
+
+    /*
+     * Automatically login after registration.
+     */
+    await login(
+      email,
+      password
+    );
   }
 
-  function logout() {
+
+  /*
+   * Logout
+   */
+  function logout(): void {
+
     clearAuthStorage();
 
     delete api.defaults.headers.common.Authorization;
@@ -122,18 +232,30 @@ export function AuthProvider({
     setToken(null);
   }
 
+
+  /*
+   * Authentication state.
+   */
+  const isAuthenticated =
+    Boolean(token && user);
+
+
+  /*
+   * Context value.
+   */
+  const contextValue: AuthContextType = {
+    user,
+    token,
+    loading,
+    login,
+    register,
+    logout,
+    isAuthenticated,
+  };
+
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!token,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

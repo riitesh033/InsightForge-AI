@@ -1,16 +1,24 @@
 import axios from "axios";
 
+/*
+|--------------------------------------------------------------------------
+| API Configuration
+|--------------------------------------------------------------------------
+*/
+
 const api = axios.create({
   baseURL:
     import.meta.env.VITE_API_URL ||
-    "http://localhost:8000",
+    "http://localhost:8000/api/v1",
 
   headers: {
     Accept: "application/json",
+    "Content-Type": "application/json",
   },
 
   timeout: 30000,
 });
+
 
 /*
 |--------------------------------------------------------------------------
@@ -23,13 +31,17 @@ api.interceptors.request.use(
     const token = localStorage.getItem("access_token");
 
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
+
 
 /*
 |--------------------------------------------------------------------------
@@ -38,13 +50,26 @@ api.interceptors.request.use(
 */
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
 
   (error) => {
-    if (error.response?.status === 401) {
+    if (error?.response?.status === 401) {
       localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
 
-      if (window.location.pathname !== "/login") {
+      delete api.defaults.headers.common.Authorization;
+
+      const currentPath = window.location.pathname;
+
+      const authPages = [
+        "/login",
+        "/register",
+        "/forgot-password",
+      ];
+
+      if (!authPages.includes(currentPath)) {
         window.location.href = "/login";
       }
     }
@@ -52,5 +77,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 
 export default api;

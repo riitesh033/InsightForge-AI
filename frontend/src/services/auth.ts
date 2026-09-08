@@ -1,96 +1,71 @@
-import api from "./api";
-
-// =========================
-// Interfaces
-// =========================
-
-export interface RegisterData {
-  full_name: string;
-  email: string;
-  password: string;
-}
-
-export interface LoginData {
-  email: string;
-  password: string;
-}
-
-export interface ForgotPasswordData {
-  email: string;
-  password?: string;
-}
+import api from "@/services/api";
 
 export interface LoginResponse {
   access_token: string;
   token_type: string;
 }
 
-// =========================
-// Register
-// =========================
-
-export async function register(
-  data: RegisterData
-): Promise<any> {
-  const response = await api.post(
-    "/auth/register",
-    data
-  );
-
-  return response.data;
+export interface RegisterResponse {
+  id: number;
+  full_name: string;
+  email: string;
+  is_active: boolean;
 }
 
-// =========================
-// Login
-// =========================
+
+/*
+|--------------------------------------------------------------------------
+| Login
+|--------------------------------------------------------------------------
+*/
 
 export async function login(
-  data: LoginData
+  email: string,
+  password: string
 ): Promise<LoginResponse> {
+
   const formData = new URLSearchParams();
 
-  formData.append(
-    "username",
-    data.email
-  );
+  formData.append("username", email.trim());
+  formData.append("password", password);
 
-  formData.append(
-    "password",
-    data.password
-  );
-
-  const response = await api.post<LoginResponse>(
-    "/auth/login",
-    formData,
-    {
-      headers: {
-        "Content-Type":
-          "application/x-www-form-urlencoded",
-      },
-    }
-  );
-
-  // Save JWT token
-  localStorage.setItem(
-    "access_token",
-    response.data.access_token
-  );
+  const response =
+    await api.post<LoginResponse>(
+      "/auth/login",
+      formData,
+      {
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
   return response.data;
 }
 
-// =========================
-// Forgot Password
-// =========================
 
-export async function forgotPassword(
-  data: ForgotPasswordData
-): Promise<any> {
-  const response = await api.post(
-    "/auth/forgot-password",
-    data
-  );
+/*
+|--------------------------------------------------------------------------
+| Register
+|--------------------------------------------------------------------------
+*/
+
+export async function register(
+  full_name: string,
+  email: string,
+  password: string
+): Promise<RegisterResponse> {
+
+  const response =
+    await api.post<RegisterResponse>(
+      "/auth/register",
+      {
+        full_name: full_name.trim(),
+        email: email.trim(),
+        password,
+      }
+    );
 
   return response.data;
 }
-
