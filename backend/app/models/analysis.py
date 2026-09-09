@@ -77,6 +77,37 @@ class Analysis(Base):
         default=100,
     )
 
+    # Professional analysis fields
+    executive_summary = Column(
+        Text,
+        nullable=True,
+    )
+
+    key_insights = Column(
+        JSON,
+        nullable=True,
+    )
+
+    recommendations = Column(
+        JSON,
+        nullable=True,
+    )
+
+    business_opportunities = Column(
+        JSON,
+        nullable=True,
+    )
+
+    distributions = Column(
+        JSON,
+        nullable=True,
+    )
+
+    data_quality_issues = Column(
+        JSON,
+        nullable=True,
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow,
