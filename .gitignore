@@ -46,16 +46,10 @@ ENV/
 .coverage
 coverage/
 htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Alembic
-alembic/
 
 # Database
 *.db
-*.sqlite
-*.sqlite3
+*.db-journal
 
 # OS
 .DS_Store

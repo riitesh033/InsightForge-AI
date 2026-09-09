@@ -9,6 +9,8 @@ from app.api.v1.endpoints import dashboard
 from app.api.v1.endpoints import chat
 from app.api.v1.endpoints import reports
 from app.api.v1.endpoints import cleaning
+from app.api.v1.endpoints import notifications
+from app.api.v1.endpoints import payments
 
 api_router = APIRouter()
 
@@ -64,4 +66,16 @@ api_router.include_router(
     cleaning.router,
     prefix="/cleaning",
     tags=["Cleaning"],
+)
+
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["Notifications"],
+)
+
+api_router.include_router(
+    payments.router,
+    prefix="/payments",
+    tags=["Payments"],
 )
