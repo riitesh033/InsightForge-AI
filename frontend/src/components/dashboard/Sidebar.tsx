@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Upload,
@@ -9,6 +9,9 @@ import {
   LogOut,
   BarChart3,
 } from "lucide-react";
+
+import { useAuth } from "@/hooks/useAuth";
+import { showSuccess } from "@/lib/toast";
 
 const navigation = [
   {
@@ -48,6 +51,20 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onNavigate }: SidebarProps) {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  async function handleLogout() {
+    try {
+      await logout();
+      showSuccess("Logged out successfully.");
+      navigate("/login");
+    } catch (error) {
+      // Even if API fails, still redirect
+      navigate("/login");
+    }
+  }
+
   return (
     <aside className="flex h-full w-72 flex-col border-r border-border bg-card">
 
@@ -102,6 +119,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       <div className="border-t border-border p-5">
 
         <button
+          onClick={handleLogout}
           className="
             flex
             w-full

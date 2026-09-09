@@ -21,6 +21,7 @@ import {
 import {
   login as loginService,
   register as registerService,
+  getCurrentUser as getCurrentUserService,
 } from "@/services/auth";
 
 import api from "@/services/api";
@@ -220,16 +221,34 @@ export function AuthProvider({
 
 
   /*
-   * Logout
+   * Logout - calls backend if needed and clears local state
    */
-  function logout(): void {
+  async function logout(): Promise<void> {
+    try {
+      // Optionally call backend logout endpoint if you want to invalidate server-side sessions
+      // For stateless JWT, this is not strictly necessary but can be useful for audit logs
+      // await api.post("/auth/logout");
+    } catch (error) {
+      // Ignore logout errors - still clear local state
+      console.warn("Logout API call failed, clearing local state anyway:", error);
+    }
 
+    // Clear local storage and state
     clearAuthStorage();
 
     delete api.defaults.headers.common.Authorization;
 
     setUser(null);
     setToken(null);
+  }
+
+
+  /*
+   * Update user profile in context
+   */
+  function updateUserProfile(updatedUser: User): void {
+    setUser(updatedUser);
+    saveUser(updatedUser);
   }
 
 
@@ -251,6 +270,7 @@ export function AuthProvider({
     register,
     logout,
     isAuthenticated,
+    updateUserProfile,
   };
 
 
