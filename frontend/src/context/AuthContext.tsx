@@ -21,7 +21,6 @@ import {
 import {
   login as loginService,
   register as registerService,
-  getCurrentUser as getCurrentUserService,
 } from "@/services/auth";
 
 import api from "@/services/api";

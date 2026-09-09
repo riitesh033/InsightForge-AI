@@ -24,10 +24,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    },
-
-    /* Ignore deprecation warnings for baseUrl (required for path aliases) */
-    "ignoreDeprecations": "6.0"
+    }
   },
   "include": ["src"]
 }
