@@ -1,4 +1,4 @@
-```gitignore
+```
 # Python
 __pycache__/
 *.py[cod]
@@ -25,26 +25,22 @@ wheels/
 .env
 .env.local
 .env.*
-.venv/
-venv/
-ENV/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
+# Alembic
+alembic/versions/*.pyc
 
-# Logs
-*.log
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
+# Backend specific
+backend/__pycache__/
+backend/alembic/__pycache__/
+backend/alembic/versions/__pycache__/
+backend/app/__pycache__/
+backend/app/api/__pycache__/
+backend/app/api/v1/__pycache__/
+backend/app/api/v1/endpoints/__pycache__/
+backend/app/core/__pycache__/
+backend/app/crud/__pycache__/
+backend/app/db/__pycache__/
+backend/app/models/__pycache__/
+backend/app/schemas/__pycache__/
+backend/app/services/__pycache__/
 ```
