@@ -15,6 +15,7 @@ from app.services.insights import (
     generate_dataset_summary,
 )
 from app.services.profiling import profile_dataframe
+from app.services.professional_analysis import generate_professional_analysis
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -121,27 +122,31 @@ def upload_dataset(
         )
 
     try:
+        # Generate both basic profiling and professional analysis
         analysis_data = profile_dataframe(dataframe)
-
+        
         # Convert everything into JSON-safe objects
         analysis_data = make_json_serializable(analysis_data)
-
+        
+        # Generate professional analysis with insights and recommendations
+        professional_analysis = generate_professional_analysis(dataframe)
+        
         analysis_text = generate_dataset_summary(
             analysis_data
         )
-
+        
         quality_score = calculate_quality_score(
             analysis_data
         )
-
+        
     except Exception as e:
         save_path.unlink(missing_ok=True)
-
+        
         raise HTTPException(
             status_code=500,
             detail=f"Unable to profile dataset. {str(e)}",
         )
-
+    
     dataset = Dataset(
         filename=unique_filename,
         original_filename=file.filename,
@@ -152,12 +157,13 @@ def upload_dataset(
         columns=len(dataframe.columns),
         owner_id=owner_id,
     )
-
+    
     dataset = create_dataset(
         db=db,
         dataset=dataset,
     )
-
+    
+    # Merge professional analysis fields into existing analysis structure
     analysis = Analysis(
         dataset_id=dataset.id,
         summary=analysis_data["summary"],
@@ -169,6 +175,13 @@ def upload_dataset(
         duplicates=analysis_data["duplicates"],
         correlations=analysis_data["correlations"],
         outliers=analysis_data["outliers"],
+        # Add professional analysis fields
+        executive_summary=professional_analysis.get("executive_summary"),
+        key_insights=professional_analysis.get("key_insights"),
+        recommendations=professional_analysis.get("recommendations"),
+        business_opportunities=professional_analysis.get("business_opportunities"),
+        distributions=professional_analysis.get("distributions"),
+        data_quality_issues=professional_analysis.get("data_quality", {}).get("issues"),
     )
 
     db.add(analysis)
