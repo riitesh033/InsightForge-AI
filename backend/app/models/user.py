@@ -8,6 +8,7 @@ from app.db.base_models import Base
 
 if TYPE_CHECKING:
     from app.models.dataset import Dataset
+    from app.models.subscription import Subscription
 
 
 class User(Base):
@@ -69,5 +70,12 @@ class User(Base):
     datasets: Mapped[list["Dataset"]] = relationship(
         "Dataset",
         back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+
+    subscription: Mapped["Subscription"] = relationship(
+        "Subscription",
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
     )
