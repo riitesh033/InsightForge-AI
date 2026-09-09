@@ -40,7 +40,9 @@ export interface AuthContextType {
     password: string
   ) => Promise<void>;
 
-  logout: () => void;
+  logout: () => Promise<void>;
 
   isAuthenticated: boolean;
+
+  updateUserProfile: (user: User) => void;
 }
