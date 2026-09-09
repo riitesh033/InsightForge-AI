@@ -42,56 +42,26 @@ export function useAnalysis(
         setLoading(true);
         setError("");
 
-
-        console.log(
-          "Fetching analysis for dataset:",
-          datasetId
-        );
-
-
         const response =
           await getAnalysis(
             Number(datasetId)
           );
 
-
-        console.log(
-          "Analysis response:",
-          response
-        );
-
-
         setData(response);
 
-
-      } catch (error: any) {
-
-
-        console.error(
-          "Analysis API error:",
-          error?.response?.data || error
-        );
-
-
+      } catch (error) {
         setData(null);
 
-
         setError(
-          error?.response?.data?.detail ||
-          "Failed to load analysis."
+          error instanceof Error && 'response' in error 
+            ? (error as any).response?.data?.detail || "Failed to load analysis."
+            : error instanceof Error 
+              ? error.message 
+              : "Failed to load analysis."
         );
-
 
       } finally {
-
-
         setLoading(false);
-
-
-        console.log(
-          "Analysis loading finished"
-        );
-
       }
 
     },

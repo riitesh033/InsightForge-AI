@@ -159,15 +159,13 @@ export default function AnalysisPage() {
 
       setCleaningData(response);
 
-    } catch (error: any) {
-      console.error(
-        "Failed to preview cleaning:",
-        error
-      );
-
+    } catch (error) {
       setCleaningError(
-        error?.response?.data?.detail ??
-        "Unable to generate cleaning preview."
+        error instanceof Error && 'response' in error 
+          ? (error as any).response?.data?.detail ?? "Unable to generate cleaning preview."
+          : error instanceof Error 
+            ? error.message 
+            : "Unable to generate cleaning preview."
       );
 
     } finally {
@@ -203,15 +201,13 @@ export default function AnalysisPage() {
       setCleaningData(response);
       setCleaningApplied(true);
 
-    } catch (error: any) {
-      console.error(
-        "Failed to apply cleaning:",
-        error
-      );
-
+    } catch (error) {
       setCleaningError(
-        error?.response?.data?.detail ??
-        "Unable to clean the dataset."
+        error instanceof Error && 'response' in error 
+          ? (error as any).response?.data?.detail ?? "Unable to clean the dataset."
+          : error instanceof Error 
+            ? error.message 
+            : "Unable to clean the dataset."
       );
 
     } finally {
@@ -249,15 +245,13 @@ export default function AnalysisPage() {
         downloadFormat
       );
 
-    } catch (error: any) {
-      console.error(
-        "Failed to download file:",
-        error
-      );
-
+    } catch (error) {
       setDownloadError(
-        error?.response?.data?.detail ??
-        "Unable to download the selected file."
+        error instanceof Error && 'response' in error 
+          ? (error as any).response?.data?.detail ?? "Unable to download the selected file."
+          : error instanceof Error 
+            ? error.message 
+            : "Unable to download the selected file."
       );
 
     } finally {
@@ -401,16 +395,16 @@ export default function AnalysisPage() {
   const cleaningPreview =
     cleaningData?.preview;
 
-  const totalOutliers =
-    cleaningPreview
-      ? Object.values(
-          cleaningPreview.outliers_detected
-        ).reduce(
-          (total, count) =>
-            total + count,
-          0
-        )
-      : 0;
+  // const totalOutliers =
+  //   cleaningPreview
+  //     ? Object.values(
+  //         cleaningPreview.outliers_detected
+  //       ).reduce(
+  //         (total, count) =>
+  //           total + count,
+  //         0
+  //       )
+  //     : 0;
 
   const hasCleaningChanges =
     Boolean(

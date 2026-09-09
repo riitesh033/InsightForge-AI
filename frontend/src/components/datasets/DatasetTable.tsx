@@ -12,7 +12,7 @@ import RenameDatasetDialog from "@/components/datasets/RenameDatasetDialog";
 import {
   Dataset,
   deleteDataset,
-  downloadDataset,
+  downloadDatasetFile,
   renameDataset,
 } from "@/services/dataset";
 
@@ -140,7 +140,7 @@ export default function DatasetTable({
 
                         <button
                           onClick={() =>
-                            downloadDataset(dataset.id)
+                            downloadDatasetFile(dataset.id, "original")
                           }
                           className="rounded-lg p-2 hover:bg-muted"
                           title="Download"

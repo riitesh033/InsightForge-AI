@@ -159,16 +159,13 @@ export default function UploadDatasetPage() {
       setTimeout(() => {
         navigate("/dashboard/datasets");
       }, 1000);
-    } catch (error: any) {
-      console.error(
-        "Dataset upload failed:",
-        error
-      );
-
+    } catch (error) {
       const message =
-        error?.response?.data?.detail ??
-        error?.message ??
-        "Upload failed. Please try again.";
+        error instanceof Error && 'response' in error 
+          ? (error as any).response?.data?.detail ?? error.message
+          : error instanceof Error 
+            ? error.message 
+            : "Upload failed. Please try again.";
 
       showError(message);
     } finally {

@@ -53,13 +53,15 @@ export default function RegisterPage() {
 
       navigate("/login");
 
-    } catch (error: any) {
-      console.error(error);
+    } catch (error) {
+      const message =
+        error instanceof Error && 'response' in error 
+          ? (error as any).response?.data?.detail ?? "Registration failed."
+          : error instanceof Error 
+            ? error.message 
+            : "Registration failed.";
 
-      showError(
-        error.response?.data?.detail ??
-        "Registration failed."
-      );
+      showError(message);
 
     } finally {
       setLoading(false);
