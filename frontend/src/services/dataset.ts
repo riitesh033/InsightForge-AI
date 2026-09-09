@@ -147,7 +147,12 @@ export async function uploadDataset(
 
   const response = await api.post<Dataset>(
     "/datasets/upload",
-    formData
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
 
   return response.data;
