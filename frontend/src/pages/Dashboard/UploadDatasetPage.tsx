@@ -146,6 +146,8 @@ export default function UploadDatasetPage() {
       setUploading(true);
       setProgress(0);
 
+      console.log("Starting upload for file:", selectedFile.name, selectedFile.size);
+
       const response = await uploadDataset(selectedFile);
 
       console.log("UPLOAD RESPONSE:", response);
@@ -159,13 +161,18 @@ export default function UploadDatasetPage() {
       setTimeout(() => {
         navigate("/dashboard/datasets");
       }, 1000);
-    } catch (error) {
-      const message =
-        error instanceof Error && 'response' in error 
-          ? (error as any).response?.data?.detail ?? error.message
-          : error instanceof Error 
-            ? error.message 
-            : "Upload failed. Please try again.";
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      
+      let message = "Upload failed. Please try again.";
+      
+      if (error?.response?.status === 401) {
+        message = "Please login to upload datasets.";
+      } else if (error?.response?.data?.detail) {
+        message = error.response.data.detail;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
 
       showError(message);
     } finally {
