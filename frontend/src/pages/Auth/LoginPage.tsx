@@ -57,14 +57,14 @@ export default function LoginPage() {
       showSuccess("Welcome back!");
 
       navigate("/dashboard");
-    } catch (error: any) {
-      console.error("Login error:", error);
-
+    } catch (error) {
       // =========================
       // FastAPI / Axios Error
       // =========================
 
-      const detail = error?.response?.data?.detail;
+      const detail = error instanceof Error && 'response' in error 
+        ? (error as any).response?.data?.detail 
+        : undefined;
 
       if (Array.isArray(detail)) {
         const message = detail
@@ -84,12 +84,12 @@ export default function LoginPage() {
         showError(message);
       } else if (typeof detail === "string") {
         showError(detail);
-      } else if (error?.response?.status === 401) {
+      } else if (error instanceof Error && 'response' in error && (error as any).response?.status === 401) {
         showError("Invalid email or password.");
-      } else if (error?.response?.status === 422) {
+      } else if (error instanceof Error && 'response' in error && (error as any).response?.status === 422) {
         showError("Please check your email and password.");
-      } else if (error?.response?.data?.message) {
-        showError(error.response.data.message);
+      } else if (error instanceof Error && 'response' in error && (error as any).response?.data?.message) {
+        showError((error as any).response.data.message);
       } else {
         showError("Unable to login. Please try again.");
       }

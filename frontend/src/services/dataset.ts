@@ -90,7 +90,7 @@ export interface CleaningResponse {
 // Download Format
 // =========================
 
-export type DownloadFormat = "xlsx" | "csv" | "pdf";
+export type DownloadFormat = "xlsx" | "csv" | "pdf" | "original";
 
 // =========================
 // Get Datasets
@@ -179,6 +179,38 @@ export async function downloadDataset(
 
   link.href = url;
   link.download = `dataset_${datasetId}.${format}`;
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+
+  window.URL.revokeObjectURL(url);
+}
+
+// =========================
+// Download Original Dataset (Simple)
+// =========================
+
+export async function downloadOriginalDataset(
+  datasetId: number
+): Promise<void> {
+  const response = await api.get(
+    `/datasets/${datasetId}/download`,
+    {
+      responseType: "blob",
+    }
+  );
+
+  const blob = new Blob([response.data]);
+
+  const url = window.URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `dataset_${datasetId}_original`;
 
   document.body.appendChild(link);
 
@@ -297,6 +329,11 @@ export async function downloadDatasetFile(
 ): Promise<void> {
   if (format === "pdf") {
     await downloadAnalysisReport(datasetId);
+    return;
+  }
+
+  if (format === "original") {
+    await downloadOriginalDataset(datasetId);
     return;
   }
 

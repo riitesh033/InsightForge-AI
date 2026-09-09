@@ -24,10 +24,8 @@ export default function ForgotPasswordPage() {
     try {
       setLoading(true);
 
-      // TODO:
-      // await forgotPassword(email);
-
-      // Simulate API request
+      // Simulate API request for demo purposes
+      // In a real implementation, this would call the backend password reset endpoint
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       showSuccess(
@@ -36,13 +34,10 @@ export default function ForgotPasswordPage() {
 
       setEmail("");
 
-    } catch (error: any) {
-      console.error(error);
-
-      showError(
-        error?.response?.data?.detail ??
-        "Failed to send reset link."
-      );
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send reset link";
+      
+      showError(errorMessage);
 
     } finally {
       setLoading(false);
