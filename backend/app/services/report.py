@@ -12,14 +12,13 @@ import numpy as np
 import pandas as pd
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     HRFlowable,
     Image,
-    KeepTogether,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -31,6 +30,14 @@ from reportlab.platypus import (
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 
+from app.services.verified_analysis import (
+    build_verified_analysis_report,
+)
+
+from app.services.insight_engine import (
+    generate_professional_insights,
+)
+
 
 # ============================================================
 # Helpers
@@ -41,6 +48,7 @@ def safe_text(value: Any) -> str:
     """
     Safely convert arbitrary values into ReportLab-compatible text.
     """
+
     if value is None:
         return ""
 
@@ -50,10 +58,14 @@ def safe_text(value: Any) -> str:
     return escape(str(value))
 
 
-def format_number(value: Any, decimals: int = 2) -> str:
+def format_number(
+    value: Any,
+    decimals: int = 2,
+) -> str:
     """
     Format numeric values safely for the PDF.
     """
+
     try:
         number = float(value)
 
@@ -67,10 +79,158 @@ def format_number(value: Any, decimals: int = 2) -> str:
 
 
 def format_percent(value: Any) -> str:
+    """
+    Format percentage values safely.
+    """
+
     try:
         return f"{float(value):.2f}%"
+
     except (TypeError, ValueError):
         return "0.00%"
+
+
+def priority_weight(priority: str) -> int:
+    """
+    Convert insight priority into a sortable weight.
+    """
+
+    weights = {
+        "Critical": 4,
+        "High": 3,
+        "Medium": 2,
+        "Low": 1,
+    }
+
+    return weights.get(
+        str(priority),
+        0,
+    )
+
+
+def build_insight_paragraph(
+    insight,
+    body_style,
+) -> list:
+    """
+    Convert one professional insight into ReportLab flowables.
+    """
+
+    flowables = []
+
+    title = safe_text(insight.title)
+    category = safe_text(insight.category)
+    priority = safe_text(insight.priority)
+    confidence = safe_text(insight.confidence)
+
+    flowables.append(
+        Paragraph(
+            f"<b>{title}</b>",
+            body_style,
+        )
+    )
+
+    flowables.append(
+        Paragraph(
+            (
+                f"<b>Category:</b> {category} "
+                f"&nbsp;&nbsp;"
+                f"<b>Priority:</b> {priority} "
+                f"&nbsp;&nbsp;"
+                f"<b>Confidence:</b> {confidence}"
+            ),
+            body_style,
+        )
+    )
+
+    flowables.append(
+        Paragraph(
+            (
+                f"<b>Finding:</b> "
+                f"{safe_text(insight.finding)}"
+            ),
+            body_style,
+        )
+    )
+
+    if insight.evidence:
+
+        evidence_lines = []
+
+        for evidence in insight.evidence:
+
+            metric = safe_text(
+                evidence.metric
+            )
+
+            value = safe_text(
+                evidence.value
+            )
+
+            context = safe_text(
+                evidence.context
+            )
+
+            evidence_text = (
+                f"<b>{metric}:</b> {value}"
+            )
+
+            if context:
+                evidence_text += (
+                    f" — {context}"
+                )
+
+            evidence_lines.append(
+                f"• {evidence_text}"
+            )
+
+        flowables.append(
+            Paragraph(
+                (
+                    "<b>Evidence:</b><br/>"
+                    + "<br/>".join(
+                        evidence_lines
+                    )
+                ),
+                body_style,
+            )
+        )
+
+    flowables.append(
+        Paragraph(
+            (
+                f"<b>Interpretation:</b> "
+                f"{safe_text(insight.interpretation)}"
+            ),
+            body_style,
+        )
+    )
+
+    flowables.append(
+        Paragraph(
+            (
+                f"<b>Potential Impact:</b> "
+                f"{safe_text(insight.potential_impact)}"
+            ),
+            body_style,
+        )
+    )
+
+    flowables.append(
+        Paragraph(
+            (
+                f"<b>Recommended Action:</b> "
+                f"{safe_text(insight.recommended_action)}"
+            ),
+            body_style,
+        )
+    )
+
+    flowables.append(
+        Spacer(1, 8)
+    )
+
+    return flowables
 
 
 # ============================================================
@@ -78,14 +238,18 @@ def format_percent(value: Any) -> str:
 # ============================================================
 
 
-def load_dataset(dataset: Dataset) -> pd.DataFrame:
+def load_dataset(
+    dataset: Dataset,
+) -> pd.DataFrame:
     """
     Load the original dataset from the path stored in the database.
 
     The original file is read-only for report generation.
     """
 
-    file_path = Path(dataset.file_path)
+    file_path = Path(
+        dataset.file_path
+    )
 
     if not file_path.exists():
         raise FileNotFoundError(
@@ -95,13 +259,21 @@ def load_dataset(dataset: Dataset) -> pd.DataFrame:
     extension = dataset.file_type.lower()
 
     if extension == "csv":
-        return pd.read_csv(file_path)
+        return pd.read_csv(
+            file_path
+        )
 
-    if extension in {"xlsx", "xls"}:
-        return pd.read_excel(file_path)
+    if extension in {
+        "xlsx",
+        "xls",
+    }:
+        return pd.read_excel(
+            file_path
+        )
 
     raise ValueError(
-        f"Unsupported dataset type: {dataset.file_type}"
+        f"Unsupported dataset type: "
+        f"{dataset.file_type}"
     )
 
 
@@ -148,19 +320,29 @@ def create_missing_values_chart(
     Create a bar chart showing missing values by column.
     """
 
-    missing_values = analysis.missing_values or {}
+    missing_values = (
+        analysis.missing_values or {}
+    )
 
     rows = []
 
     for column, info in missing_values.items():
+
         if not isinstance(info, dict):
             continue
 
-        count = info.get("count", 0)
+        count = info.get(
+            "count",
+            0,
+        )
 
         try:
             count = int(count)
-        except (TypeError, ValueError):
+
+        except (
+            TypeError,
+            ValueError,
+        ):
             continue
 
         if count > 0:
@@ -179,8 +361,15 @@ def create_missing_values_chart(
         reverse=True,
     )
 
-    columns = [item[0] for item in rows]
-    counts = [item[1] for item in rows]
+    columns = [
+        item[0]
+        for item in rows
+    ]
+
+    counts = [
+        item[1]
+        for item in rows
+    ]
 
     figure, axis = plt.subplots(
         figsize=(9, 4.8)
@@ -197,15 +386,22 @@ def create_missing_values_chart(
         fontweight="bold",
     )
 
-    axis.set_ylabel("Missing cells")
-    axis.set_xlabel("Column")
+    axis.set_ylabel(
+        "Missing cells"
+    )
+
+    axis.set_xlabel(
+        "Column"
+    )
 
     axis.tick_params(
         axis="x",
         rotation=45,
     )
 
-    for index, count in enumerate(counts):
+    for index, count in enumerate(
+        counts
+    ):
         axis.text(
             index,
             count,
@@ -217,7 +413,9 @@ def create_missing_values_chart(
 
     figure.tight_layout()
 
-    return figure_to_image(figure)
+    return figure_to_image(
+        figure
+    )
 
 
 def create_outlier_chart(
@@ -227,13 +425,16 @@ def create_outlier_chart(
     Create a bar chart showing detected outliers.
     """
 
-    outliers = analysis.outliers or {}
+    outliers = (
+        analysis.outliers or {}
+    )
 
     rows = []
 
     for column, value in outliers.items():
 
         if isinstance(value, dict):
+
             count = value.get(
                 "count",
                 value.get(
@@ -241,15 +442,21 @@ def create_outlier_chart(
                     0,
                 ),
             )
+
         else:
             count = value
 
         try:
             count = int(count)
-        except (TypeError, ValueError):
+
+        except (
+            TypeError,
+            ValueError,
+        ):
             continue
 
         if count > 0:
+
             rows.append(
                 (
                     str(column),
@@ -265,8 +472,15 @@ def create_outlier_chart(
         reverse=True,
     )
 
-    columns = [item[0] for item in rows]
-    counts = [item[1] for item in rows]
+    columns = [
+        item[0]
+        for item in rows
+    ]
+
+    counts = [
+        item[1]
+        for item in rows
+    ]
 
     figure, axis = plt.subplots(
         figsize=(9, 4.8)
@@ -283,15 +497,22 @@ def create_outlier_chart(
         fontweight="bold",
     )
 
-    axis.set_ylabel("Outlier count")
-    axis.set_xlabel("Column")
+    axis.set_ylabel(
+        "Outlier count"
+    )
+
+    axis.set_xlabel(
+        "Column"
+    )
 
     axis.tick_params(
         axis="x",
         rotation=45,
     )
 
-    for index, count in enumerate(counts):
+    for index, count in enumerate(
+        counts
+    ):
         axis.text(
             index,
             count,
@@ -303,7 +524,9 @@ def create_outlier_chart(
 
     figure.tight_layout()
 
-    return figure_to_image(figure)
+    return figure_to_image(
+        figure
+    )
 
 
 def create_correlation_heatmap(
@@ -313,16 +536,24 @@ def create_correlation_heatmap(
     Create a correlation heatmap from stored analysis data.
     """
 
-    correlations = analysis.correlations or {}
+    correlations = (
+        analysis.correlations or {}
+    )
 
-    if not isinstance(correlations, dict):
+    if not isinstance(
+        correlations,
+        dict,
+    ):
         return None
 
     if not correlations:
         return None
 
     try:
-        correlation_df = pd.DataFrame(correlations)
+        correlation_df = pd.DataFrame(
+            correlations
+        )
+
     except Exception:
         return None
 
@@ -334,14 +565,18 @@ def create_correlation_heatmap(
         errors="coerce",
     )
 
-    correlation_df = correlation_df.dropna(
-        axis=0,
-        how="all",
+    correlation_df = (
+        correlation_df.dropna(
+            axis=0,
+            how="all",
+        )
     )
 
-    correlation_df = correlation_df.dropna(
-        axis=1,
-        how="all",
+    correlation_df = (
+        correlation_df.dropna(
+            axis=1,
+            how="all",
+        )
     )
 
     if correlation_df.empty:
@@ -351,7 +586,9 @@ def create_correlation_heatmap(
         6,
         min(
             11,
-            len(correlation_df.columns) * 0.7,
+            len(
+                correlation_df.columns
+            ) * 0.7,
         ),
     )
 
@@ -375,7 +612,11 @@ def create_correlation_heatmap(
     )
 
     axis.set_xticks(
-        range(len(correlation_df.columns))
+        range(
+            len(
+                correlation_df.columns
+            )
+        )
     )
 
     axis.set_xticklabels(
@@ -386,7 +627,11 @@ def create_correlation_heatmap(
     )
 
     axis.set_yticks(
-        range(len(correlation_df.index))
+        range(
+            len(
+                correlation_df.index
+            )
+        )
     )
 
     axis.set_yticklabels(
@@ -431,7 +676,10 @@ def create_distribution_charts(
 
     for column in numeric_columns[:4]:
 
-        series = dataframe[column].dropna()
+        series = (
+            dataframe[column]
+            .dropna()
+        )
 
         if series.empty:
             continue
@@ -462,7 +710,9 @@ def create_distribution_charts(
         figure.tight_layout()
 
         charts.append(
-            figure_to_image(figure)
+            figure_to_image(
+                figure
+            )
         )
 
     return charts
@@ -478,11 +728,24 @@ def build_statistics_table(
 ) -> Table | None:
     """
     Build a readable statistical summary table.
+
+    Includes:
+        Count
+        Mean
+        Median
+        Standard Deviation
+        Minimum
+        Maximum
     """
 
-    statistics = analysis.statistics or {}
+    statistics = (
+        analysis.statistics or {}
+    )
 
-    if not isinstance(statistics, dict):
+    if not isinstance(
+        statistics,
+        dict,
+    ):
         return None
 
     if not statistics:
@@ -493,6 +756,7 @@ def build_statistics_table(
             "Column",
             "Count",
             "Mean",
+            "Median",
             "Std",
             "Min",
             "Max",
@@ -501,40 +765,55 @@ def build_statistics_table(
 
     for column, values in statistics.items():
 
-        if not isinstance(values, dict):
+        if not isinstance(
+            values,
+            dict,
+        ):
             continue
 
         rows.append(
             [
                 safe_text(column),
+
                 format_number(
                     values.get(
                         "count",
                         0,
                     )
                 ),
+
                 format_number(
                     values.get(
                         "mean",
-                        "-"
+                        "-",
                     )
                 ),
+
+                format_number(
+                    values.get(
+                        "median",
+                        "-",
+                    )
+                ),
+
                 format_number(
                     values.get(
                         "std",
-                        "-"
+                        "-",
                     )
                 ),
+
                 format_number(
                     values.get(
                         "min",
-                        "-"
+                        "-",
                     )
                 ),
+
                 format_number(
                     values.get(
                         "max",
-                        "-"
+                        "-",
                     )
                 ),
             ]
@@ -547,12 +826,13 @@ def build_statistics_table(
         rows,
         repeatRows=1,
         colWidths=[
-            35 * mm,
+            32 * mm,
+            17 * mm,
+            22 * mm,
+            22 * mm,
             20 * mm,
-            25 * mm,
-            25 * mm,
-            25 * mm,
-            25 * mm,
+            22 * mm,
+            22 * mm,
         ],
     )
 
@@ -563,7 +843,9 @@ def build_statistics_table(
                     "BACKGROUND",
                     (0, 0),
                     (-1, 0),
-                    colors.HexColor("#1f2937"),
+                    colors.HexColor(
+                        "#1f2937"
+                    ),
                 ),
                 (
                     "TEXTCOLOR",
@@ -587,14 +869,16 @@ def build_statistics_table(
                     "FONTSIZE",
                     (0, 0),
                     (-1, -1),
-                    8,
+                    7.5,
                 ),
                 (
                     "GRID",
                     (0, 0),
                     (-1, -1),
                     0.4,
-                    colors.HexColor("#d1d5db"),
+                    colors.HexColor(
+                        "#d1d5db"
+                    ),
                 ),
                 (
                     "ROWBACKGROUNDS",
@@ -602,7 +886,9 @@ def build_statistics_table(
                     (-1, -1),
                     [
                         colors.white,
-                        colors.HexColor("#f9fafb"),
+                        colors.HexColor(
+                            "#f9fafb"
+                        ),
                     ],
                 ),
                 (
@@ -640,7 +926,9 @@ def create_kpi_table(
     analysis: Analysis,
 ) -> Table:
 
-    summary = analysis.summary or {}
+    summary = (
+        analysis.summary or {}
+    )
 
     rows = [
         [
@@ -656,13 +944,16 @@ def create_kpi_table(
                     dataset.rows,
                 )
             ),
+
             format_number(
                 summary.get(
                     "columns",
                     dataset.columns,
                 )
             ),
+
             f"{format_number(analysis.quality_score)}/100",
+
             format_number(
                 summary.get(
                     "missing_cells",
@@ -689,7 +980,9 @@ def create_kpi_table(
                     "BACKGROUND",
                     (0, 0),
                     (-1, 0),
-                    colors.HexColor("#374151"),
+                    colors.HexColor(
+                        "#374151"
+                    ),
                 ),
                 (
                     "TEXTCOLOR",
@@ -713,7 +1006,9 @@ def create_kpi_table(
                     "BACKGROUND",
                     (0, 1),
                     (-1, 1),
-                    colors.HexColor("#f3f4f6"),
+                    colors.HexColor(
+                        "#f3f4f6"
+                    ),
                 ),
                 (
                     "FONTNAME",
@@ -744,14 +1039,18 @@ def create_kpi_table(
                     (0, 0),
                     (-1, -1),
                     0.5,
-                    colors.HexColor("#d1d5db"),
+                    colors.HexColor(
+                        "#d1d5db"
+                    ),
                 ),
                 (
                     "INNERGRID",
                     (0, 0),
                     (-1, -1),
                     0.5,
-                    colors.HexColor("#d1d5db"),
+                    colors.HexColor(
+                        "#d1d5db"
+                    ),
                 ),
                 (
                     "TOPPADDING",
@@ -791,7 +1090,9 @@ def draw_page_header_footer(
 
     # Header
     canvas.setStrokeColor(
-        colors.HexColor("#d1d5db")
+        colors.HexColor(
+            "#d1d5db"
+        )
     )
 
     canvas.line(
@@ -807,7 +1108,9 @@ def draw_page_header_footer(
     )
 
     canvas.setFillColor(
-        colors.HexColor("#374151")
+        colors.HexColor(
+            "#374151"
+        )
     )
 
     canvas.drawString(
@@ -841,7 +1144,9 @@ def draw_page_header_footer(
     )
 
     canvas.setFillColor(
-        colors.HexColor("#6b7280")
+        colors.HexColor(
+            "#6b7280"
+        )
     )
 
     canvas.drawString(
@@ -871,14 +1176,32 @@ def generate_analysis_report(
     """
     Generate a professional PDF analysis report.
 
-    The report is generated from:
-        1. The actual dataset
-        2. Stored analysis results
+    The report uses the same verified analysis contract
+    and professional insight engine as the dashboard.
 
-    No source files are modified.
+    The original dataset is never modified.
     """
 
-    dataframe = load_dataset(dataset)
+    dataframe = load_dataset(
+        dataset
+    )
+
+    # --------------------------------------------------------
+    # VERIFIED ANALYSIS SOURCE OF TRUTH
+    # --------------------------------------------------------
+
+    verified_analysis = (
+        build_verified_analysis_report(
+            analysis=analysis,
+            dataset=dataset,
+        )
+    )
+
+    professional_insights = (
+        generate_professional_insights(
+            report=verified_analysis,
+        )
+    )
 
     buffer = BytesIO()
 
@@ -905,7 +1228,9 @@ def generate_analysis_report(
         fontSize=25,
         leading=30,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#111827"),
+        textColor=colors.HexColor(
+            "#111827"
+        ),
         spaceAfter=10,
     )
 
@@ -916,7 +1241,9 @@ def generate_analysis_report(
         fontSize=11,
         leading=16,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#6b7280"),
+        textColor=colors.HexColor(
+            "#6b7280"
+        ),
     )
 
     section_style = ParagraphStyle(
@@ -925,7 +1252,9 @@ def generate_analysis_report(
         fontName="Helvetica-Bold",
         fontSize=15,
         leading=19,
-        textColor=colors.HexColor("#111827"),
+        textColor=colors.HexColor(
+            "#111827"
+        ),
         spaceBefore=8,
         spaceAfter=8,
     )
@@ -936,7 +1265,9 @@ def generate_analysis_report(
         fontName="Helvetica",
         fontSize=9.5,
         leading=14,
-        textColor=colors.HexColor("#374151"),
+        textColor=colors.HexColor(
+            "#374151"
+        ),
         spaceAfter=6,
     )
 
@@ -946,7 +1277,9 @@ def generate_analysis_report(
         fontName="Helvetica",
         fontSize=8,
         leading=11,
-        textColor=colors.HexColor("#6b7280"),
+        textColor=colors.HexColor(
+            "#6b7280"
+        ),
     )
 
     story = []
@@ -955,7 +1288,9 @@ def generate_analysis_report(
     # COVER
     # ========================================================
 
-    story.append(Spacer(1, 35 * mm))
+    story.append(
+        Spacer(1, 35 * mm)
+    )
 
     story.append(
         Paragraph(
@@ -965,12 +1300,16 @@ def generate_analysis_report(
                 parent=title_style,
                 fontSize=14,
                 leading=18,
-                textColor=colors.HexColor("#4b5563"),
+                textColor=colors.HexColor(
+                    "#4b5563"
+                ),
             ),
         )
     )
 
-    story.append(Spacer(1, 10 * mm))
+    story.append(
+        Spacer(1, 10 * mm)
+    )
 
     story.append(
         Paragraph(
@@ -988,28 +1327,37 @@ def generate_analysis_report(
         )
     )
 
-    story.append(Spacer(1, 8 * mm))
+    story.append(
+        Spacer(1, 8 * mm)
+    )
 
     story.append(
         HRFlowable(
             width="70%",
             thickness=1,
-            color=colors.HexColor("#d1d5db"),
+            color=colors.HexColor(
+                "#d1d5db"
+            ),
             hAlign="CENTER",
         )
     )
 
-    story.append(Spacer(1, 8 * mm))
+    story.append(
+        Spacer(1, 8 * mm)
+    )
 
     story.append(
         Paragraph(
             (
                 f"<b>Dataset ID:</b> "
                 f"{dataset.id}<br/>"
+
                 f"<b>Rows:</b> "
                 f"{len(dataframe):,}<br/>"
+
                 f"<b>Columns:</b> "
                 f"{len(dataframe.columns):,}<br/>"
+
                 f"<b>File Type:</b> "
                 f"{safe_text(dataset.file_type.upper())}"
             ),
@@ -1023,19 +1371,26 @@ def generate_analysis_report(
         )
     )
 
-    story.append(Spacer(1, 15 * mm))
+    story.append(
+        Spacer(1, 15 * mm)
+    )
 
     story.append(
         Paragraph(
-            "Automated data quality, statistical and exploratory analysis",
+            (
+                "Automated data quality, "
+                "statistical and exploratory analysis"
+            ),
             subtitle_style,
         )
     )
 
-    story.append(PageBreak())
+    story.append(
+        PageBreak()
+    )
 
     # ========================================================
-    # EXECUTIVE SUMMARY
+    # 1. EXECUTIVE SUMMARY
     # ========================================================
 
     story.append(
@@ -1047,21 +1402,20 @@ def generate_analysis_report(
 
     story.append(
         Paragraph(
-            safe_text(
-                analysis.summary_text
-                or (
-                    "This report provides an automated "
-                    "assessment of the uploaded dataset, "
-                    "including data quality, missing values, "
-                    "duplicates, outliers, statistical "
-                    "properties and correlations."
-                )
+            (
+                "This report provides a verified assessment "
+                "of the uploaded dataset covering data quality, "
+                "column characteristics, descriptive statistics, "
+                "correlations, outliers, and evidence-based "
+                "professional insights."
             ),
             body_style,
         )
     )
 
-    story.append(Spacer(1, 5))
+    story.append(
+        Spacer(1, 5)
+    )
 
     story.append(
         create_kpi_table(
@@ -1070,10 +1424,71 @@ def generate_analysis_report(
         )
     )
 
-    story.append(Spacer(1, 12))
+    story.append(
+        Spacer(1, 12)
+    )
+
+    # Top Findings
+    story.append(
+        Paragraph(
+            "Top Findings",
+            ParagraphStyle(
+                "ExecutiveSubHeading",
+                parent=section_style,
+                fontSize=12,
+                leading=15,
+                spaceBefore=6,
+                spaceAfter=5,
+            ),
+        )
+    )
+
+    top_findings = (
+        professional_insights.top_findings[:5]
+    )
+
+    if top_findings:
+
+        for index, insight in enumerate(
+            top_findings,
+            start=1,
+        ):
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>{index}. "
+                        f"{safe_text(insight.title)}</b>"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"{safe_text(insight.finding)} "
+                        f"<b>Priority:</b> "
+                        f"{safe_text(insight.priority)}."
+                    ),
+                    body_style,
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "No professional findings were "
+                    "generated from the verified analysis."
+                ),
+                body_style,
+            )
+        )
 
     # ========================================================
-    # DATASET OVERVIEW
+    # 2. DATASET OVERVIEW
     # ========================================================
 
     story.append(
@@ -1084,7 +1499,10 @@ def generate_analysis_report(
     )
 
     overview_data = [
-        ["Property", "Value"],
+        [
+            "Property",
+            "Value",
+        ],
         [
             "Dataset",
             safe_text(
@@ -1109,10 +1527,11 @@ def generate_analysis_report(
                 dataset.file_type.upper()
             ),
         ],
-        [
-            "Memory Usage",
-            f"{dataframe.memory_usage(deep=True).sum() / 1024:.2f} KB",
-        ],
+       [
+        
+           "Memory Usage",
+           f"{dataframe.memory_usage(deep=True).sum() / 1024:.2f} KB",
+       ],
         [
             "Numeric Columns",
             format_number(
@@ -1155,7 +1574,9 @@ def generate_analysis_report(
                     "BACKGROUND",
                     (0, 0),
                     (-1, 0),
-                    colors.HexColor("#1f2937"),
+                    colors.HexColor(
+                        "#1f2937"
+                    ),
                 ),
                 (
                     "TEXTCOLOR",
@@ -1174,7 +1595,9 @@ def generate_analysis_report(
                     (0, 0),
                     (-1, -1),
                     0.4,
-                    colors.HexColor("#d1d5db"),
+                    colors.HexColor(
+                        "#d1d5db"
+                    ),
                 ),
                 (
                     "ROWBACKGROUNDS",
@@ -1182,7 +1605,9 @@ def generate_analysis_report(
                     (-1, -1),
                     [
                         colors.white,
-                        colors.HexColor("#f9fafb"),
+                        colors.HexColor(
+                            "#f9fafb"
+                        ),
                     ],
                 ),
                 (
@@ -1205,10 +1630,12 @@ def generate_analysis_report(
         overview_table
     )
 
-    story.append(PageBreak())
+    story.append(
+        PageBreak()
+    )
 
     # ========================================================
-    # DATA QUALITY
+    # 3. DATA QUALITY
     # ========================================================
 
     story.append(
@@ -1218,7 +1645,15 @@ def generate_analysis_report(
         )
     )
 
-    summary = analysis.summary or {}
+    summary = (
+        analysis.summary or {}
+    )
+
+    quality_score = (
+        verified_analysis
+        .data_quality
+        .quality_score
+    )
 
     story.append(
         Paragraph(
@@ -1228,11 +1663,138 @@ def generate_analysis_report(
                 f"rows and "
                 f"<b>{format_number(len(dataframe.columns))}</b> "
                 "columns. "
-                f"The calculated data quality score is "
-                f"<b>{format_number(analysis.quality_score)}/100</b>."
+                f"The verified data quality score is "
+                f"<b>{format_number(quality_score)}/100</b>."
             ),
             body_style,
         )
+    )
+
+    # Verified quality table
+    quality_data = [
+        [
+            "Metric",
+            "Verified Value",
+        ],
+        [
+            "Quality Score",
+            (
+                f"{format_number(quality_score)}"
+                "/100"
+            ),
+        ],
+        [
+            "Total Rows",
+            format_number(
+                verified_analysis.dataset.rows
+            ),
+        ],
+        [
+            "Total Columns",
+            format_number(
+                verified_analysis.dataset.columns
+            ),
+        ],
+        [
+            "Missing Cells",
+            format_number(
+                summary.get(
+                    "missing_cells",
+                    0,
+                )
+            ),
+        ],
+        [
+            "Duplicate Rows",
+            format_number(
+                (
+                    verified_analysis
+                    .data_quality
+                    .duplicates
+                    .count
+                    if verified_analysis
+                    .data_quality
+                    .duplicates
+                    else 0
+                )
+            ),
+        ],
+    ]
+
+    quality_table = Table(
+        quality_data,
+        colWidths=[
+            70 * mm,
+            70 * mm,
+        ],
+        repeatRows=1,
+    )
+
+    quality_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor(
+                        "#1f2937"
+                    ),
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.white,
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.4,
+                    colors.HexColor(
+                        "#d1d5db"
+                    ),
+                ),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor(
+                            "#f9fafb"
+                        ),
+                    ],
+                ),
+                (
+                    "PADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        quality_table
+    )
+
+    story.append(
+        Spacer(1, 10)
     )
 
     # Missing values
@@ -1265,17 +1827,24 @@ def generate_analysis_report(
         )
     )
 
-    missing_chart = create_missing_values_chart(
-        analysis
+    missing_chart = (
+        create_missing_values_chart(
+            analysis
+        )
     )
 
     if missing_chart:
+
         story.append(
             missing_chart
         )
-        story.append(Spacer(1, 8))
+
+        story.append(
+            Spacer(1, 8)
+        )
 
     else:
+
         story.append(
             Paragraph(
                 "No missing values were detected.",
@@ -1298,7 +1867,9 @@ def generate_analysis_report(
         )
     )
 
-    duplicates = analysis.duplicates or {}
+    duplicates = (
+        analysis.duplicates or {}
+    )
 
     duplicate_count = duplicates.get(
         "count",
@@ -1322,7 +1893,7 @@ def generate_analysis_report(
     )
 
     # ========================================================
-    # OUTLIERS
+    # 4. OUTLIERS
     # ========================================================
 
     story.append(
@@ -1332,11 +1903,14 @@ def generate_analysis_report(
         )
     )
 
-    outlier_chart = create_outlier_chart(
-        analysis
+    outlier_chart = (
+        create_outlier_chart(
+            analysis
+        )
     )
 
     if outlier_chart:
+
         story.append(
             Paragraph(
                 "Detected Outliers",
@@ -1350,23 +1924,32 @@ def generate_analysis_report(
 
         story.append(
             Paragraph(
-                "Outliers are reported for investigation and are not automatically removed.",
+                (
+                    "Outliers are reported for investigation "
+                    "and are not automatically removed."
+                ),
                 small_style,
             )
         )
 
     else:
+
         story.append(
             Paragraph(
-                "No statistical outliers were detected in the analyzed numeric columns.",
+                (
+                    "No statistical outliers were detected "
+                    "in the analyzed numeric columns."
+                ),
                 body_style,
             )
         )
 
-    story.append(PageBreak())
+    story.append(
+        PageBreak()
+    )
 
     # ========================================================
-    # STATISTICAL ANALYSIS
+    # 5. STATISTICAL ANALYSIS
     # ========================================================
 
     story.append(
@@ -1376,31 +1959,42 @@ def generate_analysis_report(
         )
     )
 
-    statistics_table = build_statistics_table(
-        analysis
+    statistics_table = (
+        build_statistics_table(
+            analysis
+        )
     )
 
     if statistics_table:
+
         story.append(
             statistics_table
         )
 
     else:
+
         story.append(
             Paragraph(
-                "Detailed statistical information was not available for this dataset.",
+                (
+                    "Detailed statistical information "
+                    "was not available for this dataset."
+                ),
                 body_style,
             )
         )
 
-    story.append(Spacer(1, 12))
+    story.append(
+        Spacer(1, 12)
+    )
 
     # ========================================================
     # DISTRIBUTIONS
     # ========================================================
 
-    distribution_charts = create_distribution_charts(
-        dataframe
+    distribution_charts = (
+        create_distribution_charts(
+            dataframe
+        )
     )
 
     if distribution_charts:
@@ -1413,18 +2007,22 @@ def generate_analysis_report(
         )
 
         for chart in distribution_charts:
+
             story.append(
                 chart
             )
+
             story.append(
                 Spacer(1, 8)
             )
 
     # ========================================================
-    # CORRELATION
+    # 6. CORRELATION
     # ========================================================
 
-    story.append(PageBreak())
+    story.append(
+        PageBreak()
+    )
 
     story.append(
         Paragraph(
@@ -1433,11 +2031,14 @@ def generate_analysis_report(
         )
     )
 
-    correlation_chart = create_correlation_heatmap(
-        analysis
+    correlation_chart = (
+        create_correlation_heatmap(
+            analysis
+        )
     )
 
     if correlation_chart:
+
         story.append(
             Paragraph(
                 (
@@ -1453,16 +2054,32 @@ def generate_analysis_report(
             correlation_chart
         )
 
-    else:
         story.append(
             Paragraph(
-                "Correlation analysis was not available because the dataset does not contain enough numeric variables.",
+                (
+                    "Correlation indicates statistical "
+                    "association and should not be interpreted "
+                    "as evidence of causation."
+                ),
+                small_style,
+            )
+        )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "Correlation analysis was not available "
+                    "because the dataset does not contain "
+                    "enough numeric variables."
+                ),
                 body_style,
             )
         )
 
     # ========================================================
-    # COLUMN PROFILE
+    # 7. COLUMN PROFILE
     # ========================================================
 
     story.append(
@@ -1472,9 +2089,11 @@ def generate_analysis_report(
         )
     )
 
-    column_info = analysis.column_info or []
+    column_info = (
+        verified_analysis.column_info
+    )
 
-    if isinstance(column_info, list):
+    if column_info:
 
         column_rows = [
             [
@@ -1487,34 +2106,22 @@ def generate_analysis_report(
 
         for column in column_info:
 
-            if not isinstance(column, dict):
-                continue
-
             column_rows.append(
                 [
                     safe_text(
-                        column.get(
-                            "name",
-                            "",
-                        )
+                        column.name
                     ),
+
                     safe_text(
-                        column.get(
-                            "dtype",
-                            "",
-                        )
+                        column.dtype
                     ),
+
                     format_number(
-                        column.get(
-                            "missing",
-                            0,
-                        )
+                        column.missing
                     ),
+
                     format_number(
-                        column.get(
-                            "unique",
-                            0,
-                        )
+                        column.unique
                     ),
                 ]
             )
@@ -1539,7 +2146,9 @@ def generate_analysis_report(
                             "BACKGROUND",
                             (0, 0),
                             (-1, 0),
-                            colors.HexColor("#1f2937"),
+                            colors.HexColor(
+                                "#1f2937"
+                            ),
                         ),
                         (
                             "TEXTCOLOR",
@@ -1564,7 +2173,9 @@ def generate_analysis_report(
                             (0, 0),
                             (-1, -1),
                             0.4,
-                            colors.HexColor("#d1d5db"),
+                            colors.HexColor(
+                                "#d1d5db"
+                            ),
                         ),
                         (
                             "ROWBACKGROUNDS",
@@ -1572,7 +2183,9 @@ def generate_analysis_report(
                             (-1, -1),
                             [
                                 colors.white,
-                                colors.HexColor("#f9fafb"),
+                                colors.HexColor(
+                                    "#f9fafb"
+                                ),
                             ],
                         ),
                         (
@@ -1589,102 +2202,331 @@ def generate_analysis_report(
                 column_table
             )
 
-    # ========================================================
-    # AI INSIGHTS
-    # ========================================================
-
-    story.append(PageBreak())
-
-    story.append(
-        Paragraph(
-            "8. AI Generated Insights",
-            section_style,
-        )
-    )
-
-    summary_text = (
-        analysis.summary_text
-        or "No AI-generated insights are available."
-    )
-
-    for line in summary_text.splitlines():
-
-        line = line.strip()
-
-        if not line:
-            continue
+    else:
 
         story.append(
             Paragraph(
-                safe_text(line),
-                body_style,
-            )
-        )
-
-    # ========================================================
-    # CLEANING RECOMMENDATIONS
-    # ========================================================
-
-    story.append(
-        Paragraph(
-            "9. Cleaning Recommendations",
-            section_style,
-        )
-    )
-
-    recommendations = []
-
-    if missing_count:
-        recommendations.append(
-            "Review missing values and apply an appropriate imputation strategy."
-        )
-
-    if duplicate_count:
-        recommendations.append(
-            "Review duplicate records before downstream modeling or reporting."
-        )
-
-    outliers = analysis.outliers or {}
-
-    total_outliers = 0
-
-    for value in outliers.values():
-
-        if isinstance(value, dict):
-            value = value.get(
-                "count",
-                value.get(
-                    "outlier_count",
-                    0,
+                (
+                    "Verified column profile information "
+                    "was not available."
                 ),
-            )
-
-        try:
-            total_outliers += int(value)
-        except (TypeError, ValueError):
-            pass
-
-    if total_outliers:
-        recommendations.append(
-            "Investigate detected outliers and determine whether they represent valid observations or data-quality issues."
-        )
-
-    if not recommendations:
-        recommendations.append(
-            "No major automatic cleaning recommendations were identified from the available quality indicators."
-        )
-
-    for recommendation in recommendations:
-
-        story.append(
-            Paragraph(
-                f"• {safe_text(recommendation)}",
                 body_style,
             )
         )
 
     # ========================================================
-    # FINAL ASSESSMENT
+    # 8. PROFESSIONAL INSIGHTS
+    # ========================================================
+
+    story.append(
+        PageBreak()
+    )
+
+    story.append(
+        Paragraph(
+            "8. Professional Insights",
+            section_style,
+        )
+    )
+
+    if professional_insights.insights:
+
+        for insight in (
+            professional_insights.insights
+        ):
+
+            story.extend(
+                build_insight_paragraph(
+                    insight,
+                    body_style,
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "No professional insights were generated "
+                    "from the verified analysis."
+                ),
+                body_style,
+            )
+        )
+
+    # ========================================================
+    # 9. TOP 5 RECOMMENDED ACTIONS
+    # ========================================================
+
+    story.append(
+        Paragraph(
+            "9. Top 5 Recommended Actions",
+            section_style,
+        )
+    )
+
+    top_actions = (
+        professional_insights.top_actions[:5]
+    )
+
+    if top_actions:
+
+        for index, insight in enumerate(
+            top_actions,
+            start=1,
+        ):
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>{index}. "
+                        f"{safe_text(insight.recommended_action)}</b>"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Reason:</b> "
+                        f"{safe_text(insight.finding)}"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Priority:</b> "
+                        f"{safe_text(insight.priority)}"
+                    ),
+                    body_style,
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "No recommended actions were generated "
+                    "from the verified analysis."
+                ),
+                body_style,
+            )
+        )
+
+    # ========================================================
+    # 10. DATA QUALITY PRIORITIES
+    # ========================================================
+
+    story.append(
+        Paragraph(
+            "10. Data Quality Priorities",
+            section_style,
+        )
+    )
+
+    quality_categories = {
+        "data quality",
+        "missing values",
+        "duplicates",
+        "outliers",
+    }
+
+    quality_priorities = [
+        insight
+        for insight in professional_insights.insights
+        if str(
+            insight.category
+        ).strip().lower()
+        in quality_categories
+    ]
+
+    quality_priorities.sort(
+        key=lambda insight: priority_weight(
+            insight.priority
+        ),
+        reverse=True,
+    )
+
+    quality_priorities = (
+        quality_priorities[:5]
+    )
+
+    if quality_priorities:
+
+        for index, insight in enumerate(
+            quality_priorities,
+            start=1,
+        ):
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>{index}. "
+                        f"{safe_text(insight.title)}</b>"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Priority:</b> "
+                        f"{safe_text(insight.priority)}"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Action:</b> "
+                        f"{safe_text(insight.recommended_action)}"
+                    ),
+                    body_style,
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "No specific data-quality priorities "
+                    "were generated from the verified findings."
+                ),
+                body_style,
+            )
+        )
+
+    # ========================================================
+    # 11. BUSINESS / OPERATIONAL PRIORITIES
+    # ========================================================
+
+    story.append(
+        Paragraph(
+            "11. Business / Operational Priorities",
+            section_style,
+        )
+    )
+
+    operational_priorities = list(
+        professional_insights.insights
+    )
+
+    operational_priorities.sort(
+        key=lambda insight: priority_weight(
+            insight.priority
+        ),
+        reverse=True,
+    )
+
+    operational_priorities = (
+        operational_priorities[:5]
+    )
+
+    if operational_priorities:
+
+        for index, insight in enumerate(
+            operational_priorities,
+            start=1,
+        ):
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>{index}. "
+                        f"{safe_text(insight.title)}</b>"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Potential Impact:</b> "
+                        f"{safe_text(insight.potential_impact)}"
+                    ),
+                    body_style,
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    (
+                        f"<b>Recommended Action:</b> "
+                        f"{safe_text(insight.recommended_action)}"
+                    ),
+                    body_style,
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                (
+                    "No business or operational priorities "
+                    "were generated from the verified findings."
+                ),
+                body_style,
+            )
+        )
+
+    # ========================================================
+    # 12. LIMITATIONS OF ANALYSIS
+    # ========================================================
+
+    story.append(
+        Paragraph(
+            "12. Limitations of Analysis",
+            section_style,
+        )
+    )
+
+    limitations = [
+        (
+            "The analysis is based on the uploaded dataset "
+            "and the analytical results available at "
+            "report-generation time."
+        ),
+        (
+            "Detected correlations describe statistical "
+            "association and should not be interpreted "
+            "as evidence of causation."
+        ),
+        (
+            "Detected outliers are flagged for investigation "
+            "and are not automatically considered errors."
+        ),
+        (
+            "Priority levels are report-prioritization rules "
+            "and do not represent statistical significance."
+        ),
+        (
+            "Temporal trends are reported only when sufficient "
+            "verified temporal information is available."
+        ),
+    ]
+
+    for limitation in limitations:
+
+        story.append(
+            Paragraph(
+                f"• {safe_text(limitation)}",
+                body_style,
+            )
+        )
+
+    # ========================================================
+    # 13. FINAL DATA HEALTH ASSESSMENT
     # ========================================================
 
     story.append(
@@ -1695,7 +2537,9 @@ def generate_analysis_report(
         HRFlowable(
             width="100%",
             thickness=0.7,
-            color=colors.HexColor("#d1d5db"),
+            color=colors.HexColor(
+                "#d1d5db"
+            ),
         )
     )
 
@@ -1705,37 +2549,45 @@ def generate_analysis_report(
 
     story.append(
         Paragraph(
-            "10. Final Data Health Assessment",
+            "13. Final Data Health Assessment",
             section_style,
         )
     )
 
-    quality_score = float(
+    quality_score_value = float(
         analysis.quality_score or 0
     )
 
-    if quality_score >= 90:
+    if quality_score_value >= 90:
+
         assessment = (
-            "The dataset demonstrates strong overall data quality "
-            "with relatively few detected quality issues."
+            "The dataset demonstrates strong overall "
+            "data quality with relatively few detected "
+            "quality issues."
         )
 
-    elif quality_score >= 75:
+    elif quality_score_value >= 75:
+
         assessment = (
-            "The dataset demonstrates acceptable data quality, "
-            "although several areas may benefit from additional cleaning."
+            "The dataset demonstrates acceptable data "
+            "quality, although several areas may benefit "
+            "from additional cleaning."
         )
 
-    elif quality_score >= 50:
+    elif quality_score_value >= 50:
+
         assessment = (
-            "The dataset contains notable quality issues that "
-            "should be addressed before relying heavily on analytical results."
+            "The dataset contains notable quality issues "
+            "that should be addressed before relying "
+            "heavily on analytical results."
         )
 
     else:
+
         assessment = (
-            "The dataset contains significant quality concerns "
-            "and should undergo substantial cleaning and validation."
+            "The dataset contains significant quality "
+            "concerns and should undergo substantial "
+            "cleaning and validation."
         )
 
     story.append(
@@ -1753,7 +2605,7 @@ def generate_analysis_report(
         Paragraph(
             (
                 f"<b>Final Quality Score: "
-                f"{format_number(quality_score)}/100</b>"
+                f"{format_number(quality_score_value)}/100</b>"
             ),
             ParagraphStyle(
                 "FinalScore",

@@ -9,10 +9,7 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react";
-import {
-  useNavigate,
-  useParams,
-} from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
   Dataset,
@@ -34,31 +31,22 @@ import DuplicateCard from "@/components/analysis/DuplicateCard";
 import CorrelationHeatmap from "@/components/analysis/CorrelationHeatmap";
 import OutlierCard from "@/components/analysis/OutlierCard";
 import AIInsights from "@/components/analysis/AIInsights";
-
+import ProfessionalInsights from "@/components/analysis/ProfessionalInsights";
 
 export default function AnalysisPage() {
-  const { datasetId } =
-    useParams<{ datasetId: string }>();
+  const { datasetId } = useParams<{ datasetId: string }>();
 
   const navigate = useNavigate();
 
-  const {
-    data,
-    loading,
-    error,
-  } = useAnalysis(datasetId);
-
+  const { data, loading, error } = useAnalysis(datasetId);
 
   // ==========================================================
   // Dataset
   // ==========================================================
 
-  const [dataset, setDataset] =
-    useState<Dataset | null>(null);
+  const [dataset, setDataset] = useState<Dataset | null>(null);
 
-  const [loadingDataset, setLoadingDataset] =
-    useState(true);
-
+  const [loadingDataset, setLoadingDataset] = useState(true);
 
   // ==========================================================
   // Download State
@@ -67,12 +55,9 @@ export default function AnalysisPage() {
   const [downloadFormat, setDownloadFormat] =
     useState<DownloadFormat>("pdf");
 
-  const [downloading, setDownloading] =
-    useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  const [downloadError, setDownloadError] =
-    useState<string | null>(null);
-
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // ==========================================================
   // Cleaning State
@@ -81,18 +66,13 @@ export default function AnalysisPage() {
   const [cleaningData, setCleaningData] =
     useState<CleaningResponse | null>(null);
 
-  const [cleaningLoading, setCleaningLoading] =
-    useState(false);
+  const [cleaningLoading, setCleaningLoading] = useState(false);
 
-  const [cleaningApplying, setCleaningApplying] =
-    useState(false);
+  const [cleaningApplying, setCleaningApplying] = useState(false);
 
-  const [cleaningError, setCleaningError] =
-    useState<string | null>(null);
+  const [cleaningError, setCleaningError] = useState<string | null>(null);
 
-  const [cleaningApplied, setCleaningApplied] =
-    useState(false);
-
+  const [cleaningApplied, setCleaningApplied] = useState(false);
 
   // ==========================================================
   // Load Dataset Information
@@ -108,18 +88,13 @@ export default function AnalysisPage() {
       try {
         setLoadingDataset(true);
 
-        const response =
-          await getDatasets();
+        const response = await getDatasets();
 
-        const foundDataset =
-          response.items.find(
-            (item) =>
-              item.id === Number(datasetId)
-          );
-
-        setDataset(
-          foundDataset ?? null
+        const foundDataset = response.items.find(
+          (item) => item.id === Number(datasetId)
         );
+
+        setDataset(foundDataset ?? null);
       } catch (error) {
         console.error(
           "Failed to load dataset information:",
@@ -134,7 +109,6 @@ export default function AnalysisPage() {
 
     loadDataset();
   }, [datasetId]);
-
 
   // ==========================================================
   // Preview Cleaning
@@ -152,27 +126,22 @@ export default function AnalysisPage() {
       setDownloadError(null);
       setDownloadFormat("pdf");
 
-      const response =
-        await previewCleaning(
-          Number(datasetId)
-        );
+      const response = await previewCleaning(Number(datasetId));
 
       setCleaningData(response);
-
     } catch (error) {
       setCleaningError(
-        error instanceof Error && 'response' in error 
-          ? (error as any).response?.data?.detail ?? "Unable to generate cleaning preview."
-          : error instanceof Error 
-            ? error.message 
+        error instanceof Error && "response" in error
+          ? (error as any).response?.data?.detail ??
+              "Unable to generate cleaning preview."
+          : error instanceof Error
+            ? error.message
             : "Unable to generate cleaning preview."
       );
-
     } finally {
       setCleaningLoading(false);
     }
   }
-
 
   // ==========================================================
   // Apply Cleaning
@@ -183,9 +152,7 @@ export default function AnalysisPage() {
       return;
     }
 
-    if (
-      cleaningData.preview.changes.length === 0
-    ) {
+    if (cleaningData.preview.changes.length === 0) {
       return;
     }
 
@@ -193,28 +160,23 @@ export default function AnalysisPage() {
       setCleaningApplying(true);
       setCleaningError(null);
 
-      const response =
-        await applyCleaning(
-          Number(datasetId)
-        );
+      const response = await applyCleaning(Number(datasetId));
 
       setCleaningData(response);
       setCleaningApplied(true);
-
     } catch (error) {
       setCleaningError(
-        error instanceof Error && 'response' in error 
-          ? (error as any).response?.data?.detail ?? "Unable to clean the dataset."
-          : error instanceof Error 
-            ? error.message 
+        error instanceof Error && "response" in error
+          ? (error as any).response?.data?.detail ??
+              "Unable to clean the dataset."
+          : error instanceof Error
+            ? error.message
             : "Unable to clean the dataset."
       );
-
     } finally {
       setCleaningApplying(false);
     }
   }
-
 
   // ==========================================================
   // Unified Download
@@ -244,21 +206,19 @@ export default function AnalysisPage() {
         Number(datasetId),
         downloadFormat
       );
-
     } catch (error) {
       setDownloadError(
-        error instanceof Error && 'response' in error 
-          ? (error as any).response?.data?.detail ?? "Unable to download the selected file."
-          : error instanceof Error 
-            ? error.message 
+        error instanceof Error && "response" in error
+          ? (error as any).response?.data?.detail ??
+              "Unable to download the selected file."
+          : error instanceof Error
+            ? error.message
             : "Unable to download the selected file."
       );
-
     } finally {
       setDownloading(false);
     }
   }
-
 
   // ==========================================================
   // Loading
@@ -268,7 +228,6 @@ export default function AnalysisPage() {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
-
           <Loader2
             size={32}
             className="mx-auto mb-3 animate-spin text-primary"
@@ -277,12 +236,10 @@ export default function AnalysisPage() {
           <p className="text-muted-foreground">
             Loading analysis...
           </p>
-
         </div>
       </div>
     );
   }
-
 
   // ==========================================================
   // Error
@@ -291,7 +248,6 @@ export default function AnalysisPage() {
   if (error) {
     return (
       <div className="space-y-4">
-
         <button
           onClick={() =>
             navigate("/dashboard/datasets")
@@ -311,25 +267,24 @@ export default function AnalysisPage() {
           Back to Datasets
         </button>
 
-
-        <div className="
-          rounded-xl
-          border
-          border-red-200
-          bg-red-50
-          p-5
-          text-red-600
-          dark:border-red-900
-          dark:bg-red-950
-          dark:text-red-400
-        ">
+        <div
+          className="
+            rounded-xl
+            border
+            border-red-200
+            bg-red-50
+            p-5
+            text-red-600
+            dark:border-red-900
+            dark:bg-red-950
+            dark:text-red-400
+          "
+        >
           {error}
         </div>
-
       </div>
     );
   }
-
 
   // ==========================================================
   // No Analysis
@@ -338,7 +293,6 @@ export default function AnalysisPage() {
   if (!data) {
     return (
       <div className="space-y-4">
-
         <button
           onClick={() =>
             navigate("/dashboard/datasets")
@@ -358,13 +312,14 @@ export default function AnalysisPage() {
           Back to Datasets
         </button>
 
-
-        <div className="
-          rounded-xl
-          border
-          p-8
-          text-center
-        ">
+        <div
+          className="
+            rounded-xl
+            border
+            p-8
+            text-center
+          "
+        >
           <h2 className="text-lg font-semibold">
             No analysis found
           </h2>
@@ -373,11 +328,149 @@ export default function AnalysisPage() {
             This dataset does not have an analysis available yet.
           </p>
         </div>
-
       </div>
     );
   }
 
+  // ==========================================================
+  // Verified Analysis Data
+  // ==========================================================
+
+  const verifiedAnalysis = data.verified_analysis;
+
+  const dataQuality = verifiedAnalysis.data_quality;
+
+  const datasetInfo = verifiedAnalysis.dataset;
+
+  // ==========================================================
+  // Statistics
+  // ==========================================================
+
+  const statistics = Array.isArray(
+    verifiedAnalysis.statistics
+  )
+    ? verifiedAnalysis.statistics.reduce(
+        (acc, item) => {
+          const column =
+            item.column ??
+            "";
+
+          if (typeof column === "string" && column.length > 0) {
+            acc[column] = item;
+          }
+
+          return acc;
+        },
+        {} as Record<string, any>
+      )
+    : {};
+
+  // ==========================================================
+  // Missing Values
+  // ==========================================================
+
+  const missingValues =
+    dataQuality.missing_values.reduce(
+      (acc, item) => {
+        acc[item.column] = {
+          count: item.count,
+          percent: item.percentage ?? 0,
+        };
+
+        return acc;
+      },
+      {} as Record<
+        string,
+        {
+          count: number;
+          percent: number;
+        }
+      >
+    );
+
+  // ==========================================================
+  // Duplicates
+  // ==========================================================
+
+  const duplicates =
+    dataQuality.duplicates ?? {
+      count: 0,
+      has_duplicates: false,
+      percent: 0,
+    };
+
+  // ==========================================================
+  // Correlations
+  //
+  // Backend verified contract:
+  // variable_a
+  // variable_b
+  // coefficient
+  // ==========================================================
+
+  const correlations =
+    verifiedAnalysis.correlations.reduce(
+      (
+        acc,
+        item
+      ) => {
+        const firstColumn = item.variable_a;
+
+        const secondColumn = item.variable_b;
+
+        const value = Number(
+          item.coefficient
+        );
+
+        if (
+          !firstColumn ||
+          !secondColumn ||
+          !Number.isFinite(value)
+        ) {
+          return acc;
+        }
+
+        acc[firstColumn] ??= {};
+
+        acc[secondColumn] ??= {};
+
+        acc[firstColumn][secondColumn] = value;
+
+        acc[secondColumn][firstColumn] = value;
+
+        return acc;
+      },
+      {} as Record<
+        string,
+        Record<string, number>
+      >
+    );
+
+  // ==========================================================
+  // Outliers
+  //
+  // OutlierCard expects:
+  // Record<string, any>
+  //
+  // Backend returns:
+  // OutlierFinding[]
+  // ==========================================================
+
+  const outliers =
+    verifiedAnalysis.outliers.reduce(
+      (acc, item) => {
+        acc[item.column] = {
+          count: item.count,
+          percentage: item.percentage,
+          method: item.method,
+          lower_bound: item.lower_bound,
+          upper_bound: item.upper_bound,
+        };
+
+        return acc;
+      },
+      {} as Record<string, any>
+    );
 
   // ==========================================================
   // Dataset Name
@@ -385,8 +478,8 @@ export default function AnalysisPage() {
 
   const datasetName =
     dataset?.original_filename ??
-    `Dataset #${data.dataset_id}`;
-
+    datasetInfo.filename ??
+    `Dataset #${datasetInfo.dataset_id}`;
 
   // ==========================================================
   // Cleaning Statistics
@@ -395,23 +488,11 @@ export default function AnalysisPage() {
   const cleaningPreview =
     cleaningData?.preview;
 
-  // const totalOutliers =
-  //   cleaningPreview
-  //     ? Object.values(
-  //         cleaningPreview.outliers_detected
-  //       ).reduce(
-  //         (total, count) =>
-  //           total + count,
-  //         0
-  //       )
-  //     : 0;
-
   const hasCleaningChanges =
     Boolean(
       cleaningPreview &&
-      cleaningPreview.changes.length > 0
+        cleaningPreview.changes.length > 0
     );
-
 
   // ==========================================================
   // Main
@@ -447,17 +528,18 @@ export default function AnalysisPage() {
           Back to Datasets
         </button>
 
-
         {/* Header Content */}
 
-        <div className="
-          flex
-          flex-col
-          gap-5
-          lg:flex-row
-          lg:items-center
-          lg:justify-between
-        ">
+        <div
+          className="
+            flex
+            flex-col
+            gap-5
+            lg:flex-row
+            lg:items-center
+            lg:justify-between
+          "
+        >
 
           <div className="min-w-0">
 
@@ -465,12 +547,14 @@ export default function AnalysisPage() {
               Dataset Analysis
             </p>
 
-            <h1 className="
-              truncate
-              text-3xl
-              font-bold
-              tracking-tight
-            ">
+            <h1
+              className="
+                truncate
+                text-3xl
+                font-bold
+                tracking-tight
+              "
+            >
               {datasetName}
             </h1>
 
@@ -480,23 +564,24 @@ export default function AnalysisPage() {
 
           </div>
 
-
           {/* Header Actions */}
 
-          <div className="
-            flex
-            shrink-0
-            flex-wrap
-            items-center
-            gap-3
-          ">
+          <div
+            className="
+              flex
+              shrink-0
+              flex-wrap
+              items-center
+              gap-3
+            "
+          >
 
             {/* AI Chat */}
 
             <button
               onClick={() =>
                 navigate(
-                  `/dashboard/ai-chat/${data.dataset_id}`
+                  `/dashboard/ai-chat/${datasetInfo.dataset_id}`
                 )
               }
               className="
@@ -520,7 +605,6 @@ export default function AnalysisPage() {
               <MessageSquare size={17} />
               AI Chat
             </button>
-
 
             {/* Download Format */}
 
@@ -571,7 +655,6 @@ export default function AnalysisPage() {
                   : ""}
               </option>
             </select>
-
 
             {/* Download */}
 
@@ -626,78 +709,95 @@ export default function AnalysisPage() {
 
         </div>
 
-
         {/* Download Error */}
 
         {downloadError && (
-          <div className="
-            rounded-lg
-            border
-            border-red-200
-            bg-red-50
-            p-3
-            text-sm
-            text-red-600
-            dark:border-red-900
-            dark:bg-red-950
-            dark:text-red-400
-          ">
+          <div
+            className="
+              rounded-lg
+              border
+              border-red-200
+              bg-red-50
+              p-3
+              text-sm
+              text-red-600
+              dark:border-red-900
+              dark:bg-red-950
+              dark:text-red-400
+            "
+          >
             {downloadError}
           </div>
         )}
 
       </div>
 
-
       {/* =====================================================
           Quality Score
       ====================================================== */}
 
       <QualityScore
-        score={data.quality_score}
+        score={
+          dataQuality.quality_score ?? 0
+        }
       />
 
+      {/* =====================================================
+          Professional Insights
+      ====================================================== */}
+
+      <ProfessionalInsights
+        insights={
+          data.insights.top_findings
+        }
+      />
 
       {/* =====================================================
           Data Cleaning
       ====================================================== */}
 
-      <section className="
-        overflow-hidden
-        rounded-2xl
-        border
-        border-border
-        bg-card
-        shadow-sm
-      ">
+      <section
+        className="
+          overflow-hidden
+          rounded-2xl
+          border
+          border-border
+          bg-card
+          shadow-sm
+        "
+      >
 
         {/* Cleaning Header */}
 
-        <div className="
-          flex
-          flex-col
-          gap-4
-          border-b
-          border-border
-          p-6
-          sm:flex-row
-          sm:items-center
-          sm:justify-between
-        ">
+        <div
+          className="
+            flex
+            flex-col
+            gap-4
+            border-b
+            border-border
+            p-6
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
 
           <div className="flex items-start gap-3">
 
-            <div className="
-              flex
-              h-10
-              w-10
-              shrink-0
-              items-center
-              justify-center
-              rounded-lg
-              bg-primary/10
-              text-primary
-            ">
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-lg
+                bg-primary/10
+                text-primary
+              "
+            >
               <Sparkles size={20} />
             </div>
 
@@ -715,7 +815,6 @@ export default function AnalysisPage() {
             </div>
 
           </div>
-
 
           {/* Preview Button */}
 
@@ -765,61 +864,63 @@ export default function AnalysisPage() {
 
         </div>
 
-
         {/* Cleaning Error */}
 
         {cleaningError && (
-          <div className="
-            mx-6
-            mt-6
-            rounded-lg
-            border
-            border-red-200
-            bg-red-50
-            p-4
-            text-sm
-            text-red-600
-            dark:border-red-900
-            dark:bg-red-950
-            dark:text-red-400
-          ">
+          <div
+            className="
+              mx-6
+              mt-6
+              rounded-lg
+              border
+              border-red-200
+              bg-red-50
+              p-4
+              text-sm
+              text-red-600
+              dark:border-red-900
+              dark:bg-red-950
+              dark:text-red-400
+            "
+          >
             {cleaningError}
           </div>
         )}
-
 
         {/* Cleaning Preview */}
 
         {cleaningPreview && (
           <div className="space-y-6 p-6">
 
-            {/* =================================================
-                Cleaning Status
-            ================================================== */}
+            {/* Cleaning Status */}
 
             {cleaningApplied ? (
-              <div className="
-                flex
-                items-start
-                gap-3
-                rounded-xl
-                border
-                border-primary/20
-                bg-primary/5
-                p-5
-              ">
-
-                <div className="
+              <div
+                className="
                   flex
-                  h-10
-                  w-10
-                  shrink-0
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-primary/10
-                  text-primary
-                ">
+                  items-start
+                  gap-3
+                  rounded-xl
+                  border
+                  border-primary/20
+                  bg-primary/5
+                  p-5
+                "
+              >
+
+                <div
+                  className="
+                    flex
+                    h-10
+                    w-10
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-primary/10
+                    text-primary
+                  "
+                >
                   <FileCheck2 size={20} />
                 </div>
 
@@ -829,23 +930,27 @@ export default function AnalysisPage() {
                     Cleaned dataset created successfully
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-sm
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      text-muted-foreground
+                    "
+                  >
                     Your original dataset remains unchanged.
                     The cleaned version is ready to download.
                   </p>
 
                   {cleaningData.cleaned_filename && (
-                    <p className="
-                      mt-2
-                      break-all
-                      text-sm
-                      font-medium
-                      text-primary
-                    ">
+                    <p
+                      className="
+                        mt-2
+                        break-all
+                        text-sm
+                        font-medium
+                        text-primary
+                      "
+                    >
                       {cleaningData.cleaned_filename}
                     </p>
                   )}
@@ -854,13 +959,15 @@ export default function AnalysisPage() {
 
               </div>
             ) : (
-              <div className="
-                rounded-xl
-                border
-                border-border
-                bg-background
-                p-4
-              ">
+              <div
+                className="
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-4
+                "
+              >
 
                 <div className="flex items-start gap-3">
 
@@ -879,11 +986,13 @@ export default function AnalysisPage() {
                       Cleaning preview ready
                     </p>
 
-                    <p className="
-                      mt-1
-                      text-sm
-                      text-muted-foreground
-                    ">
+                    <p
+                      className="
+                        mt-1
+                        text-sm
+                        text-muted-foreground
+                      "
+                    >
                       Review the proposed changes below
                       before creating the cleaned dataset.
                     </p>
@@ -895,10 +1004,7 @@ export default function AnalysisPage() {
               </div>
             )}
 
-
-            {/* =================================================
-                Summary
-            ================================================== */}
+            {/* Cleaning Summary */}
 
             <div>
 
@@ -908,42 +1014,49 @@ export default function AnalysisPage() {
                   Cleaning Summary
                 </h3>
 
-                <p className="
-                  mt-1
-                  text-sm
-                  text-muted-foreground
-                ">
+                <p
+                  className="
+                    mt-1
+                    text-sm
+                    text-muted-foreground
+                  "
+                >
                   What InsightForge found and what it can safely fix.
                 </p>
 
               </div>
 
-
-              <div className="
-                grid
-                gap-4
-                sm:grid-cols-2
-                lg:grid-cols-3
-                xl:grid-cols-6
-              ">
+              <div
+                className="
+                  grid
+                  gap-4
+                  sm:grid-cols-2
+                  lg:grid-cols-3
+                  xl:grid-cols-6
+                "
+              >
 
                 {/* Rows */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Rows
                   </p>
 
@@ -951,11 +1064,13 @@ export default function AnalysisPage() {
                     {cleaningPreview.rows_after.toLocaleString()}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     {cleaningPreview.rows_before ===
                     cleaningPreview.rows_after
                       ? "No rows removed"
@@ -967,24 +1082,27 @@ export default function AnalysisPage() {
 
                 </div>
 
-
                 {/* Missing Values */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Missing
                   </p>
 
@@ -992,34 +1110,39 @@ export default function AnalysisPage() {
                     {cleaningPreview.missing_values_after}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     {cleaningPreview.missing_values_before} before
                   </p>
 
                 </div>
 
-
                 {/* Missing Filled */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Filled
                   </p>
 
@@ -1027,34 +1150,39 @@ export default function AnalysisPage() {
                     {cleaningPreview.missing_values_filled}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     missing values fixed
                   </p>
 
                 </div>
 
-
                 {/* Duplicates */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Duplicates
                   </p>
 
@@ -1062,34 +1190,39 @@ export default function AnalysisPage() {
                     {cleaningPreview.duplicates_removed}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     rows removed
                   </p>
 
                 </div>
 
-
                 {/* Whitespace */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Whitespace
                   </p>
 
@@ -1097,34 +1230,39 @@ export default function AnalysisPage() {
                     {cleaningPreview.whitespace_cleaned}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     values cleaned
                   </p>
 
                 </div>
 
-
                 {/* Empty Strings */}
 
-                <div className="
-                  rounded-xl
-                  border
-                  border-border
-                  bg-background
-                  p-4
-                ">
+                <div
+                  className="
+                    rounded-xl
+                    border
+                    border-border
+                    bg-background
+                    p-4
+                  "
+                >
 
-                  <p className="
-                    text-xs
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      text-xs
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
+                    "
+                  >
                     Empty Values
                   </p>
 
@@ -1132,11 +1270,13 @@ export default function AnalysisPage() {
                     {cleaningPreview.empty_strings_replaced}
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-xs
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
                     converted to missing
                   </p>
 
@@ -1146,10 +1286,7 @@ export default function AnalysisPage() {
 
             </div>
 
-
-            {/* =================================================
-                Proposed Changes
-            ================================================== */}
+            {/* Proposed Changes */}
 
             {hasCleaningChanges ? (
               <div>
@@ -1167,18 +1304,19 @@ export default function AnalysisPage() {
                       Proposed Changes
                     </h3>
 
-                    <p className="
-                      mt-1
-                      text-sm
-                      text-muted-foreground
-                    ">
+                    <p
+                      className="
+                        mt-1
+                        text-sm
+                        text-muted-foreground
+                      "
+                    >
                       These changes are considered safe to apply automatically.
                     </p>
 
                   </div>
 
                 </div>
-
 
                 <div className="space-y-3">
 
@@ -1208,33 +1346,39 @@ export default function AnalysisPage() {
                           "
                         >
 
-                          <div className="
-                            flex
-                            flex-col
-                            gap-4
-                            sm:flex-row
-                            sm:items-center
-                            sm:justify-between
-                          ">
-
-                            <div className="
+                          <div
+                            className="
                               flex
-                              items-start
-                              gap-3
-                            ">
+                              flex-col
+                              gap-4
+                              sm:flex-row
+                              sm:items-center
+                              sm:justify-between
+                            "
+                          >
 
-                              <div className="
-                                mt-0.5
+                            <div
+                              className="
                                 flex
-                                h-8
-                                w-8
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-lg
-                                bg-primary/10
-                                text-primary
-                              ">
+                                items-start
+                                gap-3
+                              "
+                            >
+
+                              <div
+                                className="
+                                  mt-0.5
+                                  flex
+                                  h-8
+                                  w-8
+                                  shrink-0
+                                  items-center
+                                  justify-center
+                                  rounded-lg
+                                  bg-primary/10
+                                  text-primary
+                                "
+                              >
                                 <CheckCircle2 size={16} />
                               </div>
 
@@ -1245,11 +1389,13 @@ export default function AnalysisPage() {
                                     "Dataset"}
                                 </p>
 
-                                <p className="
-                                  mt-1
-                                  text-sm
-                                  text-muted-foreground
-                                ">
+                                <p
+                                  className="
+                                    mt-1
+                                    text-sm
+                                    text-muted-foreground
+                                  "
+                                >
                                   {actionLabel}
                                 </p>
 
@@ -1257,24 +1403,27 @@ export default function AnalysisPage() {
 
                             </div>
 
-
-                            <div className="
-                              rounded-lg
-                              bg-muted
-                              px-3
-                              py-2
-                              text-sm
-                              font-semibold
-                              sm:text-right
-                            ">
+                            <div
+                              className="
+                                rounded-lg
+                                bg-muted
+                                px-3
+                                py-2
+                                text-sm
+                                font-semibold
+                                sm:text-right
+                              "
+                            >
 
                               {change.count}
 
-                              <span className="
-                                ml-1
-                                font-normal
-                                text-muted-foreground
-                              ">
+                              <span
+                                className="
+                                  ml-1
+                                  font-normal
+                                  text-muted-foreground
+                                "
+                              >
                                 affected
                               </span>
 
@@ -1291,16 +1440,18 @@ export default function AnalysisPage() {
 
               </div>
             ) : (
-              <div className="
-                flex
-                items-start
-                gap-3
-                rounded-xl
-                border
-                border-border
-                bg-background
-                p-5
-              ">
+              <div
+                className="
+                  flex
+                  items-start
+                  gap-3
+                  rounded-xl
+                  border
+                  border-border
+                  bg-background
+                  p-5
+                "
+              >
 
                 <CheckCircle2
                   size={21}
@@ -1317,11 +1468,13 @@ export default function AnalysisPage() {
                     No automatic cleaning required
                   </p>
 
-                  <p className="
-                    mt-1
-                    text-sm
-                    text-muted-foreground
-                  ">
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      text-muted-foreground
+                    "
+                  >
                     Your dataset does not contain issues
                     that InsightForge can safely fix automatically.
                   </p>
@@ -1331,21 +1484,20 @@ export default function AnalysisPage() {
               </div>
             )}
 
-
-            {/* =================================================
-                Warnings
-            ================================================== */}
+            {/* Warnings */}
 
             {cleaningPreview.warnings.length > 0 && (
-              <div className="
-                rounded-xl
-                border
-                border-yellow-200
-                bg-yellow-50
-                p-5
-                dark:border-yellow-900
-                dark:bg-yellow-950/40
-              ">
+              <div
+                className="
+                  rounded-xl
+                  border
+                  border-yellow-200
+                  bg-yellow-50
+                  p-5
+                  dark:border-yellow-900
+                  dark:bg-yellow-950/40
+                "
+              >
 
                 <div className="flex items-start gap-3">
 
@@ -1361,20 +1513,24 @@ export default function AnalysisPage() {
 
                   <div className="min-w-0">
 
-                    <p className="
-                      font-semibold
-                      text-yellow-800
-                      dark:text-yellow-300
-                    ">
+                    <p
+                      className="
+                        font-semibold
+                        text-yellow-800
+                        dark:text-yellow-300
+                      "
+                    >
                       Cleaning warnings
                     </p>
 
-                    <p className="
-                      mt-1
-                      text-sm
-                      text-yellow-700
-                      dark:text-yellow-400
-                    ">
+                    <p
+                      className="
+                        mt-1
+                        text-sm
+                        text-yellow-700
+                        dark:text-yellow-400
+                      "
+                    >
                       These issues were detected but were not
                       automatically changed.
                     </p>
@@ -1394,11 +1550,21 @@ export default function AnalysisPage() {
                               dark:text-yellow-400
                             "
                           >
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                            <span
+                              className="
+                                mt-2
+                                h-1.5
+                                w-1.5
+                                shrink-0
+                                rounded-full
+                                bg-current
+                              "
+                            />
 
                             <span>
                               {warning}
                             </span>
+
                           </li>
                         )
                       )}
@@ -1412,34 +1578,35 @@ export default function AnalysisPage() {
               </div>
             )}
 
+            {/* Cleaning Actions */}
 
-            {/* =================================================
-                Cleaning Actions
-            ================================================== */}
-
-            <div className="
-              flex
-              flex-col
-              gap-4
-              border-t
-              border-border
-              pt-6
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-            ">
+            <div
+              className="
+                flex
+                flex-col
+                gap-4
+                border-t
+                border-border
+                pt-6
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+              "
+            >
 
               <div>
 
                 {cleaningApplied ? (
-                  <div className="
-                    flex
-                    items-start
-                    gap-2
-                    text-sm
-                    font-medium
-                    text-primary
-                  ">
+                  <div
+                    className="
+                      flex
+                      items-start
+                      gap-2
+                      text-sm
+                      font-medium
+                      text-primary
+                    "
+                  >
 
                     <CheckCircle2
                       size={18}
@@ -1452,11 +1619,13 @@ export default function AnalysisPage() {
                         Cleaning completed
                       </p>
 
-                      <p className="
-                        mt-1
-                        font-normal
-                        text-muted-foreground
-                      ">
+                      <p
+                        className="
+                          mt-1
+                          font-normal
+                          text-muted-foreground
+                        "
+                      >
                         Select CSV or XLSX above to download
                         the cleaned dataset.
                       </p>
@@ -1467,18 +1636,17 @@ export default function AnalysisPage() {
                 ) : (
                   <div>
 
-                    <p className="
-                      text-sm
-                      font-medium
-                    ">
+                    <p className="text-sm font-medium">
                       Ready to apply
                     </p>
 
-                    <p className="
-                      mt-1
-                      text-sm
-                      text-muted-foreground
-                    ">
+                    <p
+                      className="
+                        mt-1
+                        text-sm
+                        text-muted-foreground
+                      "
+                    >
                       The original dataset will not be modified.
                     </p>
 
@@ -1486,7 +1654,6 @@ export default function AnalysisPage() {
                 )}
 
               </div>
-
 
               {!cleaningApplied && (
                 <button
@@ -1546,27 +1713,27 @@ export default function AnalysisPage() {
 
       </section>
 
-
       {/* =====================================================
           Statistics
       ====================================================== */}
 
       <AnalysisStats
-        summary={data.summary}
-        missingValues={data.missing_values}
-        duplicates={data.duplicates}
+        summary={{
+          rows: datasetInfo.rows,
+          columns: datasetInfo.columns,
+        }}
+        missingValues={missingValues}
+        duplicates={duplicates}
       />
-
 
       {/* =====================================================
           Columns
       ====================================================== */}
 
       <ColumnInfoTable
-        columnInfo={data.column_info}
-        statistics={data.statistics}
+        columnInfo={verifiedAnalysis.column_info}
+        statistics={statistics}
       />
-
 
       {/* =====================================================
           Quality Charts
@@ -1575,52 +1742,46 @@ export default function AnalysisPage() {
       <div className="grid gap-6 lg:grid-cols-2">
 
         <MissingValuesChart
-          missingValues={
-            data.missing_values
-          }
+          missingValues={missingValues}
         />
 
         <DuplicateCard
-          duplicates={
-            data.duplicates
-          }
+          duplicates={duplicates}
         />
 
       </div>
-
 
       {/* =====================================================
           Correlation
       ====================================================== */}
 
-      {data.correlations && (
-        <CorrelationHeatmap
-          correlations={
-            data.correlations
-          }
-        />
-      )}
-
+      <CorrelationHeatmap
+        correlations={correlations}
+      />
 
       {/* =====================================================
           Outliers
       ====================================================== */}
 
-      {data.outliers && (
-        <OutlierCard
-          outliers={
-            data.outliers
-          }
-        />
-      )}
-
+      <OutlierCard
+        outliers={outliers}
+      />
 
       {/* =====================================================
           AI Summary
       ====================================================== */}
 
       <AIInsights
-        summary={data.summary_text}
+        summary={
+          data.insights.top_findings.length > 0
+            ? data.insights.top_findings
+                .map(
+                  (insight) =>
+                    `${insight.title}: ${insight.finding}`
+                )
+                .join("\n\n")
+            : "No professional insights are currently available."
+        }
       />
 
     </div>

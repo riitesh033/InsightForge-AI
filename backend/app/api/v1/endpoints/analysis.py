@@ -10,9 +10,18 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.crud.crud_analysis import get_analysis
 from app.db.session import get_db
+from app.models.dataset import Dataset
 from app.models.user import User
-from app.schemas.analysis import AnalysisResponse
+from app.schemas.verified_analysis_response import (
+    VerifiedAnalysisResponse,
+)
+from app.services.insight_engine import (
+    generate_professional_insights,
+)
 from app.services.report import generate_analysis_report
+from app.services.verified_analysis import (
+    build_verified_analysis_report,
+)
 
 
 router = APIRouter()
@@ -20,7 +29,7 @@ router = APIRouter()
 
 @router.get(
     "/{dataset_id}",
-    response_model=AnalysisResponse,
+    response_model=VerifiedAnalysisResponse,
 )
 def get_dataset_analysis(
     dataset_id: int,
@@ -39,7 +48,38 @@ def get_dataset_analysis(
             detail="Analysis not found.",
         )
 
-    return analysis
+    dataset = (
+        db.query(Dataset)
+        .filter(
+            Dataset.id == dataset_id,
+            Dataset.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset not found.",
+        )
+
+    verified_analysis = (
+        build_verified_analysis_report(
+            analysis=analysis,
+            dataset=dataset,
+        )
+    )
+
+    insights = generate_professional_insights(
+        report=verified_analysis,
+    )
+
+    return VerifiedAnalysisResponse(
+        analysis_id=analysis.id,
+        created_at=analysis.created_at.isoformat(),
+        verified_analysis=verified_analysis,
+        insights=insights,
+    )
 
 
 @router.get(

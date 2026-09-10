@@ -3,12 +3,13 @@ interface ColumnInfo {
   dtype: string;
   unique: number;
   missing: number;
-  missing_percent?: number;
-  memory_usage?: number;
+  missing_percentage?: number | null;
+  memory_usage?: number | null;
 }
 
 interface ColumnStatistics {
   mean?: number | null;
+  standard_deviation?: number | null;
   std?: number | null;
   [key: string]: any;
 }
@@ -65,7 +66,10 @@ export default function ColumnInfoTable({
   return (
     <div className="rounded-2xl border bg-card shadow-sm">
 
-      {/* Header */}
+      {/* =====================================================
+          Header
+      ====================================================== */}
+
       <div className="border-b p-6">
 
         <h2 className="text-xl font-semibold">
@@ -78,7 +82,10 @@ export default function ColumnInfoTable({
 
       </div>
 
-      {/* Table */}
+      {/* =====================================================
+          Table
+      ====================================================== */}
+
       <div className="overflow-x-auto">
 
         <table className="w-full min-w-[800px]">
@@ -145,7 +152,17 @@ export default function ColumnInfoTable({
 
                 const mean = stats.mean;
 
-                const std = stats.std;
+                /*
+                 * Support both:
+                 * - std
+                 * - standard_deviation
+                 *
+                 * This keeps the component compatible with
+                 * the verified analysis contract.
+                 */
+                const std =
+                  stats.standard_deviation ??
+                  stats.std;
 
                 const missing =
                   typeof info.missing === "number"
@@ -153,55 +170,79 @@ export default function ColumnInfoTable({
                     : 0;
 
                 const missingPercent =
-                  typeof info.missing_percent === "number"
-                    ? info.missing_percent
+                  typeof info.missing_percentage === "number"
+                    ? info.missing_percentage
                     : 0;
 
                 return (
                   <tr
                     key={columnName}
-                    className="border-t transition-colors hover:bg-muted/30"
+                    className="
+                      border-t
+                      transition-colors
+                      hover:bg-muted/30
+                    "
                   >
 
                     {/* Column */}
+
                     <td className="px-5 py-4 font-medium">
                       {columnName}
                     </td>
 
                     {/* Data Type */}
+
                     <td className="px-5 py-4">
 
-                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                      <span
+                        className="
+                          rounded-md
+                          bg-muted
+                          px-2
+                          py-1
+                          font-mono
+                          text-xs
+                        "
+                      >
                         {info.dtype || "-"}
                       </span>
 
                     </td>
 
                     {/* Unique */}
+
                     <td className="px-5 py-4 text-center">
                       {formatNumber(info.unique)}
                     </td>
 
                     {/* Missing */}
+
                     <td className="px-5 py-4 text-center">
                       {missing.toLocaleString()}
                     </td>
 
                     {/* Missing Percentage */}
+
                     <td
-                      className={`px-5 py-4 text-center font-medium ${getMissingClass(
-                        missingPercent
-                      )}`}
+                      className={`
+                        px-5
+                        py-4
+                        text-center
+                        font-medium
+                        ${getMissingClass(missingPercent)}
+                      `}
                     >
                       {formatPercent(missingPercent)}
                     </td>
 
                     {/* Mean */}
+
                     <td className="px-5 py-4 text-center">
                       {formatNumber(mean)}
                     </td>
 
                     {/* Standard Deviation */}
+
                     <td className="px-5 py-4 text-center">
                       {formatNumber(std)}
                     </td>
@@ -218,8 +259,12 @@ export default function ColumnInfoTable({
 
       </div>
 
-      {/* Footer */}
+      {/* =====================================================
+          Footer
+      ====================================================== */}
+
       {columns.length > 0 && (
+
         <div className="border-t px-6 py-4">
 
           <p className="text-xs text-muted-foreground">
@@ -231,6 +276,7 @@ export default function ColumnInfoTable({
           </p>
 
         </div>
+
       )}
 
     </div>
