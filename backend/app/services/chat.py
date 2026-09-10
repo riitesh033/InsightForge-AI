@@ -2,22 +2,11 @@ import re
 import json
 from typing import Any
 
-import ollama  # pyright: ignore[reportMissingImports]
-
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.services.ai_provider import generate_ai_response
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-
-
-# ============================================================
-# Ollama Client
-# ============================================================
-
-client = ollama.Client(
-    host=settings.OLLAMA_BASE_URL
-)
 
 
 # ============================================================
@@ -1146,14 +1135,31 @@ You are InsightForge AI, an AI data analyst.
 Answer the user's question using ONLY
 the dataset analysis provided below.
 
-Do not invent statistics or facts.
+IMPORTANT RULES:
 
-If the information needed to answer the question
-is not available, clearly say so.
+1. Use only verified information from the
+   dataset analysis.
 
-Explain technical concepts in simple language.
+2. Never invent statistics, values, trends,
+   correlations, percentages, or facts.
 
-Keep the answer concise and useful.
+3. Never claim to have inspected raw data
+   that is not included in the context.
+
+4. If the required information is unavailable,
+   clearly say that it is not available.
+
+5. Correlation does not imply causation.
+
+6. Use the actual dataset column names.
+
+7. Give dataset-specific recommendations
+   when the available evidence supports them.
+
+8. Explain technical concepts in simple language.
+
+9. Do not give generic advice when
+   dataset-specific evidence is available.
 
 DATASET
 -------
@@ -1228,6 +1234,18 @@ ANALYSIS SUMMARY
 USER QUESTION
 -------------
 {question}
+
+ANSWER STYLE
+------------
+For analytical questions, structure the answer as:
+
+Finding:
+Evidence:
+Interpretation:
+Recommendation:
+
+Keep the answer concise unless the user
+asks for a detailed explanation.
 """
 
 
@@ -1235,13 +1253,17 @@ USER QUESTION
 # Generate Chat Answer
 # ============================================================
 
-def generate_chat_answer(
+async def generate_chat_answer(
     question: str,
     context: dict,
 ) -> str:
 
     dataset = context["dataset"]
     analysis = context["analysis"]
+
+    # ========================================================
+    # Check analysis
+    # ========================================================
 
     if analysis is None:
 
@@ -1269,7 +1291,7 @@ def generate_chat_answer(
         return fast_answer
 
     # ========================================================
-    # Focused prompt
+    # Build focused/general prompt
     # ========================================================
 
     prompt = build_focused_prompt(
@@ -1279,29 +1301,21 @@ def generate_chat_answer(
     )
 
     # ========================================================
-    # Ollama
+    # AI Provider Router
     # ========================================================
 
     try:
 
         print(
-            "CHAT: Sending question to Ollama..."
+            "CHAT: Sending question to AI provider..."
         )
 
-        response = client.chat(
-            model=settings.OLLAMA_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
+        answer = await generate_ai_response(
+            prompt
         )
-
-        answer = response["message"]["content"]
 
         print(
-            "CHAT: Ollama response received."
+            "CHAT: AI response received."
         )
 
         return answer.strip()
@@ -1309,12 +1323,12 @@ def generate_chat_answer(
     except Exception as error:
 
         print(
-            "Ollama error:",
+            "AI provider error:",
             error,
         )
 
         return (
-            "I'm unable to connect to the local AI "
-            "model right now. Please make sure "
-            "Ollama is running."
+            "I couldn't generate an AI answer right now. "
+            "Your dataset analysis is available, but "
+            "the AI provider is temporarily unavailable."
         )

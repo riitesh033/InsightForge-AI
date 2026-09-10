@@ -187,7 +187,7 @@ def delete_session(
     "/{dataset_id}",
     response_model=ChatResponse,
 )
-def chat_with_dataset(
+async def chat_with_dataset(
     dataset_id: int,
     request: ChatMessageCreate,
     db: Session = Depends(get_db),
@@ -271,7 +271,7 @@ def chat_with_dataset(
     # Generate AI Answer
     # --------------------------------------------------------
 
-    answer = generate_chat_answer(
+    answer = await generate_chat_answer(
         question=question,
         context=context,
     )

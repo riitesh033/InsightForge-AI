@@ -18,7 +18,32 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # ============================================================
+    # AI PROVIDER
+    # ============================================================
+
+    # gemini -> openrouter -> ollama
+    AI_PROVIDER: str = "gemini"
+
+    # ============================================================
+    # Gemini
+    # ============================================================
+
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.7-flash"
+
+    # ============================================================
+    # OpenRouter
+    # ============================================================
+
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "openrouter/free"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+
+    # ============================================================
     # Ollama
+    # ============================================================
+
     OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
     OLLAMA_MODEL: str = "qwen3:8b"
 

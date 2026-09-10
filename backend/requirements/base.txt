@@ -68,4 +68,8 @@ httpx
 pytest
 pytest-asyncio
 
+# ==========================
+# AI
+# ==========================
 ollama
+google-genai
