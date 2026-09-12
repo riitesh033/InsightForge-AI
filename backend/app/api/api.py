@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.endpoints import admin
 from app.api.v1.endpoints import analysis
 from app.api.v1.endpoints import auth
 from app.api.v1.endpoints import dataset
@@ -79,3 +80,5 @@ api_router.include_router(
     prefix="/payments",
     tags=["Payments"],
 )
+
+api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])

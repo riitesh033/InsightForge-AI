@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_models import Base
@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
 class User(Base):
     __tablename__ = "users"
+    # ... existing fields ...
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
 
     id: Mapped[int] = mapped_column(
         Integer,
