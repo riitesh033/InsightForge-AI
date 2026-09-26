@@ -59,6 +59,33 @@ class EmailService:
             print(f"Failed to send email to {to_email}: {str(e)}")
             return False
 
+    async def send_password_reset_email(
+        self,
+        to_email: str,
+        reset_url: str,
+    ) -> None:
+        """Send a password reset email. No-op if SMTP is not configured."""
+        if not self.is_configured:
+            return
+
+        import smtplib
+        from email.message import EmailMessage
+
+        msg = EmailMessage()
+        msg["Subject"] = "InsightForge AI — Password Reset"
+        msg["From"] = f"{self.from_name} <{self.from_email}>"
+        msg["To"] = to_email
+        msg.set_content(
+            f"Hello,\n\nYou requested a password reset.\n\n"
+            f"Open this link to reset your password:\n{reset_url}\n\n"
+            f"If you did not request this, ignore this email.\n"
+        )
+
+        with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            server.starttls()
+            server.login(self.smtp_user, self.smtp_password)
+            server.send_message(msg)
+
     async def send_purchase_confirmation(
         self,
         to_email: str,

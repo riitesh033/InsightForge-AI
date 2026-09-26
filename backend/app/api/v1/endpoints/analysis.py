@@ -90,6 +90,21 @@ def generate_dataset_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    dataset = (
+        db.query(Dataset)
+        .filter(
+            Dataset.id == dataset_id,
+            Dataset.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset not found.",
+        )
+
     analysis = get_analysis(
         db=db,
         dataset_id=dataset_id,
@@ -103,7 +118,8 @@ def generate_dataset_report(
         )
 
     pdf = generate_analysis_report(
-        analysis
+        dataset,
+        analysis,
     )
 
     return StreamingResponse(

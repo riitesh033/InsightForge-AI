@@ -1,3 +1,6 @@
+from app.core.config import settings
+from app.services.email import email_service
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -95,7 +98,7 @@ def login(
 # ==========================
 
 @router.post("/forgot-password")
-def forgot_password(
+async def forgot_password(
     request: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
@@ -115,23 +118,35 @@ def forgot_password(
             "message": "If the account exists, a password reset email has been sent."
         }
 
-    # Generate reset token
+        # Generate reset token
     reset_token = create_password_reset_token(email=request.email)
 
-    # In production: send email with reset link
-    # For now, log the token for development purposes
-    print(f"\n=== PASSWORD RESET TOKEN (Development Only) ===")
-    print(f"Email: {request.email}")
-    print(f"Reset Token: {reset_token}")
-    print(f"Reset URL: http://localhost:5173/reset-password?token={reset_token}")
-    print("================================================\n")
+    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
-    return {
-        "message": "If the account exists, a password reset email has been sent.",
-        # Include token only in development for testing
-        # In production, remove this line and send via email
-        "reset_token": reset_token if True else None,
+    # If SMTP is configured, send the reset email
+    if settings.SMTP_HOST:
+        try:
+            await email_service.send_password_reset_email(
+                to_email=request.email,
+                reset_url=reset_url,
+            )
+        except Exception as e:
+            # Log internally; never leak email-sending errors to the client
+            print(f"Failed to send reset email: {e}")
+
+    response = {
+        "message": "If the account exists, a password reset email has been sent."
     }
+
+    # Development-only convenience: expose the token so the flow is testable
+    # without SMTP. NEVER returned in production.
+    if not settings.is_production:
+        print(f"\n=== PASSWORD RESET TOKEN (Development Only) ===")
+        print(f"Reset URL: {reset_url}")
+        print("================================================\n")
+        response["reset_token"] = reset_token
+
+    return response
 
 
 # ==========================

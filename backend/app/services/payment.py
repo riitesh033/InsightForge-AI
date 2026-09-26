@@ -1,23 +1,30 @@
-import os
+import secrets
 from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException
+
+from app.core.config import settings
 
 
 class PaymentService:
     """Payment service for handling subscriptions and payments."""
 
     def __init__(self):
-        self.stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")
-        self.stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-        self.stripe_price_id_pro = os.getenv("STRIPE_PRICE_ID_PRO")
-        self.stripe_price_id_business = os.getenv("STRIPE_PRICE_ID_BUSINESS")
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-        
+        self.stripe_secret_key = settings.STRIPE_SECRET_KEY
+        self.stripe_webhook_secret = settings.STRIPE_WEBHOOK_SECRET
+        self.stripe_price_id_pro = settings.STRIPE_PRICE_ID_PRO
+        self.stripe_price_id_business = settings.STRIPE_PRICE_ID_BUSINESS
+        self.frontend_url = settings.FRONTEND_URL
+
         self.is_configured = bool(self.stripe_secret_key)
-        
-        # Plan pricing (fallback if Stripe not configured)
+
+        # Development-only mock checkout sessions:
+        # session_id -> {"user_id": int, "plan_type": str}
+        # Stored server-side so a URL parameter alone can NEVER activate
+        # a subscription, and each mock session can be used exactly once.
+        self._mock_sessions: dict = {}
+
         self.plans = {
             "free": {
                 "name": "Free",
@@ -48,7 +55,7 @@ class PaymentService:
                     "Data cleaning tools",
                 ],
                 "limits": {
-                    "max_datasets": -1,  # unlimited
+                    "max_datasets": -1,
                     "max_file_size_mb": 100,
                     "ai_queries_per_month": 500,
                 },
@@ -67,18 +74,22 @@ class PaymentService:
                     "SLA guarantee",
                 ],
                 "limits": {
-                    "max_datasets": -1,  # unlimited
+                    "max_datasets": -1,
                     "max_file_size_mb": 500,
-                    "ai_queries_per_month": -1,  # unlimited
+                    "ai_queries_per_month": -1,
                 },
             },
         }
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
     def _get_stripe_client(self):
         """Get Stripe client instance."""
         if not self.is_configured:
             return None
-        
+
         try:
             import stripe
             stripe.api_key = self.stripe_secret_key
@@ -86,6 +97,25 @@ class PaymentService:
         except ImportError:
             print("Stripe package not installed. Install with: pip install stripe")
             return None
+
+    @staticmethod
+    def _stripe_error_class(stripe_module):
+        """Return the StripeError class across stripe SDK versions."""
+        # stripe >= 8: stripe.StripeError
+        # stripe < 8:  stripe.error.StripeError
+        err_cls = getattr(stripe_module, "StripeError", None)
+        if err_cls is not None:
+            return err_cls
+        return stripe_module.error.StripeError
+
+    def _get_db(self):
+        from app.db.database import get_db
+        db = next(get_db())
+        return db
+
+    # ------------------------------------------------------------------
+    # Checkout
+    # ------------------------------------------------------------------
 
     async def create_checkout_session(
         self,
@@ -98,11 +128,25 @@ class PaymentService:
             raise HTTPException(status_code=400, detail="Invalid plan type")
 
         if not self.is_configured:
-            # Return mock checkout URL for development
-            checkout_url = f"{self.frontend_url}/payment-success?plan={plan_type}&mock=true"
+            # Mock checkout is ONLY available in development.
+            if not settings.is_development:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Payment processing is not available.",
+                )
+
+            session_id = "mock_session_" + secrets.token_urlsafe(16)
+            self._mock_sessions[session_id] = {
+                "user_id": user_id,
+                "plan_type": plan_type,
+            }
+            checkout_url = (
+                f"{self.frontend_url}/payment-success"
+                f"?session_id={session_id}"
+            )
             return {
                 "checkout_url": checkout_url,
-                "session_id": "mock_session_" + str(user_id),
+                "session_id": session_id,
                 "is_mock": True,
             }
 
@@ -149,60 +193,98 @@ class PaymentService:
                 "session_id": session.id,
                 "is_mock": False,
             }
-        except Exception as e:
+        except self._stripe_error_class(stripe) as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to create checkout session: {str(e)}",
+                detail="Failed to create checkout session.",
             )
+        except Exception:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create checkout session.",
+            )
+
+    # ------------------------------------------------------------------
+    # Verification / activation
+    # ------------------------------------------------------------------
 
     async def verify_and_activate_subscription(
         self,
         session_id: str,
+        expected_user_id: Optional[int] = None,
     ) -> dict:
-        """Verify payment and activate subscription."""
-        if not self.is_configured:
-            # Handle mock payment
-            if session_id.startswith("mock_session_"):
-                user_id = int(session_id.replace("mock_session_", ""))
-                plan_type = "pro"  # Default for mock
-                
-                from app.db.database import get_db
-                from app.models.subscription import Subscription, PlanType, SubscriptionStatus
-                from sqlalchemy.orm import Session
-                
-                db = next(get_db())
-                try:
-                    # Check if subscription exists
-                    existing_sub = db.query(Subscription).filter(
-                        Subscription.user_id == user_id
-                    ).first()
-                    
-                    if existing_sub:
-                        existing_sub.plan = PlanType.PRO
-                        existing_sub.status = SubscriptionStatus.ACTIVE
-                        existing_sub.started_at = datetime.utcnow()
-                        db.commit()
-                        db.refresh(existing_sub)
-                    else:
-                        new_sub = Subscription(
-                            user_id=user_id,
-                            plan=PlanType.PRO,
-                            status=SubscriptionStatus.ACTIVE,
-                            started_at=datetime.utcnow(),
-                        )
-                        db.add(new_sub)
-                        db.commit()
-                        db.refresh(new_sub)
-                    
-                    return {
-                        "success": True,
-                        "plan": "pro",
-                        "status": "active",
-                        "is_mock": True,
-                    }
-                finally:
-                    db.close()
+        """
+        Verify payment and activate subscription.
 
+        expected_user_id: when provided (and not None), the session must
+        belong to this user. Prevents activating subscriptions with
+        another user's session id.
+        """
+        if not self.is_configured:
+            # --- Development-only mock path ---
+            if settings.is_production:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid payment session.",
+                )
+
+            mock_data = self._mock_sessions.pop(session_id, None)
+            if mock_data is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid or already-used payment session.",
+                )
+
+            if expected_user_id is not None and mock_data["user_id"] != expected_user_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Payment session does not belong to this user.",
+                )
+
+            user_id = mock_data["user_id"]
+            plan_type = mock_data["plan_type"]
+
+            from app.models.subscription import (
+                PlanType,
+                Subscription,
+                SubscriptionStatus,
+            )
+
+            db = self._get_db()
+            try:
+                existing_sub = db.query(Subscription).filter(
+                    Subscription.user_id == user_id
+                ).first()
+
+                plan_enum = getattr(PlanType, plan_type.upper())
+
+                if existing_sub:
+                    existing_sub.plan = plan_enum
+                    existing_sub.status = SubscriptionStatus.ACTIVE
+                    existing_sub.started_at = datetime.utcnow()
+                    db.commit()
+                    db.refresh(existing_sub)
+                else:
+                    new_sub = Subscription(
+                        user_id=user_id,
+                        plan=plan_enum,
+                        status=SubscriptionStatus.ACTIVE,
+                        started_at=datetime.utcnow(),
+                    )
+                    db.add(new_sub)
+                    db.commit()
+                    db.refresh(new_sub)
+
+                return {
+                    "success": True,
+                    "plan": plan_type,
+                    "status": "active",
+                    "is_mock": True,
+                }
+            finally:
+                db.close()
+
+        # --- Real Stripe path ---
         stripe = self._get_stripe_client()
         if not stripe:
             raise HTTPException(
@@ -212,7 +294,7 @@ class PaymentService:
 
         try:
             session = stripe.checkout.Session.retrieve(session_id)
-            
+
             if session.payment_status != "paid":
                 raise HTTPException(
                     status_code=400,
@@ -221,29 +303,40 @@ class PaymentService:
 
             user_id = int(session.metadata.get("user_id", 0))
             plan_type = session.metadata.get("plan_type", "pro")
-            
-            from app.db.database import get_db
-            from app.models.subscription import Subscription, PlanType, SubscriptionStatus
-            from sqlalchemy.orm import Session
-            
-            db = next(get_db())
+
+            if expected_user_id is not None and user_id != expected_user_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Payment session does not belong to this user.",
+                )
+
+            from app.models.subscription import (
+                PlanType,
+                Subscription,
+                SubscriptionStatus,
+            )
+
+            db = self._get_db()
             try:
-                # Check if subscription exists
                 existing_sub = db.query(Subscription).filter(
                     Subscription.user_id == user_id
                 ).first()
-                
+
                 plan_enum = getattr(PlanType, plan_type.upper())
-                
+
                 if existing_sub:
                     existing_sub.plan = plan_enum
                     existing_sub.status = SubscriptionStatus.ACTIVE
                     existing_sub.provider_subscription_id = session.subscription
                     existing_sub.started_at = datetime.utcnow()
-                    if hasattr(session, 'current_period_start'):
-                        existing_sub.current_period_start = datetime.fromtimestamp(session.current_period_start)
-                    if hasattr(session, 'current_period_end'):
-                        existing_sub.current_period_end = datetime.fromtimestamp(session.current_period_end)
+                    if getattr(session, "current_period_start", None):
+                        existing_sub.current_period_start = datetime.fromtimestamp(
+                            session.current_period_start
+                        )
+                    if getattr(session, "current_period_end", None):
+                        existing_sub.current_period_end = datetime.fromtimestamp(
+                            session.current_period_end
+                        )
                     db.commit()
                     db.refresh(existing_sub)
                 else:
@@ -257,7 +350,7 @@ class PaymentService:
                     db.add(new_sub)
                     db.commit()
                     db.refresh(new_sub)
-                
+
                 return {
                     "success": True,
                     "plan": plan_type,
@@ -266,12 +359,18 @@ class PaymentService:
                 }
             finally:
                 db.close()
-                
-        except stripe.error.StripeError as e:
+
+        except HTTPException:
+            raise
+        except self._stripe_error_class(stripe) as e:
             raise HTTPException(
                 status_code=400,
-                detail=f"Payment verification failed: {str(e)}",
+                detail="Payment verification failed.",
             )
+
+    # ------------------------------------------------------------------
+    # Webhook
+    # ------------------------------------------------------------------
 
     async def handle_webhook(
         self,
@@ -293,23 +392,22 @@ class PaymentService:
             event = stripe.Webhook.construct_event(
                 payload, sig_header, self.stripe_webhook_secret
             )
-        except (ValueError, stripe.error.SignatureVerificationError) as e:
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid webhook payload")
+        except Exception:
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
         event_type = event["type"]
-        
+
         if event_type == "checkout.session.completed":
             session = event["data"]["object"]
-            # Handle successful payment
             await self.verify_and_activate_subscription(session["id"])
-            
+
         elif event_type == "customer.subscription.updated":
-            # Handle subscription updates (cancellation, renewal, etc.)
             subscription_data = event["data"]["object"]
             await self._update_subscription_from_stripe(subscription_data)
-            
+
         elif event_type == "customer.subscription.deleted":
-            # Handle subscription cancellation
             subscription_data = event["data"]["object"]
             await self._cancel_subscription_from_stripe(subscription_data)
 
@@ -317,43 +415,47 @@ class PaymentService:
 
     async def _update_subscription_from_stripe(self, stripe_subscription: dict):
         """Update subscription from Stripe data."""
-        from app.db.database import get_db
         from app.models.subscription import Subscription, SubscriptionStatus
-        from sqlalchemy.orm import Session
-        
-        db = next(get_db())
+
+        db = self._get_db()
         try:
             sub = db.query(Subscription).filter(
                 Subscription.provider_subscription_id == stripe_subscription["id"]
             ).first()
-            
+
             if sub:
                 sub.status = SubscriptionStatus(stripe_subscription["status"])
-                sub.cancel_at_period_end = stripe_subscription.get("cancel_at_period_end", False)
+                sub.cancel_at_period_end = stripe_subscription.get(
+                    "cancel_at_period_end", False
+                )
                 if stripe_subscription.get("canceled_at"):
-                    sub.canceled_at = datetime.fromtimestamp(stripe_subscription["canceled_at"])
+                    sub.canceled_at = datetime.fromtimestamp(
+                        stripe_subscription["canceled_at"]
+                    )
                 db.commit()
         finally:
             db.close()
 
     async def _cancel_subscription_from_stripe(self, stripe_subscription: dict):
         """Cancel subscription from Stripe data."""
-        from app.db.database import get_db
         from app.models.subscription import Subscription, SubscriptionStatus
-        from sqlalchemy.orm import Session
-        
-        db = next(get_db())
+
+        db = self._get_db()
         try:
             sub = db.query(Subscription).filter(
                 Subscription.provider_subscription_id == stripe_subscription["id"]
             ).first()
-            
+
             if sub:
                 sub.status = SubscriptionStatus.CANCELED
                 sub.canceled_at = datetime.utcnow()
                 db.commit()
         finally:
             db.close()
+
+    # ------------------------------------------------------------------
+    # Plans
+    # ------------------------------------------------------------------
 
     def get_plan_features(self, plan_type: str) -> dict:
         """Get plan details and features."""
@@ -368,6 +470,10 @@ class PaymentService:
             for key, plan_info in self.plans.items()
         ]
 
+    # ------------------------------------------------------------------
+    # Payment history
+    # ------------------------------------------------------------------
+
     async def record_payment(
         self,
         user_id: int,
@@ -380,11 +486,9 @@ class PaymentService:
         description: Optional[str] = None,
     ) -> int:
         """Record payment history."""
-        from app.db.database import get_db
         from app.models.subscription import PaymentHistory
-        from sqlalchemy.orm import Session
-        
-        db = next(get_db())
+
+        db = self._get_db()
         try:
             payment = PaymentHistory(
                 user_id=user_id,
