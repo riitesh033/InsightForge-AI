@@ -9,6 +9,11 @@ from app.db.base_models import Base
 
 
 class NotificationType(str, PyEnum):
+    """Values are lowercase and the DB enum name is pinned to ``notification_type``
+    to match the original migration. The payment service writes
+    ``Notification(type="success", ...)`` rows, so the enum must contain the
+    lowercase values."""
+
     INFO = "info"
     SUCCESS = "success"
     WARNING = "warning"
@@ -44,7 +49,12 @@ class Notification(Base):
     )
 
     notification_type: Mapped[str] = mapped_column(
-        Enum(NotificationType),
+        "type",
+        Enum(
+            NotificationType,
+            name="notification_type",
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=NotificationType.INFO,
         nullable=False,
         index=True,
