@@ -9,6 +9,7 @@ import LandingPage from "@/pages/Landing/LandingPage";
 import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
+import ResetPasswordPage from "@/pages/Auth/ResetPasswordPage";
 
 import DashboardPage from "@/pages/Dashboard/DashBoardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
@@ -57,6 +58,9 @@ export default function AppRouter() {
           path="/forgot-password"
           element={<ForgotPasswordPage />}
         />
+
+        <Route path="/reset-password" 
+        element={<ResetPasswordPage />} />
 
       </Route>
 
