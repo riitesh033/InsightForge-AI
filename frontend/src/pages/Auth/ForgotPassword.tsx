@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 
+import { forgotPassword } from "@/services/auth";
 import { showSuccess, showError } from "@/lib/toast";
 
 export default function ForgotPasswordPage() {
@@ -24,13 +25,12 @@ export default function ForgotPasswordPage() {
     try {
       setLoading(true);
 
-      // Simulate API request for demo purposes
-      // In a real implementation, this would call the backend password reset endpoint
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Call the real backend password reset endpoint.
+      // The API returns the same generic message whether or not the
+      // account exists (no account enumeration).
+      const result = await forgotPassword(email);
 
-      showSuccess(
-        "Password reset link has been sent to your email."
-      );
+      showSuccess(result.message);
 
       setEmail("");
 

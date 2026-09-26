@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "no-reply@insightforge.ai"
+    SMTP_FROM_NAME: str = "InsightForge AI"
 
     # ============================================================
     # Payments (Stripe)

@@ -1,19 +1,26 @@
-import os
+import logging
 from typing import Optional
 
-from fastapi import HTTPException
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Email service for sending transactional emails."""
+    """Email service for sending transactional emails.
+
+    Configuration comes exclusively from the application settings
+    (Pydantic BaseSettings backed by environment variables / .env).
+    No credentials are ever hard-coded.
+    """
 
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER")
-        self.smtp_password = os.getenv("SMTP_PASSWORD")
-        self.from_email = os.getenv("FROM_EMAIL", "noreply@insightforge.ai")
-        self.from_name = os.getenv("FROM_NAME", "InsightForge AI")
+        self.smtp_host = settings.SMTP_HOST
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_user = settings.SMTP_USERNAME
+        self.smtp_password = settings.SMTP_PASSWORD
+        self.from_email = settings.SMTP_FROM_EMAIL
+        self.from_name = settings.SMTP_FROM_NAME
         self.is_configured = all([
             self.smtp_host,
             self.smtp_user,
@@ -30,11 +37,14 @@ class EmailService:
         """Send an email to the specified recipient."""
         if not self.is_configured:
             # Log warning but don't fail - allow development without email
-            print(f"Email not configured. Would send to {to_email}: {subject}")
+            logger.warning(
+                "SMTP not configured; email to %s skipped (%s)",
+                to_email,
+                subject,
+            )
             return True
 
         try:
-            # Import here to avoid requiring aiosmtpd in production if not using email
             import smtplib
             from email.mime.multipart import MIMEMultipart
             from email.mime.text import MIMEText
@@ -55,8 +65,9 @@ class EmailService:
                 server.send_message(msg)
 
             return True
-        except Exception as e:
-            print(f"Failed to send email to {to_email}: {str(e)}")
+        except Exception:
+            # Never leak SMTP errors/credentials to callers or clients.
+            logger.exception("Failed to send email to %s", to_email)
             return False
 
     async def send_password_reset_email(
@@ -64,8 +75,16 @@ class EmailService:
         to_email: str,
         reset_url: str,
     ) -> None:
-        """Send a password reset email. No-op if SMTP is not configured."""
+        """Send a password reset email. No-op if SMTP is not configured.
+
+        Raises on SMTP transport failure so callers can log it; the reset
+        URL/token itself is never logged.
+        """
         if not self.is_configured:
+            logger.warning(
+                "SMTP not configured; password reset email to %s skipped.",
+                to_email,
+            )
             return
 
         import smtplib
@@ -78,6 +97,7 @@ class EmailService:
         msg.set_content(
             f"Hello,\n\nYou requested a password reset.\n\n"
             f"Open this link to reset your password:\n{reset_url}\n\n"
+            f"This link expires in 1 hour.\n"
             f"If you did not request this, ignore this email.\n"
         )
 
