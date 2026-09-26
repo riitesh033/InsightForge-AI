@@ -1,5 +1,9 @@
+import logging
+
 from app.core.config import settings
 from app.services.email import email_service
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -107,43 +111,42 @@ async def forgot_password(
     For security, always return success even if email doesn't exist.
     In production, this would send an email with the reset link.
     """
+    generic_message = (
+        "If the account exists, a password reset email has been sent."
+    )
+
     user = get_user_by_email(
         db=db,
         email=request.email,
     )
 
-    # Always return success to prevent account enumeration
+    # Unknown email: return the SAME externally visible response so that
+    # account existence is never revealed, and send no email.
     if user is None:
-        return {
-            "message": "If the account exists, a password reset email has been sent."
-        }
+        return {"message": generic_message}
 
-        # Generate reset token
+    # Generate a signed, single-purpose reset token (1 hour expiry).
     reset_token = create_password_reset_token(email=request.email)
 
     reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
-    # If SMTP is configured, send the reset email
-    if settings.SMTP_HOST:
-        try:
-            await email_service.send_password_reset_email(
-                to_email=request.email,
-                reset_url=reset_url,
-            )
-        except Exception as e:
-            # Log internally; never leak email-sending errors to the client
-            print(f"Failed to send reset email: {e}")
+    # Send the reset email through the email service. The service itself
+    # decides whether SMTP is configured; failures are logged server-side
+    # only and never leaked to the client.
+    try:
+        await email_service.send_password_reset_email(
+            to_email=request.email,
+            reset_url=reset_url,
+        )
+    except Exception:
+        logger.exception("Failed to deliver password reset email")
 
-    response = {
-        "message": "If the account exists, a password reset email has been sent."
-    }
+    response: dict = {"message": generic_message}
 
-    # Development-only convenience: expose the token so the flow is testable
-    # without SMTP. NEVER returned in production.
+    # Development-only convenience so the flow is testable without SMTP.
+    # NEVER exposed in production (tokens must not appear in responses there).
     if not settings.is_production:
-        print(f"\n=== PASSWORD RESET TOKEN (Development Only) ===")
-        print(f"Reset URL: {reset_url}")
-        print("================================================\n")
+        logger.info("Password reset requested for development account.")
         response["reset_token"] = reset_token
 
     return response

@@ -9,17 +9,28 @@ from app.db.base_models import Base
 
 
 class PlanType(str, PyEnum):
+    """Plan values are lowercase: they match the Stripe plan ids used by the
+    payment service (``plan_type="free"/"pro"/"business"``) and the existing
+    database rows written before this fix (VARCHAR(20) with lowercase values)."""
+
     FREE = "free"
     PRO = "pro"
     BUSINESS = "business"
 
 
 class SubscriptionStatus(str, PyEnum):
+    """Status values are lowercase and use Stripe's spelling (``incomplete_expired``)
+    so that ``SubscriptionStatus(stripe_subscription["status"])`` from the webhook
+    handler never raises ValueError. The DB enum name is pinned to
+    ``subscription_status`` to match the original migration."""
+
     ACTIVE = "active"
     CANCELED = "canceled"
-    EXPIRED = "expired"
-    PAST_DUE = "past_due"
+    INCOMPLETE = "incomplete"
+    INCOMPLETE_EXPIRED = "incomplete_expired"
     TRIALING = "trialing"
+    PAST_DUE = "past_due"
+    UNPAID = "unpaid"
     PAUSED = "paused"
 
 
@@ -40,13 +51,17 @@ class Subscription(Base):
     )
 
     plan: Mapped[str] = mapped_column(
-        Enum(PlanType),
+        Enum(PlanType, name="plan_type", values_callable=lambda e: [m.value for m in e]),
         default=PlanType.FREE,
         nullable=False,
     )
 
     status: Mapped[str] = mapped_column(
-        Enum(SubscriptionStatus),
+        Enum(
+            SubscriptionStatus,
+            name="subscription_status",
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=SubscriptionStatus.ACTIVE,
         nullable=False,
         index=True,
