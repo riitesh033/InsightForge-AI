@@ -9,7 +9,7 @@ from app.models.notification import Notification, NotificationType
 from app.models.user import User
 from app.crud.deps import get_current_user
 
-router = APIRouter(prefix="/notifications", tags=["Notifications"])
+router = APIRouter()
 
 
 @router.get("")

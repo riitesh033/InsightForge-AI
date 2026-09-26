@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import SubscriptionSettings from "@/components/settings/SubscriptionSettings";
+import { getApiAssetUrl, getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
 import {
   updateProfile,
@@ -85,7 +87,7 @@ export default function SettingsPage() {
       return `/avatars/${avatarId}.svg`;
     }
 
-    return `${import.meta.env.VITE_API_BASE_URL || "/api/v1"}${user.profile_picture}`;
+    return getApiAssetUrl(user.profile_picture);
   }
 
   // Handle profile update
@@ -106,9 +108,8 @@ export default function SettingsPage() {
       const updatedUser = await updateProfile(fullName, email);
       updateUserProfile(updatedUser);
       showSuccess("Profile updated successfully.");
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to update profile.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to update profile."));
     } finally {
       setIsSavingProfile(false);
     }
@@ -143,9 +144,8 @@ export default function SettingsPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to change password.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to change password."));
     } finally {
       setIsChangingPassword(false);
     }
@@ -174,9 +174,8 @@ export default function SettingsPage() {
       updateUserProfile(updatedUser);
       showSuccess("Profile picture updated successfully.");
       setShowAvatarSelector(false);
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to upload picture.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to upload picture."));
     } finally {
       setIsUploadingImage(false);
     }
@@ -189,9 +188,8 @@ export default function SettingsPage() {
       updateUserProfile(updatedUser);
       showSuccess("Avatar selected successfully.");
       setShowAvatarSelector(false);
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to select avatar.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to select avatar."));
     }
   }
 
@@ -201,9 +199,8 @@ export default function SettingsPage() {
       const updatedUser = await removeProfilePicture();
       updateUserProfile(updatedUser);
       showSuccess("Profile picture removed.");
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to remove picture.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to remove picture."));
     }
   }
 
@@ -238,9 +235,8 @@ export default function SettingsPage() {
       await deleteAccount();
       logout();
       showSuccess("Account deleted successfully.");
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || "Failed to delete account.";
-      showError(message);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Failed to delete account."));
     } finally {
       setIsDeletingAccount(false);
     }
@@ -264,6 +260,8 @@ export default function SettingsPage() {
           Manage your account preferences and application settings.
         </p>
       </div>
+
+      <SubscriptionSettings />
 
       {/* Profile Section */}
       <div className="rounded-xl border border-border bg-card p-6">

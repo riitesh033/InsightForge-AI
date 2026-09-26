@@ -13,12 +13,15 @@ Generates business-quality analysis reports with:
 - Business opportunity analysis
 """
 
+import logging
 from typing import Any
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -2025,11 +2028,8 @@ def analyze_business_opportunities(
                         ),
                     })
 
-        except Exception as exc:
-            print(
-                f"Warning: Time-based business analysis "
-                f"failed: {exc}"
-            )
+        except Exception:
+            logger.exception("Time-based business analysis failed")
 
     # --------------------------------------------------------
     # No business opportunities
@@ -2078,9 +2078,9 @@ def generate_professional_analysis(
     professional analysis.
     """
 
-    print("\n========================================")
-    print("GENERATING PROFESSIONAL ANALYSIS")
-    print("========================================\n")
+    logger.debug("\n========================================")
+    logger.debug("GENERATING PROFESSIONAL ANALYSIS")
+    logger.debug("========================================\n")
 
     # --------------------------------------------------------
     # Basic validation
@@ -2100,44 +2100,42 @@ def generate_professional_analysis(
     # Step 1
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 1: Detecting column types..."
     )
 
     column_types = detect_column_types(df)
 
-    print(
+    logger.debug(
         f"  Numerical: "
         f"{len(column_types['numerical'])}"
     )
 
-    print(
+    logger.debug(
         f"  Categorical: "
         f"{len(column_types['categorical'])}"
     )
 
-    print(
+    logger.debug(
         f"  Datetime: "
         f"{len(column_types['datetime'])}"
     )
 
-    print(
+    logger.debug(
         f"  Boolean: "
         f"{len(column_types['boolean'])}"
     )
 
-    print(
+    logger.debug(
         f"  Identifier: "
         f"{len(column_types['identifier'])}"
     )
-
-    print()
 
     # --------------------------------------------------------
     # Step 2
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 2: Calculating descriptive statistics..."
     )
 
@@ -2146,7 +2144,7 @@ def generate_professional_analysis(
         column_types
     )
 
-    print(
+    logger.debug(
         f"  Statistics calculated for "
         f"{len(statistics)} columns\n"
     )
@@ -2155,7 +2153,7 @@ def generate_professional_analysis(
     # Step 3
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 3: Analyzing data quality..."
     )
 
@@ -2164,12 +2162,12 @@ def generate_professional_analysis(
         column_types
     )
 
-    print(
+    logger.debug(
         f"  Quality score: "
         f"{quality['quality_score']}/100"
     )
 
-    print(
+    logger.debug(
         f"  Total issues: "
         f"{quality['total_issues']}\n"
     )
@@ -2178,7 +2176,7 @@ def generate_professional_analysis(
     # Step 4
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 4: Analyzing distributions..."
     )
 
@@ -2187,7 +2185,7 @@ def generate_professional_analysis(
         column_types
     )
 
-    print(
+    logger.debug(
         f"  Distribution analysis for "
         f"{len(distributions)} columns\n"
     )
@@ -2196,7 +2194,7 @@ def generate_professional_analysis(
     # Step 5
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 5: Analyzing correlations..."
     )
 
@@ -2205,7 +2203,7 @@ def generate_professional_analysis(
         column_types
     )
 
-    print(
+    logger.debug(
         f"  Found "
         f"{len(correlations.get('pairs', []))} "
         f"correlation pairs\n"
@@ -2215,7 +2213,7 @@ def generate_professional_analysis(
     # Step 6
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 6: Generating key insights..."
     )
 
@@ -2228,7 +2226,7 @@ def generate_professional_analysis(
         distributions
     )
 
-    print(
+    logger.debug(
         f"  Generated "
         f"{len(insights)} insights\n"
     )
@@ -2237,7 +2235,7 @@ def generate_professional_analysis(
     # Step 7
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 7: Generating recommendations..."
     )
 
@@ -2248,17 +2246,17 @@ def generate_professional_analysis(
         insights
     )
 
-    print(
+    logger.debug(
         f"  High priority: "
         f"{len(recommendations['high_priority'])}"
     )
 
-    print(
+    logger.debug(
         f"  Medium priority: "
         f"{len(recommendations['medium_priority'])}"
     )
 
-    print(
+    logger.debug(
         f"  Low priority: "
         f"{len(recommendations['low_priority'])}\n"
     )
@@ -2267,7 +2265,7 @@ def generate_professional_analysis(
     # Step 8
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 8: Analyzing business opportunities..."
     )
 
@@ -2278,12 +2276,12 @@ def generate_professional_analysis(
         )
     )
 
-    print(
+    logger.debug(
         f"  Available metrics: "
         f"{business_opportunities['available_metrics']}"
     )
 
-    print(
+    logger.debug(
         f"  Can calculate profit: "
         f"{business_opportunities['can_calculate_profit']}\n"
     )
@@ -2292,7 +2290,7 @@ def generate_professional_analysis(
     # Step 9
     # --------------------------------------------------------
 
-    print(
+    logger.debug(
         "Step 9: Compiling executive summary..."
     )
 
@@ -2360,11 +2358,11 @@ def generate_professional_analysis(
         summary_parts
     )
 
-    print(
+    logger.debug(
         "Analysis generation complete!"
     )
 
-    print(
+    logger.debug(
         "========================================\n"
     )
 

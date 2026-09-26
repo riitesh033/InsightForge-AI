@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LandingLayout from "@/layouts/LandingLayout";
 import AuthLayout from "@/layouts/AuthLayout";
 import DashboardLayout from "@/layouts/DashBoardLayout";
+import { AdminRoute } from "@/context/AdminRoute";
 
 import LandingPage from "@/pages/Landing/LandingPage";
 
@@ -18,8 +19,13 @@ import AnalysisPage from "@/pages/Dashboard/AnalysisPage";
 import ReportsPage from "@/pages/Dashboard/ReportsPage";
 import AIChatPage from "@/pages/Dashboard/AIChatPage";
 import SettingsPage from "@/pages/Dashboard/SettingsPage";
+import { AdminDashboard } from "@/pages/Dashboard/AdminDashboard";
 
 import NotFoundPage from "@/pages/Error/NotFoundPage";
+import ForbiddenPage from "@/pages/Error/ForbiddenPage";
+import ServerErrorPage from "@/pages/Error/ServerErrorPage";
+import PaymentSuccessPage from "@/pages/PaymentSuccessPage";
+import PaymentCancelledPage from "@/pages/PaymentCancelledPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -127,6 +133,42 @@ export default function AppRouter() {
 
       </Route>
 
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <AdminRoute />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+      </Route>
+
+      <Route
+        path="/payment-success"
+        element={
+          <ProtectedRoute>
+            <PaymentSuccessPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payment-cancelled"
+        element={
+          <ProtectedRoute>
+            <PaymentCancelledPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/forbidden" element={<ForbiddenPage />} />
+      <Route path="/403" element={<ForbiddenPage />} />
+      <Route path="/server-error" element={<ServerErrorPage />} />
+      <Route path="/500" element={<ServerErrorPage />} />
+      <Route
+        path="/pricing"
+        element={<Navigate to="/#pricing" replace />}
+      />
 
       {/* =========================
           Demo Redirect

@@ -6,6 +6,7 @@ test configuration instead of the developer's local .env file.
 """
 
 import os
+from io import BytesIO
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
@@ -26,6 +27,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
+import pandas as pd
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -89,7 +91,9 @@ def db():
 
 
 @pytest.fixture()
-def client(db):
+def client(db, monkeypatch):
+    monkeypatch.setattr("app.main.ensure_migrations", lambda: None)
+
     def override_get_db():
         yield db
 
@@ -121,3 +125,33 @@ def auth_headers(client, user_dict):
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def workflow_files():
+    """Small deterministic file payloads for data-workflow tests."""
+    csv_files = {
+        "normal.csv": b"id,age,salary\n1,25,50000\n2,30,60000\n3,35,70000\n",
+        "missing.csv": b"age,city\n20,North\n,South\n40,\n",
+        "duplicates.csv": b"name,value\nA,1\nB,2\nA,1\n",
+        "outliers.csv": b"value\n1\n2\n2\n3\n4\n100\n",
+        "categorical.csv": b"color\nred\nblue\nred\ngreen\n",
+        "mixed.csv": b"value,label\n1,valid\ntwo,other\n3,valid\n",
+        "empty.csv": b"column_a,column_b\n",
+        "invalid-empty.csv": b"",
+        "one-row.csv": b"amount,category\n42,only\n",
+    }
+    wide_frame = pd.DataFrame(
+        {f"column_{index}": [index, index + 1] for index in range(120)}
+    )
+    csv_files["wide.csv"] = wide_frame.to_csv(index=False).encode("utf-8")
+
+    excel_buffer = BytesIO()
+    pd.DataFrame(
+        {"amount": [10, 20, 30], "category": ["a", "b", "a"]}
+    ).to_excel(excel_buffer, index=False, engine="openpyxl")
+
+    return {
+        **csv_files,
+        "workbook.xlsx": excel_buffer.getvalue(),
+    }

@@ -1,4 +1,4 @@
-import api from "@/services/api";
+import api from "@/lib/api";
 
 export interface LoginResponse {
   access_token: string;
@@ -257,11 +257,6 @@ export async function uploadProfilePicture(
     }>(
       "/users/me/profile-picture",
       formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
     );
 
   return response.data;

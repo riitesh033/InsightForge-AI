@@ -1,12 +1,23 @@
 import { useState, FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { getApiErrorDetails, getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
+import {
+  createCheckout,
+  redirectToCheckout,
+} from "@/services/payments";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedPlan = searchParams.get("plan");
+  const planToResume =
+    selectedPlan === "pro" || selectedPlan === "business"
+      ? selectedPlan
+      : null;
   const { login } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -56,24 +67,41 @@ export default function LoginPage() {
 
       showSuccess("Welcome back!");
 
+      if (planToResume) {
+        try {
+          const checkoutUrl = await createCheckout(planToResume);
+          redirectToCheckout(checkoutUrl);
+          return;
+        } catch (checkoutError) {
+          showError(
+            getApiErrorMessage(
+              checkoutError,
+              "Unable to start checkout. You can try again from settings."
+            )
+          );
+          navigate("/dashboard/settings");
+          return;
+        }
+      }
+
       navigate("/dashboard");
     } catch (error) {
-      // =========================
-      // FastAPI / Axios Error
-      // =========================
-
-      const detail = error instanceof Error && 'response' in error 
-        ? (error as any).response?.data?.detail 
-        : undefined;
+      const { status, detail, message: responseMessage } =
+        getApiErrorDetails(error);
 
       if (Array.isArray(detail)) {
-        const message = detail
-          .map((item: any) => {
+        const message = (detail as unknown[])
+          .map((item: unknown) => {
             if (typeof item === "string") {
               return item;
             }
 
-            if (item?.msg) {
+            if (
+              typeof item === "object" &&
+              item !== null &&
+              "msg" in item &&
+              typeof item.msg === "string"
+            ) {
               return item.msg;
             }
 
@@ -84,12 +112,12 @@ export default function LoginPage() {
         showError(message);
       } else if (typeof detail === "string") {
         showError(detail);
-      } else if (error instanceof Error && 'response' in error && (error as any).response?.status === 401) {
+      } else if (status === 401) {
         showError("Invalid email or password.");
-      } else if (error instanceof Error && 'response' in error && (error as any).response?.status === 422) {
+      } else if (status === 422) {
         showError("Please check your email and password.");
-      } else if (error instanceof Error && 'response' in error && (error as any).response?.data?.message) {
-        showError((error as any).response.data.message);
+      } else if (typeof responseMessage === "string") {
+        showError(responseMessage);
       } else {
         showError("Unable to login. Please try again.");
       }
@@ -274,7 +302,7 @@ export default function LoginPage() {
         Don't have an account?
 
         <Link
-          to="/register"
+          to={planToResume ? `/register?plan=${planToResume}` : "/register"}
           className="ml-2 text-primary hover:underline"
         >
           Register

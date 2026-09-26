@@ -1,13 +1,5 @@
-from collections.abc import Generator
+"""Compatibility import for the canonical database session dependency."""
 
-from sqlalchemy.orm import Session
+from app.db.database import get_db
 
-from app.db.database import SessionLocal
-
-
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["get_db"]

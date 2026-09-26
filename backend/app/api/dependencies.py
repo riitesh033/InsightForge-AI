@@ -29,9 +29,8 @@ def get_current_user(
             algorithms=[settings.ALGORITHM],
         )
 
-        email: str = payload.get("sub")
-
-        if email is None:
+        email = payload.get("sub")
+        if not isinstance(email, str) or not email:
             raise credentials_exception
 
     except JWTError:
@@ -48,8 +47,9 @@ def get_current_user(
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

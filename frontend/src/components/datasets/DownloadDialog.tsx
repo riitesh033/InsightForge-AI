@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 
 import {
-  downloadDataset,
+  downloadAnalysisReport,
+  downloadCleanedDataset,
   DownloadFormat,
 } from "@/services/dataset";
 
@@ -24,10 +25,11 @@ export default function DownloadDialog({
     try {
       setDownloading(true);
 
-      await downloadDataset(
-        datasetId,
-        format
-      );
+      if (format === "pdf") {
+        await downloadAnalysisReport(datasetId);
+      } else if (format === "csv" || format === "xlsx") {
+        await downloadCleanedDataset(datasetId, format);
+      }
     } catch (error) {
       console.error(
         "Download failed:",

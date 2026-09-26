@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { getApiAssetUrl } from "@/lib/api";
 import { showSuccess } from "@/lib/toast";
 
 interface TopNavbarProps {
@@ -38,17 +39,13 @@ export default function TopNavbar({
       return `/avatars/${avatarId}.svg`;
     }
 
-    return `${import.meta.env.VITE_API_BASE_URL || "/api/v1"}${user.profile_picture}`;
+    return getApiAssetUrl(user.profile_picture);
   }
 
   async function handleLogout() {
-    try {
-      await logout();
-      showSuccess("Logged out successfully.");
-      navigate("/login");
-    } catch (error) {
-      navigate("/login");
-    }
+    await logout();
+    showSuccess("Logged out successfully.");
+    navigate("/login");
   }
 
   function handleMenuItemClick(callback: () => void) {

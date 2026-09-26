@@ -1,5 +1,6 @@
 import re
 import json
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -7,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.services.ai_provider import generate_ai_response
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -990,7 +993,7 @@ def build_focused_prompt(
 
     if correlation_context:
 
-        print(
+        logger.debug(
             "CHAT: Using focused correlation context."
         )
 
@@ -1043,7 +1046,7 @@ Keep the answer concise.
 
     if outlier_context:
 
-        print(
+        logger.debug(
             "CHAT: Using focused outlier context."
         )
 
@@ -1091,7 +1094,7 @@ Keep the answer concise and useful.
 
     if statistics_context:
 
-        print(
+        logger.debug(
             "CHAT: Using focused column statistics."
         )
 
@@ -1125,7 +1128,7 @@ Keep the answer concise.
     # General dataset question
     # ========================================================
 
-    print(
+    logger.debug(
         "CHAT: Using general dataset context."
     )
 
@@ -1284,7 +1287,7 @@ async def generate_chat_answer(
 
     if fast_answer is not None:
 
-        print(
+        logger.debug(
             "CHAT: Answered directly from analysis."
         )
 
@@ -1306,7 +1309,7 @@ async def generate_chat_answer(
 
     try:
 
-        print(
+        logger.debug(
             "CHAT: Sending question to AI provider..."
         )
 
@@ -1314,18 +1317,17 @@ async def generate_chat_answer(
             prompt
         )
 
-        print(
+        if not answer.strip():
+            raise ValueError("AI provider returned an empty answer.")
+
+        logger.debug(
             "CHAT: AI response received."
         )
 
         return answer.strip()
 
-    except Exception as error:
-
-        print(
-            "AI provider error:",
-            error,
-        )
+    except Exception:
+        logger.exception("AI provider request failed")
 
         return (
             "I couldn't generate an AI answer right now. "

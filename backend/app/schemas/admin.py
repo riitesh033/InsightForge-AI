@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -26,8 +26,7 @@ class AdminUserResponse(BaseModel):
     created_at: datetime
     dataset_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AdminDatasetResponse(BaseModel):
     id: int
@@ -40,5 +39,4 @@ class AdminDatasetResponse(BaseModel):
     created_at: datetime
     owner_email: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,24 +1,25 @@
 import axios from "axios";
+import { clearAuthStorage, getToken } from "@/utils/storage";
+
+const configuredApiBaseUrl = import.meta.env.VITE_API_URL?.trim();
+const apiBaseUrl = (
+  configuredApiBaseUrl ||
+  (import.meta.env.DEV
+    ? "http://localhost:8000/api/v1"
+    : "/api/v1")
+).replace(/\/+$/, "");
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_URL ||
-    "http://localhost:8000/api/v1",
-
+  baseURL: apiBaseUrl,
   headers: {
     Accept: "application/json",
   },
-
   timeout: 120000,
 });
 
-// =========================
-// Request Interceptor
-// =========================
-
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("access_token");
+    const token = getToken();
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -31,24 +32,72 @@ api.interceptors.request.use(
   }
 );
 
-// =========================
-// Response Interceptor
-// =========================
-
 api.interceptors.response.use(
   (response) => response,
-
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("access_token");
+      const requestUrl = error.config?.url ?? "";
+      const isAuthenticationRequest =
+        requestUrl.startsWith("/auth/login") ||
+        requestUrl.startsWith("/auth/register") ||
+        requestUrl.startsWith("/auth/forgot-password") ||
+        requestUrl.startsWith("/auth/reset-password");
+      const hadToken = getToken() !== null;
 
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+      if (!isAuthenticationRequest) {
+        clearAuthStorage();
+
+        if (hadToken && window.location.pathname !== "/login") {
+          window.location.replace("/login");
+        }
       }
     }
 
     return Promise.reject(error);
   }
 );
+
+export function getApiAssetUrl(path: string): string {
+  return new URL(path, new URL(apiBaseUrl, window.location.origin)).toString();
+}
+
+export function getApiErrorMessage(
+  error: unknown,
+  fallback: string
+): string {
+  const details = getApiErrorDetails(error);
+  if (typeof details.detail === "string") {
+    return details.detail;
+  }
+  if (typeof details.message === "string") {
+    return details.message;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
+
+export interface ApiErrorDetails {
+  status?: number;
+  detail?: unknown;
+  message?: unknown;
+}
+
+export function getApiErrorDetails(
+  error: unknown
+): ApiErrorDetails {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data as
+      | { detail?: unknown; message?: unknown }
+      | undefined;
+
+    return {
+      status: error.response?.status,
+      detail: responseData?.detail,
+      message: responseData?.message,
+    };
+  }
+
+  return {};
+}
 
 export default api;

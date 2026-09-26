@@ -1,6 +1,7 @@
+import logging
 import os
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from app.models.user import User
 from app.models.dataset import Dataset
 from app.models.analysis import Analysis
@@ -15,7 +16,9 @@ class AdminService:
         active_users = db.query(User).filter(User.is_active == True).count()
         total_datasets = db.query(Dataset).count()
         total_analyses = db.query(Analysis).count()
-        total_reports = db.query(Analysis).filter(Analysis.report_path != None).count()
+        # Reports are generated from analyses on demand and are not stored as
+        # separate records, so each analysis is one report available to export.
+        total_reports = total_analyses
         total_chat_messages = db.query(ChatMessage).count()
         
         avg_score = db.query(func.avg(Analysis.quality_score)).scalar() or 0.0
@@ -35,8 +38,11 @@ class AdminService:
         # DB Health
         db_ok = True
         try:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
         except Exception:
+            logging.getLogger(__name__).exception(
+                "Admin database health check failed"
+            )
             db_ok = False
 
         # Storage Calculation

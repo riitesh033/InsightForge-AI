@@ -96,7 +96,7 @@ source venv/bin/activate
 venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements/base.txt
 
 # Copy environment file
 cp .env.example .env
@@ -154,12 +154,31 @@ Frontend will be available at: `http://localhost:5173`
 
 ```bash
 # Build and start all services
+# Copy the templates first, then set unique local values.
+cp .env.example .env
+cp backend/.env.example backend/.env
 docker compose up --build
 
 # Access application
 # Frontend: http://localhost:5173
 # Backend: http://localhost:8000
 # Database: localhost:5432
+```
+
+Set `POSTGRES_PASSWORD` in the root `.env` file to a unique URL-safe local
+password before starting Compose. Set `SECRET_KEY` in `backend/.env` to a
+random value; optional AI, SMTP, and Stripe integrations remain unconfigured
+until their credentials and settings are supplied.
+
+The Compose configuration is for development and uses file watching/hot reload.
+The backend and frontend Dockerfiles also provide production targets with no
+development server or reload behavior:
+
+```bash
+docker build --target production -t insightforge-backend ./backend
+docker build --target production \
+  --build-arg VITE_API_URL=https://your-api.example.com/api/v1 \
+  -t insightforge-frontend ./frontend
 ```
 
 ## Usage Guide

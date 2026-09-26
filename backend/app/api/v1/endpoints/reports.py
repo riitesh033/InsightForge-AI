@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ from app.models.analysis import Analysis
 from app.services.report import generate_analysis_report
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -117,22 +120,25 @@ def download_report(
         )
 
     except FileNotFoundError as exc:
+        logger.warning("Report source file is unavailable")
         raise HTTPException(
             status_code=404,
-            detail=str(exc),
-        )
+            detail="Report source file is unavailable.",
+        ) from None
 
-    except ValueError as exc:
+    except ValueError:
+        logger.exception("Report data is invalid")
         raise HTTPException(
             status_code=400,
-            detail=str(exc),
-        )
+            detail="Unable to generate report from this dataset.",
+        ) from None
 
-    except Exception as exc:
+    except Exception:
+        logger.exception("Unexpected report generation failure")
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to generate analysis report: {str(exc)}",
-        )
+            detail="Unable to generate analysis report.",
+        ) from None
 
     # --------------------------------------------------------
     # Build download filename

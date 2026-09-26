@@ -44,7 +44,7 @@ def get_user_datasets(
     return (
         db.query(Dataset)
         .filter(Dataset.owner_id == owner_id)
-        .order_by(Dataset.created_at.desc())
+        .order_by(Dataset.uploaded_at.desc())
         .all()
     )
 

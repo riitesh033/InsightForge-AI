@@ -32,7 +32,7 @@ def list_all_users(
     users = db.query(User).all()
     result = []
     for u in users:
-        d_count = db.query(Dataset).filter(Dataset.user_id == u.id).count()
+        d_count = db.query(Dataset).filter(Dataset.owner_id == u.id).count()
         result.append(AdminUserResponse(
             id=u.id,
             email=u.email,
@@ -68,16 +68,16 @@ def list_all_datasets(
     datasets = db.query(Dataset).all()
     res = []
     for d in datasets:
-        owner = db.query(User).filter(User.id == d.user_id).first()
+        owner = db.query(User).filter(User.id == d.owner_id).first()
         res.append(AdminDatasetResponse(
             id=d.id,
             filename=d.filename,
             file_type=d.file_type,
-            row_count=d.row_count,
-            column_count=d.column_count,
-            file_size_bytes=d.file_size_bytes,
+            row_count=d.rows,
+            column_count=d.columns,
+            file_size_bytes=d.file_size,
             quality_score=d.analysis.quality_score if d.analysis else None,
-            created_at=d.created_at,
+            created_at=d.uploaded_at,
             owner_email=owner.email if owner else "Unknown"
         ))
     return res

@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,8 @@ import pandas as pd
 from fastapi import HTTPException
 
 from app.models.dataset import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 def load_dataset_file(dataset: Dataset) -> pd.DataFrame:
@@ -29,11 +32,12 @@ def load_dataset_file(dataset: Dataset) -> pd.DataFrame:
         if dataset.file_type.lower() in {"xlsx", "xls"}:
             return pd.read_excel(file_path)
 
-    except Exception as exc:
+    except Exception:
+        logger.exception("Failed to load dataset for cleaning")
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to read dataset: {str(exc)}",
-        )
+            detail="Unable to read dataset.",
+        ) from None
 
     raise HTTPException(
         status_code=400,
@@ -339,11 +343,12 @@ def apply_cleaning(
                 index=False,
             )
 
-    except Exception as exc:
+    except Exception:
+        logger.exception("Failed to save cleaned dataset")
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to save cleaned dataset: {str(exc)}",
-        )
+            detail="Unable to save cleaned dataset.",
+        ) from None
 
     summary["cleaned_filename"] = cleaned_filename
     summary["cleaned_file_path"] = str(cleaned_path)

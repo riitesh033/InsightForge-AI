@@ -125,7 +125,7 @@ async def forgot_password(
     if user is None:
         return {"message": generic_message}
 
-    # Generate a signed, single-purpose reset token (1 hour expiry).
+    # Generate a signed reset token (1 hour expiry).
     reset_token = create_password_reset_token(email=request.email)
 
     reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
@@ -138,18 +138,13 @@ async def forgot_password(
             to_email=request.email,
             reset_url=reset_url,
         )
-    except Exception:
-        logger.exception("Failed to deliver password reset email")
+    except Exception as error:
+        logger.error(
+            "Failed to deliver password reset email (%s)",
+            type(error).__name__,
+        )
 
-    response: dict = {"message": generic_message}
-
-    # Development-only convenience so the flow is testable without SMTP.
-    # NEVER exposed in production (tokens must not appear in responses there).
-    if not settings.is_production:
-        logger.info("Password reset requested for development account.")
-        response["reset_token"] = reset_token
-
-    return response
+    return {"message": generic_message}
 
 
 # ==========================
@@ -175,7 +170,7 @@ def reset_password(
 
     email = payload.get("sub")
 
-    if not email:
+    if not isinstance(email, str) or not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid reset token.",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import {
@@ -94,15 +94,18 @@ export default function AIChatPage() {
   // Load Datasets
   // ==========================================================
 
-  useEffect(() => {
-    loadDatasets();
-  }, []);
-
-
-  async function loadDatasets() {
+  const loadDatasets = useCallback(async () => {
     try {
       setLoadingDatasets(true);
       setError("");
+
+      if (
+        routeDatasetId !== null &&
+        (!Number.isSafeInteger(routeDatasetId) || routeDatasetId < 1)
+      ) {
+        setError("Invalid dataset ID.");
+        return;
+      }
 
       const response = await getDatasets();
 
@@ -130,6 +133,9 @@ export default function AIChatPage() {
           setSelectedDatasetId(
             datasetFromRoute.id
           );
+        } else if (routeDatasetId !== null) {
+          setSelectedDatasetId("");
+          setError("Dataset not found.");
         } else {
           setSelectedDatasetId(
             response.items[0].id
@@ -152,7 +158,11 @@ export default function AIChatPage() {
     } finally {
       setLoadingDatasets(false);
     }
-  }
+  }, [routeDatasetId]);
+
+  useEffect(() => {
+    loadDatasets();
+  }, [loadDatasets]);
 
 
   // ==========================================================

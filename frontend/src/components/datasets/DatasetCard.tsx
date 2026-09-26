@@ -112,9 +112,16 @@ export default function DatasetCard({
     try {
       setDownloadLoading("original");
 
+      const fileType = dataset.file_type.toLowerCase();
+      const fileFormat =
+        fileType === "csv"
+          ? "csv"
+          : fileType === "xls"
+            ? "xls"
+            : "xlsx";
       await downloadDataset(
         dataset.id,
-        dataset.file_type.toLowerCase() as "csv" | "xlsx"
+        fileFormat
       );
     } catch (error) {
       console.error(
@@ -316,7 +323,8 @@ export default function DatasetCard({
               }
               disabled={
                 isBusy ||
-                !dataset.cleaned_available
+                !dataset.cleaned_available ||
+                dataset.file_type.toLowerCase() !== "csv"
               }
               className="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -324,7 +332,9 @@ export default function DatasetCard({
 
               {downloadLoading === "cleaned"
                 ? "Downloading..."
-                : "CSV"}
+                : dataset.file_type.toLowerCase() === "csv"
+                  ? "CSV"
+                  : "CSV unavailable"}
             </button>
 
             <button
@@ -336,7 +346,8 @@ export default function DatasetCard({
               }
               disabled={
                 isBusy ||
-                !dataset.cleaned_available
+                !dataset.cleaned_available ||
+                dataset.file_type.toLowerCase() === "csv"
               }
               className="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -344,7 +355,9 @@ export default function DatasetCard({
 
               {downloadLoading === "cleaned"
                 ? "Downloading..."
-                : "XLSX"}
+                : dataset.file_type.toLowerCase() === "csv"
+                  ? "XLSX unavailable"
+                  : "XLSX"}
             </button>
 
           </div>

@@ -1,15 +1,9 @@
-"""Database engine / session configuration.
-
-Includes a best-effort, process-wide Alembic bootstrap so that the FastAPI
-application can start against an empty database (used by ``docker compose up``
-and first-run local development). Alembic itself remains the source of truth;
-this only runs ``upgrade head`` once per process when the schema is missing.
-"""
+"""Database engine / session configuration and process-wide Alembic upgrade."""
 
 import logging
 import threading
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
@@ -31,24 +25,14 @@ SessionLocal = sessionmaker(
 
 
 def run_migrations() -> None:
-    """Run ``alembic upgrade head`` programmatically (idempotent)."""
+    """Apply all pending Alembic revisions (idempotent)."""
     from alembic import command
     from alembic.config import Config
-
-    bind = engine.connect()
-    try:
-        existing = set(inspect(bind).get_table_names())
-    finally:
-        bind.close()
-
-    if "alembic_version" in existing:
-        logger.info("Database already under Alembic management; skipping bootstrap.")
-        return
 
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
     command.upgrade(cfg, "head")
-    logger.info("Alembic bootstrap: database upgraded to head.")
+    logger.info("Database migrations are at Alembic head.")
 
 
 _migration_lock = threading.Lock()

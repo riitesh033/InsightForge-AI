@@ -1,3 +1,4 @@
+import logging
 import shutil
 from pathlib import Path
 from uuid import uuid4
@@ -7,7 +8,6 @@ import pandas as pd
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.crud.crud_dataset import create_dataset
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 from app.services.insights import (
@@ -19,6 +19,7 @@ from app.services.professional_analysis import generate_professional_analysis
 
 UPLOAD_DIR = Path("app/uploads/datasets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {
     ".csv",
@@ -82,7 +83,10 @@ def upload_dataset(
             detail="Invalid filename.",
         )
 
-    extension = Path(file.filename).suffix.lower()
+    original_filename = Path(
+        file.filename.replace("\\", "/")
+    ).name
+    extension = Path(original_filename).suffix.lower()
 
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -114,6 +118,7 @@ def upload_dataset(
             dataframe = pd.read_excel(save_path)
 
     except Exception:
+        logger.exception("Failed to read uploaded dataset")
         save_path.unlink(missing_ok=True)
 
         raise HTTPException(
@@ -139,17 +144,18 @@ def upload_dataset(
             analysis_data
         )
         
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to profile uploaded dataset")
         save_path.unlink(missing_ok=True)
         
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to profile dataset. {str(e)}",
+            detail="Unable to profile dataset.",
         )
     
     dataset = Dataset(
         filename=unique_filename,
-        original_filename=file.filename,
+        original_filename=original_filename,
         file_type=extension.replace(".", ""),
         file_size=file_size,
         file_path=str(save_path),
@@ -158,14 +164,9 @@ def upload_dataset(
         owner_id=owner_id,
     )
     
-    dataset = create_dataset(
-        db=db,
-        dataset=dataset,
-    )
-    
     # Merge professional analysis fields into existing analysis structure
     analysis = Analysis(
-        dataset_id=dataset.id,
+        dataset=dataset,
         summary=analysis_data["summary"],
         summary_text=analysis_text,
         quality_score=quality_score,
@@ -184,8 +185,18 @@ def upload_dataset(
         data_quality_issues=professional_analysis.get("data_quality", {}).get("issues"),
     )
 
-    db.add(analysis)
-    db.commit()
-    db.refresh(analysis)
+    try:
+        db.add(dataset)
+        db.add(analysis)
+        db.commit()
+        db.refresh(dataset)
+    except Exception:
+        db.rollback()
+        save_path.unlink(missing_ok=True)
+        logger.exception("Failed to persist uploaded dataset and analysis")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save dataset.",
+        ) from None
 
     return dataset

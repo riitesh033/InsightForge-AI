@@ -32,6 +32,9 @@ import CorrelationHeatmap from "@/components/analysis/CorrelationHeatmap";
 import OutlierCard from "@/components/analysis/OutlierCard";
 import AIInsights from "@/components/analysis/AIInsights";
 import ProfessionalInsights from "@/components/analysis/ProfessionalInsights";
+import type { DescriptiveStatistics } from "@/services/analysis";
+import { getApiErrorMessage } from "@/lib/api";
+import type { OutlierValue } from "@/components/analysis/OutlierCard";
 
 export default function AnalysisPage() {
   const { datasetId } = useParams<{ datasetId: string }>();
@@ -47,6 +50,12 @@ export default function AnalysisPage() {
   const [dataset, setDataset] = useState<Dataset | null>(null);
 
   const [loadingDataset, setLoadingDataset] = useState(true);
+  const cleanedDownloadFormat =
+    dataset?.file_type.toLowerCase() === "csv"
+      ? "csv"
+      : dataset
+        ? "xlsx"
+        : null;
 
   // ==========================================================
   // Download State
@@ -131,12 +140,10 @@ export default function AnalysisPage() {
       setCleaningData(response);
     } catch (error) {
       setCleaningError(
-        error instanceof Error && "response" in error
-          ? (error as any).response?.data?.detail ??
-              "Unable to generate cleaning preview."
-          : error instanceof Error
-            ? error.message
-            : "Unable to generate cleaning preview."
+        getApiErrorMessage(
+          error,
+          "Unable to generate cleaning preview."
+        )
       );
     } finally {
       setCleaningLoading(false);
@@ -166,12 +173,7 @@ export default function AnalysisPage() {
       setCleaningApplied(true);
     } catch (error) {
       setCleaningError(
-        error instanceof Error && "response" in error
-          ? (error as any).response?.data?.detail ??
-              "Unable to clean the dataset."
-          : error instanceof Error
-            ? error.message
-            : "Unable to clean the dataset."
+        getApiErrorMessage(error, "Unable to clean the dataset.")
       );
     } finally {
       setCleaningApplying(false);
@@ -198,6 +200,16 @@ export default function AnalysisPage() {
       return;
     }
 
+    if (
+      downloadFormat !== "pdf" &&
+      downloadFormat !== cleanedDownloadFormat
+    ) {
+      setDownloadError(
+        "The cleaned dataset is available only in its source format."
+      );
+      return;
+    }
+
     try {
       setDownloading(true);
       setDownloadError(null);
@@ -208,12 +220,10 @@ export default function AnalysisPage() {
       );
     } catch (error) {
       setDownloadError(
-        error instanceof Error && "response" in error
-          ? (error as any).response?.data?.detail ??
-              "Unable to download the selected file."
-          : error instanceof Error
-            ? error.message
-            : "Unable to download the selected file."
+        getApiErrorMessage(
+          error,
+          "Unable to download the selected file."
+        )
       );
     } finally {
       setDownloading(false);
@@ -361,7 +371,7 @@ export default function AnalysisPage() {
 
           return acc;
         },
-        {} as Record<string, any>
+        {} as Record<string, DescriptiveStatistics>
       )
     : {};
 
@@ -469,7 +479,7 @@ export default function AnalysisPage() {
 
         return acc;
       },
-      {} as Record<string, any>
+      {} as Record<string, OutlierValue>
     );
 
   // ==========================================================
@@ -637,22 +647,32 @@ export default function AnalysisPage() {
 
               <option
                 value="csv"
-                disabled={!cleaningApplied}
+                disabled={
+                  !cleaningApplied ||
+                  cleanedDownloadFormat !== "csv"
+                }
               >
                 CSV
                 {!cleaningApplied
                   ? " — Apply Cleaning"
-                  : ""}
+                  : cleanedDownloadFormat !== "csv"
+                    ? " — Unavailable for this dataset"
+                    : ""}
               </option>
 
               <option
                 value="xlsx"
-                disabled={!cleaningApplied}
+                disabled={
+                  !cleaningApplied ||
+                  cleanedDownloadFormat !== "xlsx"
+                }
               >
                 XLSX
                 {!cleaningApplied
                   ? " — Apply Cleaning"
-                  : ""}
+                  : cleanedDownloadFormat !== "xlsx"
+                    ? " — Unavailable for this dataset"
+                    : ""}
               </option>
             </select>
 

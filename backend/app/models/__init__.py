@@ -3,7 +3,13 @@ from .dataset import Dataset
 from .analysis import Analysis
 from .chat_session import ChatSession
 from .chat_message import ChatMessage
-from .subscription import Subscription, PaymentHistory, PlanType, SubscriptionStatus
+from .subscription import (
+    Subscription,
+    PaymentHistory,
+    StripeWebhookEvent,
+    PlanType,
+    SubscriptionStatus,
+)
 from .notification import Notification, NotificationType
 
 __all__ = [
@@ -14,6 +20,7 @@ __all__ = [
     "ChatMessage",
     "Subscription",
     "PaymentHistory",
+    "StripeWebhookEvent",
     "PlanType",
     "SubscriptionStatus",
     "Notification",

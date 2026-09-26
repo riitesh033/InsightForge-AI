@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -25,6 +27,7 @@ from app.services.verified_analysis import (
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -117,10 +120,29 @@ def generate_dataset_report(
             detail="Analysis not found.",
         )
 
-    pdf = generate_analysis_report(
-        dataset,
-        analysis,
-    )
+    try:
+        pdf = generate_analysis_report(
+            dataset,
+            analysis,
+        )
+    except FileNotFoundError:
+        logger.warning("Analysis report source file is unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report source file is unavailable.",
+        ) from None
+    except ValueError:
+        logger.exception("Analysis report data is invalid")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to generate report from this dataset.",
+        ) from None
+    except Exception:
+        logger.exception("Unexpected analysis report generation failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to generate analysis report.",
+        ) from None
 
     return StreamingResponse(
         pdf,

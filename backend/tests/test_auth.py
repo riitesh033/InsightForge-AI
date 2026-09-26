@@ -150,6 +150,16 @@ class TestCurrentUser:
         r = client.get(f"{API}/users/me", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 401
 
+    def test_me_token_for_inactive_user_401(self, client, user_dict, auth_headers, db):
+        user = db.query(User).filter(User.email == user_dict["email"]).one()
+        user.is_active = False
+        db.commit()
+
+        response = client.get(f"{API}/users/me", headers=auth_headers)
+
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Could not validate credentials"
+
     def test_protected_dataset_route_requires_auth(self, client):
         # An example protected resource route must reject anonymous callers.
         r = client.get(f"{API}/datasets/")

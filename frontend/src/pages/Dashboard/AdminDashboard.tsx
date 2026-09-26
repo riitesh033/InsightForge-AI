@@ -1,10 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../services/api';
-import { Users, Database, FileText, Activity, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import api from "@/lib/api";
+import { Users, Database, FileText, Activity, CheckCircle2 } from 'lucide-react';
+
+interface AdminDashboardStats {
+  total_users: number;
+  active_users: number;
+  total_datasets: number;
+  total_analyses: number;
+  total_reports: number;
+  total_chat_messages: number;
+  avg_quality_score: number;
+}
+
+interface SystemHealth {
+  backend_status: string;
+  database_status: string;
+  ai_service_status: string;
+  storage_usage_mb: number;
+}
 
 export const AdminDashboard: React.FC = () => {
-  const [stats, setStats] = useState<any>(null);
-  const [health, setHealth] = useState<any>(null);
+  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

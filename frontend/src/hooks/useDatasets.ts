@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   DatasetListResponse,
@@ -14,15 +14,7 @@ export function useDatasets() {
 
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      loadDatasets();
-    }, 400);
-
-    return () => clearTimeout(timeout);
-  }, [search]);
-
-  async function loadDatasets() {
+  const loadDatasets = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -37,7 +29,15 @@ export function useDatasets() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [search]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      loadDatasets();
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [loadDatasets]);
 
   return {
     loading,

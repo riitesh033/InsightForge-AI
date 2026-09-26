@@ -38,11 +38,11 @@ export interface DataQualityReport {
 
   duplicates?: DuplicateReport | null;
 
-  invalid_values: Record<string, any>[];
+  invalid_values: Record<string, unknown>[];
 
-  datatype_issues: Record<string, any>[];
+  datatype_issues: Record<string, unknown>[];
 
-  inconsistent_values: Record<string, any>[];
+  inconsistent_values: Record<string, unknown>[];
 }
 
 
@@ -140,7 +140,7 @@ export interface TemporalFinding {
 
   trend_direction?: string | null;
 
-  period_values: Record<string, any>[];
+  period_values: Record<string, unknown>[];
 }
 
 

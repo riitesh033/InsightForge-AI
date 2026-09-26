@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 
 import { showError, showSuccess } from "@/lib/toast";
 import { uploadDataset } from "@/services/dataset";
+import { getApiErrorMessage } from "@/lib/api";
 
 export default function UploadDatasetPage() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,19 +162,12 @@ export default function UploadDatasetPage() {
       setTimeout(() => {
         navigate("/dashboard/datasets");
       }, 1000);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Upload error:", error);
-      
-      let message = "Upload failed. Please try again.";
-      
-      if (error?.response?.status === 401) {
-        message = "Please login to upload datasets.";
-      } else if (error?.response?.data?.detail) {
-        message = error.response.data.detail;
-      } else if (error instanceof Error) {
-        message = error.message;
-      }
-
+      const message = getApiErrorMessage(
+        error,
+        "Upload failed. Please try again."
+      );
       showError(message);
     } finally {
       setUploading(false);

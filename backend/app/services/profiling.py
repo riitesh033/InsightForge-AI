@@ -94,12 +94,7 @@ def to_json_safe(obj: Any) -> Any:
 def profile_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     """Generate dataset profiling information."""
 
-    print("\n================================")
-    print("PROFILE DATAFRAME CALLED")
-    print("================================")
 
-    print("DataFrame shape:", df.shape)
-    print("Columns:", list(df.columns))
 
     total_rows = len(df)
 
@@ -186,37 +181,13 @@ def profile_dataframe(df: pd.DataFrame) -> dict[str, Any]:
 
     has_duplicates = duplicate_count > 0
 
-    print("\n================================")
-    print("DUPLICATE CHECK")
-    print("================================")
 
-    print(
-        "Identifier columns ignored:",
-        [str(column) for column in identifier_columns],
-    )
 
-    print(
-        "Columns used for duplicate detection:",
-        [str(column) for column in duplicate_columns],
-    )
 
-    print(
-        "Total duplicate rows:",
-        duplicate_count,
-    )
 
-    print(
-        "Has duplicates:",
-        has_duplicates,
-    )
 
-    print("\nDuplicate mask:")
-    print(duplicate_mask)
 
-    print("\nDuplicate rows:")
-    print(df[duplicate_mask])
 
-    print("================================\n")
 
     # ============================================================
     # SUMMARY
@@ -376,8 +347,5 @@ def profile_dataframe(df: pd.DataFrame) -> dict[str, Any]:
         "outliers": outliers,
     }
 
-    print("FINAL DUPLICATE RESULT:")
-    print(result["duplicates"])
-    print("================================\n")
 
     return to_json_safe(result)

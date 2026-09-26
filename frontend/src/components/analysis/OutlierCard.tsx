@@ -3,8 +3,18 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+export interface OutlierValue {
+  count?: number;
+  outliers?: number;
+  outlier_count?: number;
+  percentage?: number | null;
+  method?: string | null;
+  lower_bound?: number | null;
+  upper_bound?: number | null;
+}
+
 interface Props {
-  outliers?: Record<string, any>;
+  outliers?: Record<string, number | OutlierValue>;
 }
 
 export default function OutlierCard({

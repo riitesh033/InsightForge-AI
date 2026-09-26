@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "../../lib/axios";
+import api, { getApiErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 
 const schema = z
@@ -37,14 +37,14 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     try {
-      await axios.post("/auth/reset-password", {
+      await api.post("/auth/reset-password", {
         token,
         new_password: data.new_password,
       });
       toast.success("Password reset successful. Please log in.");
       navigate("/login");
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail ?? "Failed to reset password.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to reset password."));
     } finally {
       setLoading(false);
     }

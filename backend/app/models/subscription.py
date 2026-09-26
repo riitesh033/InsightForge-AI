@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from enum import Enum as PyEnum
 
@@ -32,6 +32,10 @@ class SubscriptionStatus(str, PyEnum):
     PAST_DUE = "past_due"
     UNPAID = "unpaid"
     PAUSED = "paused"
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Subscription(Base):
@@ -107,14 +111,14 @@ class Subscription(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=_utcnow_naive,
         nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=_utcnow_naive,
+        onupdate=_utcnow_naive,
         nullable=False,
     )
 
@@ -200,7 +204,7 @@ class PaymentHistory(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=_utcnow_naive,
         nullable=False,
     )
 
@@ -208,4 +212,25 @@ class PaymentHistory(Base):
     subscription: Mapped["Subscription"] = relationship(
         "Subscription",
         back_populates="payment_history",
+    )
+
+
+class StripeWebhookEvent(Base):
+    __tablename__ = "stripe_webhook_events"
+
+    event_id: Mapped[str] = mapped_column(
+        String(255),
+        primary_key=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        nullable=False,
     )

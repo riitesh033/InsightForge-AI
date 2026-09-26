@@ -11,7 +11,6 @@ interface ColumnStatistics {
   mean?: number | null;
   standard_deviation?: number | null;
   std?: number | null;
-  [key: string]: any;
 }
 
 interface Props {

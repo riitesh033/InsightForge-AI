@@ -4,6 +4,7 @@ import {
   AnalysisData,
   getAnalysis,
 } from "@/services/analysis";
+import { getApiErrorMessage } from "@/lib/api";
 
 
 export function useAnalysis(
@@ -33,9 +34,14 @@ export function useAnalysis(
         setLoading(false);
 
         return;
-
       }
 
+      const numericDatasetId = Number(datasetId);
+      if (!Number.isSafeInteger(numericDatasetId) || numericDatasetId < 1) {
+        setError("Invalid dataset ID.");
+        setLoading(false);
+        return;
+      }
 
       try {
 
@@ -44,21 +50,14 @@ export function useAnalysis(
 
         const response =
           await getAnalysis(
-            Number(datasetId)
+            numericDatasetId
           );
 
         setData(response);
 
       } catch (error) {
         setData(null);
-
-        setError(
-          error instanceof Error && 'response' in error 
-            ? (error as any).response?.data?.detail || "Failed to load analysis."
-            : error instanceof Error 
-              ? error.message 
-              : "Failed to load analysis."
-        );
+        setError(getApiErrorMessage(error, "Failed to load analysis."));
 
       } finally {
         setLoading(false);

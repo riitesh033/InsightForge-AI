@@ -79,9 +79,8 @@ export interface DashboardResponse {
 
 export async function getDashboard(): Promise<DashboardResponse> {
   const response = await api.get<DashboardResponse>(
-    "dashboard"
+    "/dashboard"
   );
 
   return response.data;
 }
-

@@ -13,7 +13,7 @@ export const AdminRoute: React.FC = () => {
 
   if (loading) return <div>Loading...</div>;
   if (!user || !user.is_superuser) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/forbidden" replace />;
   }
 
   return <Outlet />;

@@ -1,13 +1,24 @@
 import { useState, FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/hooks/useAuth";
+import { getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import {
+  createCheckout,
+  redirectToCheckout,
+} from "@/services/payments";
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedPlan = searchParams.get("plan");
+  const planToResume =
+    selectedPlan === "pro" || selectedPlan === "business"
+      ? selectedPlan
+      : null;
 
   const [full_name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -51,17 +62,27 @@ export default function RegisterPage() {
 
       showSuccess("Registration successful!");
 
-      navigate("/login");
+      if (planToResume) {
+        try {
+          const checkoutUrl = await createCheckout(planToResume);
+          redirectToCheckout(checkoutUrl);
+          return;
+        } catch (checkoutError) {
+          showError(
+            getApiErrorMessage(
+              checkoutError,
+              "Unable to start checkout. You can try again from settings."
+            )
+          );
+          navigate("/dashboard/settings");
+          return;
+        }
+      }
+
+      navigate("/dashboard");
 
     } catch (error) {
-      const message =
-        error instanceof Error && 'response' in error 
-          ? (error as any).response?.data?.detail ?? "Registration failed."
-          : error instanceof Error 
-            ? error.message 
-            : "Registration failed.";
-
-      showError(message);
+      showError(getApiErrorMessage(error, "Registration failed."));
 
     } finally {
       setLoading(false);
@@ -200,7 +221,7 @@ export default function RegisterPage() {
         Already have an account?
 
         <Link
-          to="/login"
+          to={planToResume ? `/login?plan=${planToResume}` : "/login"}
           className="ml-2 text-primary hover:underline"
         >
           Login

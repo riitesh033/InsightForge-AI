@@ -13,11 +13,10 @@ interface MissingValueInfo {
 interface DuplicateInfo {
   count: number;
   percent?: number;
-  [key: string]: any;
 }
 
 interface Props {
-  summary: Record<string, any>;
+  summary: Record<string, unknown>;
   missingValues: Record<string, MissingValueInfo>;
   duplicates: DuplicateInfo;
 }

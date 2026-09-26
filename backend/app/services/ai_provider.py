@@ -1,11 +1,12 @@
 import asyncio
 from typing import Any
+import logging
 
-from google import genai
-from google.genai import types
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -30,6 +31,9 @@ async def generate_with_gemini(
         )
 
     try:
+        from google import genai
+        from google.genai import types
+
         client = genai.Client(
             api_key=settings.GEMINI_API_KEY
         )
@@ -54,9 +58,13 @@ async def generate_with_gemini(
         return answer.strip()
 
     except Exception as error:
+        logger.warning(
+            "Gemini request failed (%s)",
+            type(error).__name__,
+        )
 
         raise AIProviderError(
-            f"Gemini error: {error}"
+            "Gemini provider request failed."
         ) from error
 
 
@@ -113,10 +121,12 @@ async def generate_with_openrouter(
 
         if response.status_code >= 400:
 
+            logger.warning(
+                "OpenRouter returned HTTP %s",
+                response.status_code,
+            )
             raise AIProviderError(
-                "OpenRouter returned "
-                f"{response.status_code}: "
-                f"{response.text[:500]}"
+                "OpenRouter provider request failed."
             )
 
         data = response.json()
@@ -145,9 +155,13 @@ async def generate_with_openrouter(
         return answer.strip()
 
     except httpx.HTTPError as error:
+        logger.warning(
+            "OpenRouter request failed (%s)",
+            type(error).__name__,
+        )
 
         raise AIProviderError(
-            f"OpenRouter HTTP error: {error}"
+            "OpenRouter provider request failed."
         ) from error
 
 
@@ -192,9 +206,13 @@ async def generate_with_ollama(
         return answer.strip()
 
     except Exception as error:
+        logger.warning(
+            "Ollama request failed (%s)",
+            type(error).__name__,
+        )
 
         raise AIProviderError(
-            f"Ollama error: {error}"
+            "Ollama provider request failed."
         ) from error
 
 
@@ -246,48 +264,36 @@ async def generate_ai_response(
             ("Ollama", generate_with_ollama),
         ]
 
-    errors: list[str] = []
-
     for name, provider_function in providers:
 
         try:
 
-            print(
-                f"CHAT: Trying {name}..."
-            )
+            logger.debug("Attempting AI provider %s", name)
 
             answer = await provider_function(
                 prompt
             )
 
-            print(
-                f"CHAT: {name} response received."
-            )
+            if not answer.strip():
+                raise AIProviderError(
+                    f"{name} returned an empty response."
+                )
 
             return answer
 
         except AIProviderError as error:
-
-            print(
-                f"CHAT: {name} failed: {error}"
+            logger.warning(
+                "AI provider %s unavailable (%s)",
+                name,
+                type(error).__name__,
             )
-
-            errors.append(
-                f"{name}: {error}"
-            )
-
         except Exception as error:
-
-            print(
-                f"CHAT: Unexpected {name} error: "
-                f"{error}"
-            )
-
-            errors.append(
-                f"{name}: {error}"
+            logger.exception(
+                "Unexpected failure from AI provider %s (%s)",
+                name,
+                type(error).__name__,
             )
 
     raise AIProviderError(
-        "All AI providers failed. "
-        + " | ".join(errors)
+        "All configured AI providers are unavailable."
     )

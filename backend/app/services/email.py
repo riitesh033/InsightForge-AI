@@ -189,7 +189,7 @@ class EmailService:
             </div>
             
             <div style="text-align: center;">
-                <a href="{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/dashboard" class="button">Go to Dashboard</a>
+                <a href="{settings.FRONTEND_URL}/dashboard" class="button">Go to Dashboard</a>
             </div>
             
             <p style="margin-top: 30px;"><strong>What's Next?</strong></p>
@@ -241,7 +241,7 @@ The InsightForge AI Team
         reset_token: str,
     ) -> bool:
         """Send password reset email."""
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        frontend_url = settings.FRONTEND_URL
         reset_link = f"{frontend_url}/reset-password?token={reset_token}"
 
         subject = "Reset Your Password - InsightForge AI"

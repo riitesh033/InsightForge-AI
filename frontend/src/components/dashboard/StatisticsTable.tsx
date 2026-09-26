@@ -1,5 +1,5 @@
 interface Props {
-  statistics: Record<string, Record<string, any>>;
+  statistics: Record<string, Record<string, unknown>>;
 }
 
 export default function StatisticsTable({

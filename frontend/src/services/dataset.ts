@@ -90,7 +90,34 @@ export interface CleaningResponse {
 // Download Format
 // =========================
 
-export type DownloadFormat = "xlsx" | "csv" | "pdf" | "original";
+export type DownloadFormat =
+  | "xlsx"
+  | "csv"
+  | "pdf"
+  | "original";
+export type DatasetFileFormat = "csv" | "xlsx" | "xls";
+
+function downloadBlob(
+  blob: Blob,
+  filename: string
+): void {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function getDownloadFilename(
+  contentDisposition: string | undefined,
+  fallback: string
+): string {
+  const match = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  return match?.[1] ?? fallback;
+}
 
 // =========================
 // Get Datasets
@@ -147,12 +174,7 @@ export async function uploadDataset(
 
   const response = await api.post<Dataset>(
     "/datasets/upload",
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
+    formData
   );
 
   return response.data;
@@ -164,34 +186,22 @@ export async function uploadDataset(
 
 export async function downloadDataset(
   datasetId: number,
-  format: DownloadFormat
+  format: DatasetFileFormat
 ): Promise<void> {
   const response = await api.get(
     `/datasets/${datasetId}/download`,
     {
       responseType: "blob",
-      params: {
-        format,
-      },
     }
   );
 
-  const blob = new Blob([response.data]);
-
-  const url = window.URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `dataset_${datasetId}.${format}`;
-
-  document.body.appendChild(link);
-
-  link.click();
-
-  link.remove();
-
-  window.URL.revokeObjectURL(url);
+  downloadBlob(
+    response.data,
+    getDownloadFilename(
+      response.headers["content-disposition"],
+      `dataset_${datasetId}.${format}`
+    )
+  );
 }
 
 // =========================
@@ -208,22 +218,13 @@ export async function downloadOriginalDataset(
     }
   );
 
-  const blob = new Blob([response.data]);
-
-  const url = window.URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `dataset_${datasetId}_original`;
-
-  document.body.appendChild(link);
-
-  link.click();
-
-  link.remove();
-
-  window.URL.revokeObjectURL(url);
+  downloadBlob(
+    response.data,
+    getDownloadFilename(
+      response.headers["content-disposition"],
+      `dataset_${datasetId}_original`
+    )
+  );
 }
 
 // =========================
@@ -266,28 +267,16 @@ export async function downloadCleanedDataset(
     `/cleaning/${datasetId}/download`,
     {
       responseType: "blob",
-      params: {
-        format,
-      },
     }
   );
 
-  const blob = new Blob([response.data]);
-
-  const objectUrl = window.URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = objectUrl;
-  link.download = `dataset_${datasetId}_cleaned.${format}`;
-
-  document.body.appendChild(link);
-
-  link.click();
-
-  link.remove();
-
-  window.URL.revokeObjectURL(objectUrl);
+  downloadBlob(
+    response.data,
+    getDownloadFilename(
+      response.headers["content-disposition"],
+      `dataset_${datasetId}_cleaned.${format}`
+    )
+  );
 }
 
 // =========================
@@ -344,4 +333,3 @@ export async function downloadDatasetFile(
 
   await downloadCleanedDataset(datasetId, format);
 }
-

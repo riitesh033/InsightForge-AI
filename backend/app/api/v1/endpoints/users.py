@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
+import logging
 import os
 import uuid
-import shutil
 from pathlib import Path
 
 from app.api.dependencies import get_current_user
@@ -24,6 +24,7 @@ from app.schemas.user import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Configuration for profile pictures
 PROFILE_PICTURES_DIR = Path("app/uploads/profile_pictures")
@@ -119,7 +120,7 @@ def upload_profile_picture(
 
     # Read file content to check size
     try:
-        file_content = file.file.read()
+        file_content = file.file.read(MAX_FILE_SIZE + 1)
         file_size = len(file_content)
         
         if file_size > MAX_FILE_SIZE:
@@ -134,11 +135,14 @@ def upload_profile_picture(
                 detail="Empty file provided.",
             )
             
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to read profile picture upload")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error reading file: {str(e)}",
-        )
+            detail="Unable to read uploaded file.",
+        ) from None
 
     # Generate unique filename
     unique_filename = f"{uuid.uuid4().hex}{file_ext}"
@@ -148,20 +152,33 @@ def upload_profile_picture(
     try:
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to save profile picture")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {str(e)}",
-        )
+            detail="Unable to save uploaded file.",
+        ) from None
 
     # Construct URL path
     profile_picture_url = f"/api/v1/users/profile-pictures/{unique_filename}"
 
     # Update user in database
     current_user.profile_picture = profile_picture_url
-    db.commit()
-    db.refresh(current_user)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            os.remove(file_path)
+        except OSError:
+            logger.exception("Failed to clean up uncommitted profile picture")
+        logger.exception("Failed to update profile picture in database")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to update profile picture.",
+        ) from None
 
+    db.refresh(current_user)
     return current_user
 
 

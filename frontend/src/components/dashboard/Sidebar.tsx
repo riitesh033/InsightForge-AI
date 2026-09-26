@@ -55,14 +55,9 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
   const { logout } = useAuth();
 
   async function handleLogout() {
-    try {
-      await logout();
-      showSuccess("Logged out successfully.");
-      navigate("/login");
-    } catch (error) {
-      // Even if API fails, still redirect
-      navigate("/login");
-    }
+    await logout();
+    showSuccess("Logged out successfully.");
+    navigate("/login");
   }
 
   return (

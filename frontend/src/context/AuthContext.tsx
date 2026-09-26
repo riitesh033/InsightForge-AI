@@ -23,7 +23,7 @@ import {
   register as registerService,
 } from "@/services/auth";
 
-import api from "@/services/api";
+import api from "@/lib/api";
 
 
 export const AuthContext =
@@ -66,14 +66,7 @@ export function AuthProvider({
       return currentUser;
 
     } catch (error) {
-      console.error(
-        "Failed to fetch current user:",
-        error
-      );
-
       clearAuthStorage();
-
-      delete api.defaults.headers.common.Authorization;
 
       setUser(null);
       setToken(null);
@@ -94,16 +87,13 @@ export function AuthProvider({
       const storedUser = getStoredUser<User>();
 
       if (!storedToken) {
+        clearAuthStorage();
+        setUser(null);
+        setToken(null);
         setLoading(false);
         return;
       }
 
-
-      /*
-       * Set token in Axios before requesting /users/me.
-       */
-      api.defaults.headers.common.Authorization =
-        `Bearer ${storedToken}`;
 
       setToken(storedToken);
 
@@ -159,12 +149,6 @@ export function AuthProvider({
     setToken(accessToken);
 
 
-    /*
-     * Configure Axios for authenticated requests.
-     */
-    api.defaults.headers.common.Authorization =
-      `Bearer ${accessToken}`;
-
 
     /*
      * Get the real user from backend.
@@ -182,8 +166,6 @@ export function AuthProvider({
        * remove the authentication state.
        */
       clearAuthStorage();
-
-      delete api.defaults.headers.common.Authorization;
 
       setUser(null);
       setToken(null);
@@ -223,19 +205,7 @@ export function AuthProvider({
    * Logout - calls backend if needed and clears local state
    */
   async function logout(): Promise<void> {
-    try {
-      // Optionally call backend logout endpoint if you want to invalidate server-side sessions
-      // For stateless JWT, this is not strictly necessary but can be useful for audit logs
-      // await api.post("/auth/logout");
-    } catch (error) {
-      // Ignore logout errors - still clear local state
-      console.warn("Logout API call failed, clearing local state anyway:", error);
-    }
-
-    // Clear local storage and state
     clearAuthStorage();
-
-    delete api.defaults.headers.common.Authorization;
 
     setUser(null);
     setToken(null);
