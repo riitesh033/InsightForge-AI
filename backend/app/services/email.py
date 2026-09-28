@@ -67,25 +67,39 @@ class EmailService:
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
-        msg = MIMEMultipart("alternative")
+        # Use multipart/mixed whenever attachments are present. The email body
+        # itself remains multipart/alternative so both plain-text and HTML
+        # clients receive the correct version.
+        if attachments:
+            msg = MIMEMultipart("mixed")
+            body = MIMEMultipart("alternative")
+            msg.attach(body)
+        else:
+            msg = MIMEMultipart("alternative")
+            body = msg
+
         msg["Subject"] = subject
         msg["From"] = f"{self.from_name} <{self.from_email}>"
         msg["To"] = to_email
 
         if text_content:
-            msg.attach(MIMEText(text_content, "plain"))
+            body.attach(MIMEText(text_content, "plain", "utf-8"))
 
-        msg.attach(MIMEText(html_content, "html"))
+        body.attach(MIMEText(html_content, "html", "utf-8"))
+
         if attachments:
             from email.mime.base import MIMEBase
             from email import encoders
+
             for filename, content, content_type in attachments:
                 maintype, subtype = content_type.split("/", 1)
                 part = MIMEBase(maintype, subtype)
                 part.set_payload(content)
                 encoders.encode_base64(part)
                 part.add_header(
-                    "Content-Disposition", "attachment", filename=filename
+                    "Content-Disposition",
+                    "attachment",
+                    filename=filename,
                 )
                 msg.attach(part)
 
@@ -98,16 +112,24 @@ class EmailService:
             with smtplib.SMTP(
                 self.smtp_host,
                 self.smtp_port,
-                timeout=10,
+                timeout=20,
             ) as server:
+                server.ehlo()
                 server.starttls()
+                server.ehlo()
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
+
+            logger.info("SMTP email sent successfully to %s", message.get("To"))
             return True
         except Exception as error:
+            # Never log SMTP credentials or email tokens. The exception text
+            # is useful for diagnosing Brevo authentication/TLS/rejection
+            # errors and does not contain the configured password.
             logger.error(
-                "SMTP email delivery failed (%s)",
+                "SMTP email delivery failed (%s): %s",
                 type(error).__name__,
+                str(error),
             )
             return False
 
