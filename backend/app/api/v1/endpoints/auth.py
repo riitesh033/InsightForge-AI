@@ -8,7 +8,15 @@ from app.services.email import build_password_reset_url, email_service
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -39,6 +47,18 @@ from app.schemas.user import (
 router = APIRouter()
 
 
+async def _send_registration_email_safely(
+    to_email: str,
+    user_name: str,
+) -> None:
+    try:
+        sent = await email_service.send_registration_email(to_email, user_name)
+        if not sent:
+            logger.warning("Registration welcome email was not delivered.")
+    except Exception as error:
+        logger.error("Registration email failed (%s)", type(error).__name__)
+
+
 # ==========================
 # Register
 # ==========================
@@ -50,6 +70,7 @@ router = APIRouter()
 )
 async def register(
     user: UserCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     existing_user = get_user_by_email(
@@ -75,15 +96,11 @@ async def register(
         action_url="/dashboard",
     ))
     db.commit()
-    try:
-        sent = await email_service.send_registration_email(
-            created.email,
-            created.full_name,
-        )
-        if not sent:
-            logger.warning("Registration welcome email was not delivered.")
-    except Exception as error:
-        logger.error("Registration email failed (%s)", type(error).__name__)
+    background_tasks.add_task(
+        _send_registration_email_safely,
+        created.email,
+        created.full_name,
+    )
     return created
 
 

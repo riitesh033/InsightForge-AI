@@ -4,6 +4,7 @@ import asyncio
 import smtplib
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
+from fastapi import BackgroundTasks
 
 from jose import jwt
 
@@ -51,6 +52,46 @@ class TestRegister:
 
         assert response.status_code == 201
         assert sent == [("new-user@example.com", "New User")]
+
+    def test_registration_queues_welcome_email_after_database_commit(
+        self,
+        client,
+        db,
+        monkeypatch,
+    ):
+        from app.api.v1.endpoints import auth as auth_module
+        from app.schemas.user import UserCreate
+
+        attempted = []
+
+        async def fake_send(to_email, user_name):
+            attempted.append((to_email, user_name))
+            return True
+
+        monkeypatch.setattr(
+            auth_module.email_service,
+            "send_registration_email",
+            fake_send,
+        )
+        tasks = BackgroundTasks()
+
+        created_user = asyncio.run(
+            auth_module.register(
+                UserCreate(
+                    full_name="Queued User",
+                    email="queued-user@example.com",
+                    password="Password123",
+                ),
+                tasks,
+                db,
+            )
+        )
+
+        assert created_user.email == "queued-user@example.com"
+        assert attempted == []
+        assert len(tasks.tasks) == 1
+        asyncio.run(tasks())
+        assert attempted == [("queued-user@example.com", "Queued User")]
 
     def test_email_failure_does_not_fail_registration_or_leak_error(
         self,
@@ -300,9 +341,10 @@ class TestRegistrationEmailService:
         sent = {}
 
         class FakeSMTP:
-            def __init__(self, host, port):
+            def __init__(self, host, port, timeout):
                 sent["host"] = host
                 sent["port"] = port
+                sent["timeout"] = timeout
 
             def __enter__(self):
                 return self
@@ -335,6 +377,7 @@ class TestRegistrationEmailService:
         assert sent == {
             "host": "smtp.example.test",
             "port": 587,
+            "timeout": 10,
             "starttls": True,
             "username": "test-smtp-login",
             "password": "test-smtp-password",

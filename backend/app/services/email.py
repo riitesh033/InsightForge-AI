@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -63,38 +64,45 @@ class EmailService:
             )
             return False
 
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"{self.from_name} <{self.from_email}>"
+        msg["To"] = to_email
+
+        if text_content:
+            msg.attach(MIMEText(text_content, "plain"))
+
+        msg.attach(MIMEText(html_content, "html"))
+        if attachments:
+            from email.mime.base import MIMEBase
+            from email import encoders
+            for filename, content, content_type in attachments:
+                maintype, subtype = content_type.split("/", 1)
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(content)
+                encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition", "attachment", filename=filename
+                )
+                msg.attach(part)
+
+        return await asyncio.to_thread(self._send_message, msg)
+
+    def _send_message(self, message) -> bool:
+        import smtplib
+
         try:
-            import smtplib
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
-
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = to_email
-
-            if text_content:
-                msg.attach(MIMEText(text_content, "plain"))
-
-            msg.attach(MIMEText(html_content, "html"))
-            if attachments:
-                from email.mime.base import MIMEBase
-                from email import encoders
-                for filename, content, content_type in attachments:
-                    maintype, subtype = content_type.split("/", 1)
-                    part = MIMEBase(maintype, subtype)
-                    part.set_payload(content)
-                    encoders.encode_base64(part)
-                    part.add_header(
-                        "Content-Disposition", "attachment", filename=filename
-                    )
-                    msg.attach(part)
-
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            with smtplib.SMTP(
+                self.smtp_host,
+                self.smtp_port,
+                timeout=10,
+            ) as server:
                 server.starttls()
                 server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
-
+                server.send_message(message)
             return True
         except Exception as error:
             logger.error(
@@ -132,7 +140,6 @@ class EmailService:
             )
             return
 
-        import smtplib
         from email.message import EmailMessage
 
         msg = EmailMessage()
@@ -146,10 +153,9 @@ class EmailService:
             f"If you did not request this, ignore this email.\n"
         )
 
-        with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-            server.starttls()
-            server.login(self.smtp_user, self.smtp_password)
-            server.send_message(msg)
+        delivered = await asyncio.to_thread(self._send_message, msg)
+        if not delivered:
+            raise RuntimeError("Password reset email delivery failed.")
 
     async def send_purchase_confirmation(
         self,
