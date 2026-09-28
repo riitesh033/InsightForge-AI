@@ -1,13 +1,30 @@
 import axios from "axios";
 import { clearAuthStorage, getToken } from "@/utils/storage";
 
-const configuredApiBaseUrl = import.meta.env.VITE_API_URL?.trim();
-const apiBaseUrl = (
+const configuredApiBaseUrl = import.meta.env.VITE_API_URL
+  ?.trim()
+  .replace(/^VITE_API_URL\s*=\s*/i, "");
+const configuredBaseUrl =
   configuredApiBaseUrl ||
   (import.meta.env.DEV
     ? "http://localhost:8000/api/v1"
-    : "/api/v1")
-).replace(/\/+$/, "");
+    : "/api/v1");
+
+function withApiVersion(baseUrl: string): string {
+  if (/^https?:\/\//i.test(baseUrl)) {
+    const url = new URL(baseUrl);
+    const path = url.pathname.replace(/\/+$/, "");
+    url.pathname = /(?:^|\/)api\/v1$/i.test(path)
+      ? path
+      : `${path}/api/v1`;
+    return url.toString().replace(/\/+$/, "");
+  }
+
+  const path = baseUrl.replace(/\/+$/, "");
+  return /(?:^|\/)api\/v1$/i.test(path) ? path : `${path}/api/v1`;
+}
+
+const apiBaseUrl = withApiVersion(configuredBaseUrl);
 
 const api = axios.create({
   baseURL: apiBaseUrl,
