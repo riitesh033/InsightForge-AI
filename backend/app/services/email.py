@@ -1,15 +1,20 @@
+import base64
 import logging
-import asyncio
 from typing import Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
+
+import httpx
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
 
 def build_password_reset_url(reset_token: str) -> str:
     frontend_url = urlsplit(settings.FRONTEND_URL)
+
     return urlunsplit(
         (
             frontend_url.scheme,
@@ -22,30 +27,26 @@ def build_password_reset_url(reset_token: str) -> str:
 
 
 class EmailService:
-    """Email service for sending transactional emails.
+    """Transactional email service using the Brevo HTTPS API.
 
-    Configuration comes exclusively from the application settings
-    (Pydantic BaseSettings backed by environment variables / .env).
-    No credentials are ever hard-coded.
+    The Brevo API key is loaded from BREVO_API_KEY.
+    SMTP credentials are not used for email delivery.
     """
 
     def __init__(self):
-        self.smtp_host = settings.SMTP_HOST
-        self.smtp_port = settings.SMTP_PORT
-        self.smtp_user = settings.SMTP_USERNAME
-        self.smtp_password = settings.SMTP_PASSWORD
+        self.api_key = settings.BREVO_API_KEY
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
+
         self.missing_configuration = tuple(
             name
             for name, value in (
-                ("SMTP_HOST", self.smtp_host),
-                ("SMTP_USERNAME", self.smtp_user),
-                ("SMTP_PASSWORD", self.smtp_password),
+                ("BREVO_API_KEY", self.api_key),
                 ("SMTP_FROM_EMAIL", self.from_email),
             )
             if not value
         )
+
         self.is_configured = not self.missing_configuration
 
     async def send_email(
@@ -56,93 +57,104 @@ class EmailService:
         text_content: Optional[str] = None,
         attachments: list[tuple[str, bytes, str]] | None = None,
     ) -> bool:
-        """Send an email to the specified recipient."""
+        """Send a transactional email through Brevo's HTTPS API."""
+
         if not self.is_configured:
             logger.warning(
-                "SMTP email skipped; missing configuration: %s",
+                "Brevo email skipped; missing configuration: %s",
                 ", ".join(self.missing_configuration),
             )
             return False
 
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-
-        # Use multipart/mixed whenever attachments are present. The email body
-        # itself remains multipart/alternative so both plain-text and HTML
-        # clients receive the correct version.
-        if attachments:
-            msg = MIMEMultipart("mixed")
-            body = MIMEMultipart("alternative")
-            msg.attach(body)
-        else:
-            msg = MIMEMultipart("alternative")
-            body = msg
-
-        msg["Subject"] = subject
-        msg["From"] = f"{self.from_name} <{self.from_email}>"
-        msg["To"] = to_email
+        payload: dict = {
+            "sender": {
+                "name": self.from_name,
+                "email": self.from_email,
+            },
+            "to": [
+                {
+                    "email": to_email,
+                }
+            ],
+            "subject": subject,
+            "htmlContent": html_content,
+        }
 
         if text_content:
-            body.attach(MIMEText(text_content, "plain", "utf-8"))
-
-        body.attach(MIMEText(html_content, "html", "utf-8"))
+            payload["textContent"] = text_content
 
         if attachments:
-            from email.mime.base import MIMEBase
-            from email import encoders
+            payload["attachment"] = [
+                {
+                    "name": filename,
+                    "content": base64.b64encode(content).decode("ascii"),
+                }
+                for filename, content, _content_type in attachments
+            ]
 
-            for filename, content, content_type in attachments:
-                maintype, subtype = content_type.split("/", 1)
-                part = MIMEBase(maintype, subtype)
-                part.set_payload(content)
-                encoders.encode_base64(part)
-                part.add_header(
-                    "Content-Disposition",
-                    "attachment",
-                    filename=filename,
-                )
-                msg.attach(part)
-
-        return await asyncio.to_thread(self._send_message, msg)
-
-    def _send_message(self, message) -> bool:
-        import smtplib
+        headers = {
+            "accept": "application/json",
+            "api-key": self.api_key,
+            "content-type": "application/json",
+        }
 
         try:
-            with smtplib.SMTP(
-                self.smtp_host,
-                self.smtp_port,
-                timeout=20,
-            ) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(message)
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.post(
+                    BREVO_API_URL,
+                    headers=headers,
+                    json=payload,
+                )
 
-            logger.info("SMTP email sent successfully to %s", message.get("To"))
-            return True
-        except Exception as error:
-            # Never log SMTP credentials or email tokens. The exception text
-            # is useful for diagnosing Brevo authentication/TLS/rejection
-            # errors and does not contain the configured password.
+            if 200 <= response.status_code < 300:
+                logger.info("Brevo email sent successfully.")
+                return True
+
+            # Do not log the response body because it could contain
+            # information that should not appear in application logs.
             logger.error(
-                "SMTP email delivery failed (%s): %s",
-                type(error).__name__,
-                str(error),
+                "Brevo email delivery failed with HTTP status %s.",
+                response.status_code,
             )
             return False
 
-    async def send_registration_email(self, to_email: str, user_name: str) -> bool:
+        except Exception as error:
+            # Never log the API key, password, reset token, or email body.
+            logger.error(
+                "Brevo email delivery failed (%s).",
+                type(error).__name__,
+            )
+            return False
+
+    async def send_registration_email(
+        self,
+        to_email: str,
+        user_name: str,
+    ) -> bool:
+        """Send the account registration welcome email."""
+
         login_url = f"{settings.FRONTEND_URL.rstrip('/')}/login"
-        return await self.send_email(
-            to_email,
-            "Welcome to InsightForge AI",
-            f"<h1>Welcome, {user_name}!</h1><p>Your account was created successfully.</p>"
+
+        html_content = (
+            f"<h1>Welcome, {user_name}!</h1>"
+            "<p>Your account was created successfully.</p>"
             f'<p><a href="{login_url}">Log in to InsightForge AI</a></p>'
-            f"<p>If you did not create this account, contact {settings.SUPPORT_EMAIL}.</p>",
-            f"Welcome, {user_name}!\n\nYour account was created successfully.\n"
-            f"Log in: {login_url}\n\nSupport: {settings.SUPPORT_EMAIL}",
+            f"<p>If you did not create this account, contact "
+            f"{settings.SUPPORT_EMAIL}.</p>"
+        )
+
+        text_content = (
+            f"Welcome, {user_name}!\n\n"
+            "Your account was created successfully.\n\n"
+            f"Log in: {login_url}\n\n"
+            f"Support: {settings.SUPPORT_EMAIL}"
+        )
+
+        return await self.send_email(
+            to_email=to_email,
+            subject="Welcome to InsightForge AI",
+            html_content=html_content,
+            text_content=text_content,
         )
 
     async def send_password_reset_email(
@@ -150,32 +162,71 @@ class EmailService:
         to_email: str,
         reset_url: str,
     ) -> None:
-        """Send a password reset email. No-op if SMTP is not configured.
+        """Send password reset email.
 
-        Raises on SMTP transport failure so callers can log it; the reset
-        URL/token itself is never logged.
+        The reset URL is sent to the recipient but is never written to logs.
         """
+
         if not self.is_configured:
             logger.warning(
-                "SMTP password-reset email skipped; missing configuration: %s",
+                "Brevo password-reset email skipped; missing configuration: %s",
                 ", ".join(self.missing_configuration),
             )
             return
 
-        from email.message import EmailMessage
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Password Reset</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h1>Reset Your Password</h1>
 
-        msg = EmailMessage()
-        msg["Subject"] = "InsightForge AI — Password Reset"
-        msg["From"] = f"{self.from_name} <{self.from_email}>"
-        msg["To"] = to_email
-        msg.set_content(
-            f"Hello,\n\nYou requested a password reset.\n\n"
-            f"Open this link to reset your password:\n{reset_url}\n\n"
-            f"This link expires in 1 hour.\n"
-            f"If you did not request this, ignore this email.\n"
+    <p>You requested a password reset for your InsightForge AI account.</p>
+
+    <p>
+        <a
+            href="{reset_url}"
+            style="
+                display: inline-block;
+                padding: 12px 24px;
+                background: #667eea;
+                color: white;
+                text-decoration: none;
+                border-radius: 6px;
+            "
+        >
+            Reset Password
+        </a>
+    </p>
+
+    <p>This link expires in 1 hour.</p>
+
+    <p>
+        If you did not request this password reset,
+        you can safely ignore this email.
+    </p>
+</body>
+</html>
+"""
+
+        text_content = (
+            "You requested a password reset for your InsightForge AI account.\n\n"
+            f"Reset your password using this link:\n{reset_url}\n\n"
+            "This link expires in 1 hour.\n\n"
+            "If you did not request this password reset, "
+            "you can safely ignore this email."
         )
 
-        delivered = await asyncio.to_thread(self._send_message, msg)
+        delivered = await self.send_email(
+            to_email=to_email,
+            subject="InsightForge AI — Password Reset",
+            html_content=html_content,
+            text_content=text_content,
+        )
+
         if not delivered:
             raise RuntimeError("Password reset email delivery failed.")
 
@@ -191,104 +242,256 @@ class EmailService:
         features: list[str],
         attachment: tuple[str, bytes, str] | None = None,
     ) -> bool:
-        """Send purchase confirmation email."""
-        subject = f"Thank you for your {plan_type.capitalize()} subscription!"
+        """Send purchase confirmation with optional PDF invoice attachment."""
 
-        features_list = "".join([f"<li>{feature}</li>" for feature in features])
+        subject = (
+            f"Thank you for your {plan_type.capitalize()} subscription!"
+        )
+
+        features_list = "".join(
+            f"<li>{feature}</li>"
+            for feature in features
+        )
 
         html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
+    <title>Purchase Confirmation</title>
+
     <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }}
-        .content {{ background: #f9f9f9; padding: 30px; }}
-        .plan-box {{ background: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-        .plan-name {{ font-size: 24px; font-weight: bold; color: #667eea; }}
-        .features {{ background: white; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-        .features ul {{ margin: 10px 0; padding-left: 20px; }}
-        .features li {{ margin: 8px 0; }}
-        .details {{ background: white; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-        .detail-row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }}
-        .detail-row:last-child {{ border-bottom: none; }}
-        .footer {{ background: #333; color: white; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 14px; }}
-        .button {{ display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+        body {{
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }}
+
+        .container {{
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+
+        .header {{
+            background: linear-gradient(
+                135deg,
+                #667eea 0%,
+                #764ba2 100%
+            );
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }}
+
+        .content {{
+            background: #f9f9f9;
+            padding: 30px;
+        }}
+
+        .plan-box {{
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }}
+
+        .plan-name {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }}
+
+        .features {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }}
+
+        .features ul {{
+            margin: 10px 0;
+            padding-left: 20px;
+        }}
+
+        .features li {{
+            margin: 8px 0;
+        }}
+
+        .details {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }}
+
+        .detail-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }}
+
+        .detail-row:last-child {{
+            border-bottom: none;
+        }}
+
+        .button {{
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-top: 20px;
+        }}
+
+        .footer {{
+            background: #333;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 0 0 8px 8px;
+            font-size: 14px;
+        }}
     </style>
 </head>
+
 <body>
     <div class="container">
+
         <div class="header">
             <h1>🎉 Purchase Confirmed!</h1>
             <p>Thank you for subscribing to InsightForge AI</p>
         </div>
-        
+
         <div class="content">
+
             <p>Dear {user_name},</p>
-            
-            <p>Thank you for your purchase! Your subscription has been successfully activated.</p>
-            
+
+            <p>
+                Thank you for your purchase!
+                Your subscription has been successfully activated.
+            </p>
+
             <div class="plan-box">
-                <div class="plan-name">{plan_type.capitalize()} Plan</div>
-                <p>Your subscription is now active and you have access to all premium features.</p>
+                <div class="plan-name">
+                    {plan_type.capitalize()} Plan
+                </div>
+
+                <p>
+                    Your subscription is now active and
+                    you have access to all premium features.
+                </p>
             </div>
-            
+
             <div class="features">
                 <h3>✨ Features Unlocked:</h3>
+
                 <ul>
                     {features_list}
                 </ul>
             </div>
-            
+
             <div class="details">
                 <h3>📋 Order Details:</h3>
+
                 <div class="detail-row">
-                    <span><strong>Amount Paid:</strong></span>
-                    <span>{currency} {amount:.2f}</span>
+                    <span>
+                        <strong>Amount Paid:</strong>
+                    </span>
+
+                    <span>
+                        {currency} {amount:.2f}
+                    </span>
                 </div>
+
                 <div class="detail-row">
-                    <span><strong>Transaction ID:</strong></span>
-                    <span>{transaction_id}</span>
+                    <span>
+                        <strong>Transaction ID:</strong>
+                    </span>
+
+                    <span>
+                        {transaction_id}
+                    </span>
                 </div>
+
                 <div class="detail-row">
-                    <span><strong>Purchase Date:</strong></span>
-                    <span>{purchase_date}</span>
+                    <span>
+                        <strong>Purchase Date:</strong>
+                    </span>
+
+                    <span>
+                        {purchase_date}
+                    </span>
                 </div>
+
                 <div class="detail-row">
-                    <span><strong>Billing Email:</strong></span>
-                    <span>{to_email}</span>
+                    <span>
+                        <strong>Billing Email:</strong>
+                    </span>
+
+                    <span>
+                        {to_email}
+                    </span>
                 </div>
             </div>
-            
+
             <div style="text-align: center;">
-                <a href="{settings.FRONTEND_URL}/dashboard" class="button">Go to Dashboard</a>
+                <a
+                    href="{settings.FRONTEND_URL.rstrip('/')}/dashboard"
+                    class="button"
+                >
+                    Go to Dashboard
+                </a>
             </div>
-            
-            <p style="margin-top: 30px;"><strong>What's Next?</strong></p>
-            <p>You can now access all premium features by visiting your dashboard. Start by uploading a dataset or exploring the advanced analytics tools.</p>
-            
-            <p style="margin-top: 20px;">If you have any questions or need assistance, please don't hesitate to contact our support team at <a href="mailto:support@insightforge.ai">support@insightforge.ai</a>.</p>
-            
-            <p>Best regards,<br>The InsightForge AI Team</p>
+
+            <p style="margin-top: 30px;">
+                <strong>What's Next?</strong>
+            </p>
+
+            <p>
+                You can now access all premium features by visiting
+                your dashboard.
+            </p>
+
+            <p style="margin-top: 20px;">
+                If you have any questions or need assistance,
+                please contact our support team at
+                {settings.SUPPORT_EMAIL}.
+            </p>
+
+            <p>
+                Best regards,<br>
+                The InsightForge AI Team
+            </p>
+
         </div>
-        
+
         <div class="footer">
-            <p>&copy; 2024 InsightForge AI. All rights reserved.</p>
-            <p>This email was sent to {to_email}</p>
+            <p>
+                &copy; 2026 InsightForge AI. All rights reserved.
+            </p>
+
+            <p>
+                This email was sent to {to_email}
+            </p>
         </div>
+
     </div>
 </body>
 </html>
-        """
+"""
 
         text_content = f"""
 Thank you for your {plan_type.capitalize()} subscription!
 
 Dear {user_name},
 
-Thank you for your purchase! Your subscription has been successfully activated.
+Thank you for your purchase!
+Your subscription has been successfully activated.
 
 Plan: {plan_type.capitalize()}
 Amount Paid: {currency} {amount:.2f}
@@ -296,19 +499,23 @@ Transaction ID: {transaction_id}
 Purchase Date: {purchase_date}
 
 Features Unlocked:
-{chr(10).join(['- ' + feature for feature in features])}
+{chr(10).join("- " + feature for feature in features)}
 
 You can now access all premium features by visiting your dashboard.
 
-If you have any questions, contact us at support@insightforge.ai.
+If you have any questions, contact us at:
+{settings.SUPPORT_EMAIL}
 
 Best regards,
 The InsightForge AI Team
-        """
+"""
 
         return await self.send_email(
-            to_email, subject, html_content, text_content,
-            [attachment] if attachment else None,
+            to_email=to_email,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_content,
+            attachments=[attachment] if attachment else None,
         )
 
     async def send_password_reset(
@@ -318,6 +525,7 @@ The InsightForge AI Team
         reset_token: str,
     ) -> bool:
         """Send password reset email."""
+
         reset_link = build_password_reset_url(reset_token)
 
         subject = "Reset Your Password - InsightForge AI"
@@ -327,66 +535,149 @@ The InsightForge AI Team
 <html>
 <head>
     <meta charset="UTF-8">
+    <title>Password Reset</title>
+
     <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }}
-        .content {{ background: #f9f9f9; padding: 30px; }}
-        .button {{ display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
-        .footer {{ background: #333; color: white; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 14px; }}
-        .warning {{ background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 6px; margin: 20px 0; }}
+        body {{
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }}
+
+        .container {{
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+
+        .header {{
+            background: linear-gradient(
+                135deg,
+                #667eea 0%,
+                #764ba2 100%
+            );
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }}
+
+        .content {{
+            background: #f9f9f9;
+            padding: 30px;
+        }}
+
+        .button {{
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 20px 0;
+        }}
+
+        .warning {{
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }}
+
+        .footer {{
+            background: #333;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 0 0 8px 8px;
+            font-size: 14px;
+        }}
     </style>
 </head>
+
 <body>
     <div class="container">
+
         <div class="header">
             <h1>🔐 Password Reset Request</h1>
         </div>
-        
+
         <div class="content">
+
             <p>Dear {user_name},</p>
-            
-            <p>We received a request to reset your password. Click the button below to reset it:</p>
-            
+
+            <p>
+                We received a request to reset your password.
+                Click the button below to reset it:
+            </p>
+
             <div style="text-align: center;">
-                <a href="{reset_link}" class="button">Reset Password</a>
+                <a href="{reset_link}" class="button">
+                    Reset Password
+                </a>
             </div>
-            
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #667eea;">{reset_link}</p>
-            
+
+            <p>
+                Or copy and paste this link into your browser:
+            </p>
+
+            <p style="word-break: break-all; color: #667eea;">
+                {reset_link}
+            </p>
+
             <div class="warning">
-                <strong>⚠️ Important:</strong> This link will expire in 1 hour. If you didn't request this password reset, please ignore this email.
+                <strong>⚠️ Important:</strong>
+                This link will expire in 1 hour.
+                If you did not request this password reset,
+                please ignore this email.
             </div>
-            
-            <p>Best regards,<br>The InsightForge AI Team</p>
+
+            <p>
+                Best regards,<br>
+                The InsightForge AI Team
+            </p>
+
         </div>
-        
+
         <div class="footer">
-            <p>&copy; 2024 InsightForge AI. All rights reserved.</p>
+            <p>
+                &copy; 2026 InsightForge AI. All rights reserved.
+            </p>
         </div>
+
     </div>
 </body>
 </html>
-        """
+"""
 
         text_content = f"""
 Password Reset Request
 
 Dear {user_name},
 
-We received a request to reset your password. Visit the link below to reset it:
+We received a request to reset your password.
+
+Visit the link below to reset your password:
 
 {reset_link}
 
-This link will expire in 1 hour. If you didn't request this password reset, please ignore this email.
+This link will expire in 1 hour.
+
+If you did not request this password reset,
+please ignore this email.
 
 Best regards,
 The InsightForge AI Team
-        """
+"""
 
-        return await self.send_email(to_email, subject, html_content, text_content)
+        return await self.send_email(
+            to_email=to_email,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_content,
+        )
 
 
-# Global instance
+# Global email service instance
 email_service = EmailService()

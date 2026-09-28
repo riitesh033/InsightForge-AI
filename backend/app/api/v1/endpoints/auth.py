@@ -52,7 +52,8 @@ async def _send_registration_email_safely(
     Attempt to send the registration email.
 
     Email failure must not undo a successful account registration.
-    SMTP credentials, passwords, and tokens are never logged.
+    SMTP credentials, passwords, API keys, reset tokens, and
+    exception messages are never logged.
     """
     try:
         sent = await email_service.send_registration_email(
@@ -67,14 +68,13 @@ async def _send_registration_email_safely(
         else:
             logger.error(
                 "Registration welcome email was not sent because "
-                "SMTP is not configured or delivery returned false."
+                "Brevo is not configured or delivery returned false."
             )
 
     except Exception as error:
         logger.error(
-            "Registration email failed (%s): %s",
+            "Registration email failed (%s).",
             type(error).__name__,
-            str(error),
         )
 
 
@@ -510,9 +510,8 @@ async def forgot_password(
         )
     except Exception as error:
         logger.error(
-            "Failed to deliver password reset email (%s): %s",
+            "Failed to deliver password reset email (%s).",
             type(error).__name__,
-            str(error),
         )
 
     return {

@@ -23,15 +23,23 @@ class Settings(BaseSettings):
     GOOGLE_CALLBACK_URL: str = ""
 
     # ============================================================
-    # Email / SMTP
+    # Email / Brevo
     # ============================================================
 
+    # Brevo HTTPS API key.
+    # Used instead of SMTP for email delivery on Render.
+    BREVO_API_KEY: str = ""
+
+    # Sender information.
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "InsightForge AI"
+
+    # Legacy SMTP settings kept for compatibility.
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = ""
-    SMTP_FROM_NAME: str = "InsightForge AI"
+
     SUPPORT_EMAIL: str = "support@insightforge.ai"
     BUSINESS_NAME: str = "InsightForge AI"
     BUSINESS_ADDRESS: str = ""
@@ -44,14 +52,6 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_ID_PRO: str = ""
     STRIPE_PRICE_ID_BUSINESS: str = ""
-
-    @property
-    def is_development(self) -> bool:
-        return self.ENVIRONMENT.lower() == "development"
-
-    @property
-    def is_production(self) -> bool:
-        return self.ENVIRONMENT.lower() == "production"
 
     # ============================================================
     # AI PROVIDER
@@ -87,6 +87,14 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT.lower() == "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
 
 
 @lru_cache
