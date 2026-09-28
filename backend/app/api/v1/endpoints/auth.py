@@ -3,9 +3,6 @@ import secrets
 from urllib.parse import urlencode, urlsplit
 
 import httpx
-from app.core.config import settings
-from app.services.email import build_password_reset_url, email_service
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -14,10 +11,11 @@ from fastapi import (
     Response,
     status,
 )
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_password_reset_token,
@@ -39,6 +37,7 @@ from app.schemas.user import (
     UserCreate,
     UserResponse,
 )
+from app.services.email import build_password_reset_url, email_service
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +48,28 @@ async def _send_registration_email_safely(
     to_email: str,
     user_name: str,
 ) -> None:
-    """Attempt delivery without exposing SMTP credentials or email tokens."""
+    """
+    Attempt to send the registration email.
+
+    Email failure must not undo a successful account registration.
+    SMTP credentials, passwords, and tokens are never logged.
+    """
     try:
         sent = await email_service.send_registration_email(
             to_email=to_email,
             user_name=user_name,
         )
+
         if sent:
-            logger.info("Registration welcome email sent successfully.")
+            logger.info(
+                "Registration welcome email sent successfully."
+            )
         else:
             logger.error(
-                "Registration welcome email was not sent because SMTP "
-                "is not configured or delivery returned false."
+                "Registration welcome email was not sent because "
+                "SMTP is not configured or delivery returned false."
             )
+
     except Exception as error:
         logger.error(
             "Registration email failed (%s): %s",
@@ -111,13 +119,12 @@ async def register(
 
     db.commit()
 
-    # Capture values before any later session lifecycle changes.
+    # Save values before any later database/session lifecycle changes.
     recipient_email = created.email
     recipient_name = created.full_name
 
-    # Run the delivery before returning so the email path is actually
-    # exercised during registration. A delivery failure does NOT undo
-    # successful account creation.
+    # Send the registration email before returning the response.
+    # Email failure does not undo the successful account creation.
     await _send_registration_email_safely(
         recipient_email,
         recipient_name,
@@ -125,6 +132,10 @@ async def register(
 
     return created
 
+
+# ==========================
+# Google OAuth
+# ==========================
 
 def _google_configuration() -> tuple[str, str, str]:
     client_id = settings.GOOGLE_CLIENT_ID.strip()
@@ -134,7 +145,10 @@ def _google_configuration() -> tuple[str, str, str]:
     if not client_id or not client_secret or not callback_url:
         raise HTTPException(
             status_code=503,
-            detail="Google sign-in is not configured. Use email and password instead.",
+            detail=(
+                "Google sign-in is not configured. "
+                "Use email and password instead."
+            ),
         )
 
     return client_id, client_secret, callback_url
@@ -157,8 +171,16 @@ def begin_google_login(response: Response) -> dict[str, str]:
         "path": cookie_path or "/",
     }
 
-    response.set_cookie("google_oauth_state", state, **cookie_options)
-    response.set_cookie("google_oauth_nonce", nonce, **cookie_options)
+    response.set_cookie(
+        "google_oauth_state",
+        state,
+        **cookie_options,
+    )
+    response.set_cookie(
+        "google_oauth_nonce",
+        nonce,
+        **cookie_options,
+    )
 
     authorization_url = (
         "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -175,7 +197,9 @@ def begin_google_login(response: Response) -> dict[str, str]:
         )
     )
 
-    return {"authorization_url": authorization_url}
+    return {
+        "authorization_url": authorization_url,
+    }
 
 
 def _google_failure(code: str) -> RedirectResponse:
@@ -183,7 +207,11 @@ def _google_failure(code: str) -> RedirectResponse:
         f"{settings.FRONTEND_URL.rstrip('/')}"
         f"/login?google_error={code}"
     )
-    return RedirectResponse(location, status_code=303)
+
+    return RedirectResponse(
+        location,
+        status_code=303,
+    )
 
 
 @router.get("/google/callback")
@@ -229,15 +257,24 @@ async def google_callback(
     if (
         not state
         or not state_cookie
-        or not secrets.compare_digest(state, state_cookie)
+        or not secrets.compare_digest(
+            state,
+            state_cookie,
+        )
     ):
-        return clear_oauth_cookies(_google_failure("invalid_state"))
+        return clear_oauth_cookies(
+            _google_failure("invalid_state")
+        )
 
     if not code or not nonce:
-        return clear_oauth_cookies(_google_failure("invalid_response"))
+        return clear_oauth_cookies(
+            _google_failure("invalid_response")
+        )
 
     try:
-        client_id, client_secret, callback_url = _google_configuration()
+        client_id, client_secret, callback_url = (
+            _google_configuration()
+        )
 
         async with httpx.AsyncClient(timeout=10) as client:
             token_response = await client.post(
@@ -261,7 +298,9 @@ async def google_callback(
                 "Google token response is missing an ID token."
             )
 
-        from google.auth.transport.requests import Request as GoogleRequest
+        from google.auth.transport.requests import (
+            Request as GoogleRequest,
+        )
         from google.oauth2 import id_token
 
         claims = id_token.verify_oauth2_token(
@@ -271,44 +310,71 @@ async def google_callback(
         )
 
         if claims.get("nonce") != nonce:
-            return clear_oauth_cookies(_google_failure("invalid_state"))
+            return clear_oauth_cookies(
+                _google_failure("invalid_state")
+            )
 
     except HTTPException as auth_error:
         if auth_error.status_code == 503:
-            return clear_oauth_cookies(_google_failure("unavailable"))
+            return clear_oauth_cookies(
+                _google_failure("unavailable")
+            )
+
         raise
 
-    except (httpx.HTTPError, ValueError, TypeError) as token_error:
+    except (
+        httpx.HTTPError,
+        ValueError,
+        TypeError,
+    ) as token_error:
         logger.info(
             "Google token exchange failed (%s)",
             type(token_error).__name__,
         )
-        return clear_oauth_cookies(_google_failure("invalid_response"))
+
+        return clear_oauth_cookies(
+            _google_failure("invalid_response")
+        )
 
     except Exception as token_error:
         logger.info(
             "Google ID token verification failed (%s)",
             type(token_error).__name__,
         )
-        return clear_oauth_cookies(_google_failure("invalid_response"))
 
-    email = str(claims.get("email", "")).strip().lower()
-    google_id = str(claims.get("sub", "")).strip()
+        return clear_oauth_cookies(
+            _google_failure("invalid_response")
+        )
+
+    email = str(
+        claims.get("email", "")
+    ).strip().lower()
+
+    google_id = str(
+        claims.get("sub", "")
+    ).strip()
 
     if (
         not email
         or not google_id
         or claims.get("email_verified") is not True
     ):
-        return clear_oauth_cookies(_google_failure("invalid_response"))
+        return clear_oauth_cookies(
+            _google_failure("invalid_response")
+        )
 
-    user = get_user_by_email(db, email)
+    user = get_user_by_email(
+        db,
+        email,
+    )
+
     is_new = user is None
 
     if user is None:
         user = User(
             full_name=str(
-                claims.get("name") or email.split("@")[0]
+                claims.get("name")
+                or email.split("@")[0]
             )[:100],
             email=email,
             hashed_password=None,
@@ -324,7 +390,9 @@ async def google_callback(
             Notification(
                 user_id=user.id,
                 title="Welcome to InsightForge AI",
-                message="Your Google account was connected successfully.",
+                message=(
+                    "Your Google account was connected successfully."
+                ),
                 notification_type=NotificationType.SUCCESS,
                 action_url="/dashboard",
             )
@@ -350,7 +418,9 @@ async def google_callback(
             user.full_name,
         )
 
-    access_token = create_access_token(user.email)
+    access_token = create_access_token(
+        user.email,
+    )
 
     callback = RedirectResponse(
         f"{settings.FRONTEND_URL.rstrip('/')}"
@@ -408,8 +478,8 @@ async def forgot_password(
     """
     Request a password reset email.
 
-    Always return the same external response whether the account exists
-    or not, so account existence is not disclosed.
+    Always return the same external response whether the
+    account exists or not, so account existence is not disclosed.
     """
     generic_message = (
         "If the account exists, a password reset email has been sent."
@@ -421,13 +491,17 @@ async def forgot_password(
     )
 
     if user is None:
-        return {"message": generic_message}
+        return {
+            "message": generic_message,
+        }
 
     reset_token = create_password_reset_token(
         email=request.email,
     )
 
-    reset_url = build_password_reset_url(reset_token)
+    reset_url = build_password_reset_url(
+        reset_token,
+    )
 
     try:
         await email_service.send_password_reset_email(
@@ -441,7 +515,9 @@ async def forgot_password(
             str(error),
         )
 
-    return {"message": generic_message}
+    return {
+        "message": generic_message,
+    }
 
 
 # ==========================
@@ -453,7 +529,9 @@ def reset_password(
     request: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
-    payload = decode_password_reset_token(request.token)
+    payload = decode_password_reset_token(
+        request.token,
+    )
 
     if payload is None:
         raise HTTPException(
@@ -498,5 +576,5 @@ def reset_password(
 @router.get("/test")
 def test():
     return {
-        "message": "Authentication API is working."
+        "message": "Authentication API is working.",
     }
