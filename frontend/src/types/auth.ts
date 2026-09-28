@@ -34,6 +34,9 @@ export interface AuthContextType {
     password: string
   ) => Promise<void>;
 
+  loginWithGoogle: () => Promise<void>;
+  completeGoogleLogin: (accessToken: string) => Promise<void>;
+
   register: (
     full_name: string,
     email: string,

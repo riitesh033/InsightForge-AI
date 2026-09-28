@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
+import GoogleButton from "@/components/auth/GoogleButton";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import {
   createCheckout,
@@ -216,6 +217,7 @@ export default function RegisterPage() {
         </button>
 
       </form>
+      <GoogleButton />
 
       <div className="mt-6 text-center text-foreground">
         Already have an account?

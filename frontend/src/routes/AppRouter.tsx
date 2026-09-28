@@ -11,6 +11,7 @@ import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
 import ResetPasswordPage from "@/pages/Auth/ResetPasswordPage";
+import GoogleCallbackPage from "@/pages/Auth/GoogleCallbackPage";
 
 import DashboardPage from "@/pages/Dashboard/DashBoardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
@@ -67,6 +68,7 @@ export default function AppRouter() {
 
         <Route path="/reset-password" 
         element={<ResetPasswordPage />} />
+        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
       </Route>
 

@@ -1,10 +1,11 @@
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { getApiErrorDetails, getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
+import GoogleButton from "@/components/auth/GoogleButton";
 import {
   createCheckout,
   redirectToCheckout,
@@ -12,13 +13,29 @@ import {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const selectedPlan = searchParams.get("plan");
   const planToResume =
     selectedPlan === "pro" || selectedPlan === "business"
       ? selectedPlan
       : null;
   const { login } = useAuth();
+
+  useEffect(() => {
+    const oauthError = searchParams.get("google_error");
+    if (!oauthError) return;
+    const messages: Record<string, string> = {
+      cancelled: "Google sign-in was cancelled.",
+      invalid_state: "Google sign-in could not be verified. Please try again.",
+      invalid_response: "Google returned an invalid sign-in response.",
+      account_conflict: "That Google account cannot be linked to this account.",
+      unavailable: "Google sign-in is temporarily unavailable.",
+    };
+    showError(messages[oauthError] ?? "Google sign-in failed. Please try again.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("google_error");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -280,6 +297,7 @@ export default function LoginPage() {
           {loading ? "Signing In..." : "Login"}
         </button>
       </form>
+      <GoogleButton />
 
       {/* =========================
           Forgot Password

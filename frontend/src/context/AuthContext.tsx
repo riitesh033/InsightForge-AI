@@ -20,6 +20,7 @@ import {
 
 import {
   login as loginService,
+  startGoogleLogin as startGoogleLoginService,
   register as registerService,
 } from "@/services/auth";
 
@@ -174,6 +175,24 @@ export function AuthProvider({
     }
   }
 
+  async function loginWithGoogle(): Promise<void> {
+    const authorizationUrl = await startGoogleLoginService();
+    window.location.assign(authorizationUrl);
+  }
+
+  async function completeGoogleLogin(accessToken: string): Promise<void> {
+    saveToken(accessToken);
+    setToken(accessToken);
+    try {
+      await fetchCurrentUser();
+    } catch (error) {
+      clearAuthStorage();
+      setUser(null);
+      setToken(null);
+      throw error;
+    }
+  }
+
 
   /*
    * Register
@@ -236,6 +255,8 @@ export function AuthProvider({
     token,
     loading,
     login,
+    loginWithGoogle,
+    completeGoogleLogin,
     register,
     logout,
     isAuthenticated,

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Upload,
@@ -64,7 +64,12 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     <aside className="flex h-full w-72 flex-col border-r border-border bg-card">
 
       {/* Logo */}
-      <div className="flex h-20 items-center gap-3 border-b border-border px-6">
+      <Link
+        to="/"
+        aria-label="InsightForge AI home"
+        onClick={onNavigate}
+        className="flex h-20 items-center gap-3 border-b border-border px-6"
+      >
 
         <div className="rounded-lg bg-primary p-2 text-primary-foreground">
           <BarChart3 size={22} />
@@ -79,8 +84,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
             Your AI Data Analyst
           </p>
         </div>
-
-      </div>
+      </Link>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-2 p-5">

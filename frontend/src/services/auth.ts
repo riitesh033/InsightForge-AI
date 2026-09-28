@@ -64,6 +64,14 @@ export async function login(
   return response.data;
 }
 
+export async function startGoogleLogin(): Promise<string> {
+  const response = await api.get<{ authorization_url: string }>(
+    "/auth/google/login",
+    { withCredentials: true }
+  );
+  return response.data.authorization_url;
+}
+
 
 /*
 |--------------------------------------------------------------------------
