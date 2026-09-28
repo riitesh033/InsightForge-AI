@@ -53,11 +53,16 @@ export function AuthProvider({
    * Fetch the currently authenticated user
    * from the backend.
    */
-  async function fetchCurrentUser(): Promise<User> {
+  async function fetchCurrentUser(authToken: string): Promise<User> {
     try {
       const response = await api.get<User>(
-        "/users/me"
+        "/users/me",
+        { headers: { Authorization: `Bearer ${authToken}` } }
       );
+
+      if (getStoredToken() !== authToken) {
+        throw new Error("Authentication session changed during request.");
+      }
 
       const currentUser = response.data;
 
@@ -67,10 +72,14 @@ export function AuthProvider({
       return currentUser;
 
     } catch (error) {
-      clearAuthStorage();
-
-      setUser(null);
-      setToken(null);
+      const storedToken = getStoredToken();
+      if (storedToken === authToken || storedToken === null) {
+        if (storedToken === authToken) {
+          clearAuthStorage();
+        }
+        setUser(null);
+        setToken(null);
+      }
 
       throw error;
     }
@@ -88,9 +97,11 @@ export function AuthProvider({
       const storedUser = getStoredUser<User>();
 
       if (!storedToken) {
-        clearAuthStorage();
-        setUser(null);
-        setToken(null);
+        if (!getStoredToken()) {
+          clearAuthStorage();
+          setUser(null);
+          setToken(null);
+        }
         setLoading(false);
         return;
       }
@@ -111,7 +122,7 @@ export function AuthProvider({
        * Verify token with backend.
        */
       try {
-        await fetchCurrentUser();
+        await fetchCurrentUser(storedToken);
       } catch {
         // Session has already been cleared.
       }
@@ -154,25 +165,7 @@ export function AuthProvider({
     /*
      * Get the real user from backend.
      */
-    try {
-      const currentUser =
-        await fetchCurrentUser();
-
-      setUser(currentUser);
-
-    } catch (error) {
-
-      /*
-       * If token is valid but /users/me fails,
-       * remove the authentication state.
-       */
-      clearAuthStorage();
-
-      setUser(null);
-      setToken(null);
-
-      throw error;
-    }
+    await fetchCurrentUser(accessToken);
   }
 
   async function loginWithGoogle(): Promise<void> {
@@ -183,14 +176,7 @@ export function AuthProvider({
   async function completeGoogleLogin(accessToken: string): Promise<void> {
     saveToken(accessToken);
     setToken(accessToken);
-    try {
-      await fetchCurrentUser();
-    } catch (error) {
-      clearAuthStorage();
-      setUser(null);
-      setToken(null);
-      throw error;
-    }
+    await fetchCurrentUser(accessToken);
   }
 
 

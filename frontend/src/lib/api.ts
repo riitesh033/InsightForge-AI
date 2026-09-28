@@ -37,9 +37,10 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = getToken();
+    const authorization = config.headers.get("Authorization");
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (token && !authorization) {
+      config.headers.set("Authorization", `Bearer ${token}`);
     }
 
     return config;
@@ -59,12 +60,18 @@ api.interceptors.response.use(
         requestUrl.startsWith("/auth/register") ||
         requestUrl.startsWith("/auth/forgot-password") ||
         requestUrl.startsWith("/auth/reset-password");
-      const hadToken = getToken() !== null;
+      const requestAuthorization =
+        error.config?.headers.get("Authorization");
+      const currentToken = getToken();
+      const isCurrentSessionRequest =
+        typeof requestAuthorization === "string" &&
+        currentToken !== null &&
+        requestAuthorization === `Bearer ${currentToken}`;
 
-      if (!isAuthenticationRequest) {
+      if (!isAuthenticationRequest && isCurrentSessionRequest) {
         clearAuthStorage();
 
-        if (hadToken && window.location.pathname !== "/login") {
+        if (window.location.pathname !== "/login") {
           window.location.replace("/login");
         }
       }
