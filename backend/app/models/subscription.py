@@ -234,3 +234,23 @@ class StripeWebhookEvent(Base):
         default=lambda: datetime.now(UTC).replace(tzinfo=None),
         nullable=False,
     )
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payment_history_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("payment_history.id", ondelete="SET NULL"), nullable=True
+    )
+    invoice_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    provider_payment_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    plan_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    invoice_date: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, nullable=False)
+    pdf_data: Mapped[bytes] = mapped_column(nullable=False)
+    email_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

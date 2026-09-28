@@ -18,6 +18,10 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CALLBACK_URL: str = ""
+
     # ============================================================
     # Email / SMTP
     # ============================================================
@@ -28,6 +32,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "no-reply@insightforge.ai"
     SMTP_FROM_NAME: str = "InsightForge AI"
+    SUPPORT_EMAIL: str = "support@insightforge.ai"
+    BUSINESS_NAME: str = "InsightForge AI"
+    BUSINESS_ADDRESS: str = ""
 
     # ============================================================
     # Payments (Stripe)

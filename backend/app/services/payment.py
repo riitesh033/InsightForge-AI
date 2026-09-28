@@ -1,4 +1,6 @@
 import logging
+import io
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -288,7 +290,7 @@ class PaymentService:
             )
             db.commit()
             if confirmation is not None:
-                await self._send_purchase_confirmation(confirmation)
+                await self._send_purchase_confirmation(confirmation, db)
         except IntegrityError:
             db.rollback()
             if db.get(StripeWebhookEvent, event_id) is not None:
@@ -407,12 +409,77 @@ class PaymentService:
         user = db.get(User, user_id)
         if user is None:
             return None
+        session_id = self._identifier(self._value(session, "id"))
+        if session_id is None:
+            raise HTTPException(status_code=400, detail="Invalid checkout session.")
+        from app.models.subscription import Invoice
+        invoice = db.query(Invoice).filter(
+            Invoice.provider_payment_id == session_id
+        ).first()
+        if invoice is None:
+            invoice = Invoice(
+                user_id=user.id,
+                invoice_number=f"INV-{datetime.now(UTC):%Y%m%d}-{uuid.uuid4().hex[:8].upper()}",
+                provider_payment_id=session_id,
+                plan_type=plan_type,
+                amount=float(self.get_plan_features(plan_type)["price"]),
+                currency=str(self.get_plan_features(plan_type)["currency"]),
+                pdf_data=self._build_invoice_pdf(
+                    user.full_name, user.email, plan_type, session_id
+                ),
+            )
+            db.add(invoice)
+        elif invoice.email_sent:
+            return None
         return {
             "email": user.email,
             "name": user.full_name,
             "plan": plan_type,
-            "session_id": self._value(session, "id"),
+            "session_id": session_id,
+            "invoice_pdf": invoice.pdf_data,
+            "invoice_filename": f"{invoice.invoice_number}.pdf",
+            "invoice": invoice,
         }
+
+    @staticmethod
+    def _build_invoice_pdf(
+        customer_name: str,
+        customer_email: str,
+        plan_type: str,
+        transaction_id: str,
+    ) -> bytes:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        output = io.BytesIO()
+        pdf = canvas.Canvas(output, pagesize=letter)
+        pdf.setTitle(f"InsightForge AI invoice {transaction_id}")
+        pdf.setFont("Helvetica-Bold", 18)
+        pdf.drawString(54, 744, "InsightForge AI")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(54, 726, settings.BUSINESS_ADDRESS or settings.SUPPORT_EMAIL)
+        pdf.drawRightString(558, 744, "INVOICE")
+        pdf.drawRightString(558, 726, transaction_id)
+        pdf.line(54, 708, 558, 708)
+        pdf.drawString(54, 680, f"Bill to: {customer_name}")
+        pdf.drawString(54, 664, customer_email)
+        pdf.drawString(54, 620, "Description")
+        pdf.drawString(390, 620, "Amount")
+        pdf.line(54, 610, 558, 610)
+        plan = plan_type.capitalize()
+        amount = PaymentService().get_plan_features(plan_type)["price"]
+        currency = PaymentService().get_plan_features(plan_type)["currency"]
+        pdf.drawString(54, 586, f"{plan} membership")
+        pdf.drawRightString(558, 586, f"{currency} {amount:.2f}")
+        pdf.line(54, 550, 558, 550)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawRightString(558, 526, f"Total paid: {currency} {amount:.2f}")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(54, 480, "Payment status: Paid")
+        pdf.drawString(54, 464, f"Transaction ID: {transaction_id}")
+        pdf.drawString(54, 448, f"Invoice date: {datetime.now(UTC):%Y-%m-%d}")
+        pdf.save()
+        return output.getvalue()
 
     async def _retrieve_subscription(
         self,
@@ -439,12 +506,13 @@ class PaymentService:
     async def _send_purchase_confirmation(
         self,
         confirmation: dict[str, Any],
+        db: Session,
     ) -> None:
         from app.services.email import email_service
 
         plan = self.get_plan_features(confirmation["plan"])
         try:
-            await email_service.send_purchase_confirmation(
+            sent = await email_service.send_purchase_confirmation(
                 to_email=confirmation["email"],
                 user_name=confirmation["name"],
                 plan_type=confirmation["plan"],
@@ -453,7 +521,15 @@ class PaymentService:
                 transaction_id=confirmation["session_id"],
                 purchase_date=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
                 features=plan["features"],
+                attachment=(
+                    confirmation["invoice_filename"],
+                    confirmation["invoice_pdf"],
+                    "application/pdf",
+                ),
             )
+            if sent:
+                confirmation["invoice"].email_sent = True
+                db.commit()
         except Exception as error:
             logger.error(
                 "Purchase confirmation email failed (%s)",

@@ -62,7 +62,7 @@ def authenticate_user(
     if not user.is_active:
         return None
 
-    if not verify_password(
+    if not user.hashed_password or not verify_password(
         password,
         user.hashed_password,
     ):

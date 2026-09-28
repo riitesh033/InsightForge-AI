@@ -61,6 +61,7 @@ reportlab
 # HTTP Client
 # ==========================
 httpx
+google-auth
 
 # ==========================
 # Testing

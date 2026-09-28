@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.crud.deps import get_current_user
@@ -14,10 +14,34 @@ from app.models.subscription import (
     SubscriptionStatus,
 )
 from app.models.user import User
+from app.models.subscription import Invoice
 from app.services.payment import payment_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@router.get("/invoices/{invoice_id}")
+def download_invoice(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.user_id == current_user.id,
+    ).first()
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+    return Response(
+        content=invoice.pdf_data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{invoice.invoice_number}.pdf"'
+            )
+        },
+    )
 
 
 @router.get("/plans")

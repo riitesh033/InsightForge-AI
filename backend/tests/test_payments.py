@@ -330,7 +330,14 @@ def test_checkout_webhook_activates_bound_subscription_and_deduplicates(
     assert stored.status == SubscriptionStatus.ACTIVE
     assert stored.provider_customer_id == "cus_test"
     assert db.query(StripeWebhookEvent).count() == 1
-    assert db.query(Notification).count() == 1
+    welcome_count = db.query(Notification).filter(
+        Notification.title == "Welcome to InsightForge AI"
+    ).count()
+    assert welcome_count == 1
+    assert db.query(Notification).count() == welcome_count + 1
+    assert db.query(Notification).filter(
+        Notification.title == "Subscription updated"
+    ).count() == 1
     assert len(sent_confirmation) == 1
 
 
@@ -351,7 +358,11 @@ def test_unpaid_checkout_completion_does_not_create_a_subscription(
 
     assert response.status_code == 200
     assert db.query(Subscription).count() == 0
-    assert db.query(Notification).count() == 0
+    welcome_count = db.query(Notification).filter(
+        Notification.title == "Welcome to InsightForge AI"
+    ).count()
+    assert welcome_count == 1
+    assert db.query(Notification).count() == welcome_count
 
 
 def test_invalid_signature_is_rejected(client, monkeypatch):
@@ -571,8 +582,15 @@ def test_invoice_events_create_and_update_payment_history(
     assert payment.payment_status == expected_status
     assert payment.provider_payment_id == "in_test"
     assert payment.amount == 29
+    welcome_count = db.query(Notification).filter(
+        Notification.title == "Welcome to InsightForge AI"
+    ).count()
+    payment_notice = "Payment failed" if expected_status == "failed" else "Payment received"
+    assert db.query(Notification).filter(
+        Notification.title == payment_notice
+    ).count() == 1
     assert db.query(Notification).count() == (
-        2 if expected_status == "failed" else 1
+        welcome_count + (2 if expected_status == "failed" else 1)
     )
     if expected_status == "failed":
         assert subscription.status == SubscriptionStatus.PAST_DUE

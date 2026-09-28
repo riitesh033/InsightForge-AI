@@ -33,6 +33,7 @@ class EmailService:
         subject: str,
         html_content: str,
         text_content: Optional[str] = None,
+        attachments: list[tuple[str, bytes, str]] | None = None,
     ) -> bool:
         """Send an email to the specified recipient."""
         if not self.is_configured:
@@ -58,6 +59,18 @@ class EmailService:
                 msg.attach(MIMEText(text_content, "plain"))
 
             msg.attach(MIMEText(html_content, "html"))
+            if attachments:
+                from email.mime.base import MIMEBase
+                from email import encoders
+                for filename, content, content_type in attachments:
+                    maintype, subtype = content_type.split("/", 1)
+                    part = MIMEBase(maintype, subtype)
+                    part.set_payload(content)
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition", "attachment", filename=filename
+                    )
+                    msg.attach(part)
 
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
@@ -69,6 +82,18 @@ class EmailService:
             # Never leak SMTP errors/credentials to callers or clients.
             logger.exception("Failed to send email to %s", to_email)
             return False
+
+    async def send_registration_email(self, to_email: str, user_name: str) -> bool:
+        login_url = f"{settings.FRONTEND_URL.rstrip('/')}/login"
+        return await self.send_email(
+            to_email,
+            "Welcome to InsightForge AI",
+            f"<h1>Welcome, {user_name}!</h1><p>Your account was created successfully.</p>"
+            f'<p><a href="{login_url}">Log in to InsightForge AI</a></p>'
+            f"<p>If you did not create this account, contact {settings.SUPPORT_EMAIL}.</p>",
+            f"Welcome, {user_name}!\n\nYour account was created successfully.\n"
+            f"Log in: {login_url}\n\nSupport: {settings.SUPPORT_EMAIL}",
+        )
 
     async def send_password_reset_email(
         self,
@@ -116,6 +141,7 @@ class EmailService:
         transaction_id: str,
         purchase_date: str,
         features: list[str],
+        attachment: tuple[str, bytes, str] | None = None,
     ) -> bool:
         """Send purchase confirmation email."""
         subject = f"Thank you for your {plan_type.capitalize()} subscription!"
@@ -232,7 +258,10 @@ Best regards,
 The InsightForge AI Team
         """
 
-        return await self.send_email(to_email, subject, html_content, text_content)
+        return await self.send_email(
+            to_email, subject, html_content, text_content,
+            [attachment] if attachment else None,
+        )
 
     async def send_password_reset(
         self,

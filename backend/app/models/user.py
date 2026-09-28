@@ -37,9 +37,17 @@ class User(Base):
         nullable=False,
     )
 
-    hashed_password: Mapped[str] = mapped_column(
+    hashed_password: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
+    )
+
+    google_id: Mapped[str | None] = mapped_column(
+        String(255), unique=True, nullable=True, index=True
+    )
+
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
     )
 
     profile_picture: Mapped[str | None] = mapped_column(

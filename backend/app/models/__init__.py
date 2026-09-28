@@ -9,6 +9,7 @@ from .subscription import (
     StripeWebhookEvent,
     PlanType,
     SubscriptionStatus,
+    Invoice,
 )
 from .notification import Notification, NotificationType
 
@@ -25,4 +26,5 @@ __all__ = [
     "SubscriptionStatus",
     "Notification",
     "NotificationType",
+    "Invoice",
 ]
