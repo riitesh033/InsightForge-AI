@@ -2,6 +2,7 @@
 
 import asyncio
 import smtplib
+from http.cookies import SimpleCookie
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 from fastapi import BackgroundTasks
@@ -202,11 +203,165 @@ class TestRegister:
 
 
 class TestGoogleOAuth:
+    def test_login_sets_secure_cross_site_cookies_at_callback_path(
+        self,
+        client,
+        monkeypatch,
+    ):
+        from app.api.v1.endpoints import auth as auth_module
+
+        callback_url = (
+            "https://insightforge-ai-backend-85vm.onrender.com"
+            "/api/v1/auth/google/callback"
+        )
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setattr(settings, "GOOGLE_CALLBACK_URL", callback_url)
+        monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+
+        response = client.get(f"{API}/auth/google/login")
+
+        assert response.status_code == 200
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        assert len(set_cookie_headers) == 2
+        for cookie_name in ("google_oauth_state", "google_oauth_nonce"):
+            header = next(
+                value
+                for value in set_cookie_headers
+                if value.startswith(f"{cookie_name}=")
+            )
+            cookie = SimpleCookie()
+            cookie.load(header)
+            morsel = cookie[cookie_name]
+            assert morsel["httponly"]
+            assert morsel["secure"]
+            assert morsel["samesite"].lower() == "none"
+            assert morsel["path"] == "/api/v1/auth/google/callback"
+
+    def test_callback_rejects_missing_state_cookie(self, client, monkeypatch):
+        frontend_url = "https://frontend.example.test"
+        monkeypatch.setattr(settings, "FRONTEND_URL", frontend_url)
+        monkeypatch.setattr(
+            settings,
+            "GOOGLE_CALLBACK_URL",
+            "https://backend.example.test/api/v1/auth/google/callback",
+        )
+
+        response = client.get(
+            f"{API}/auth/google/callback",
+            params={"code": "test-code", "state": "test-state"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            f"{frontend_url}/login?google_error=invalid_state"
+        )
+        assert "google_oauth_state=" in response.headers.get("set-cookie", "")
+
+    def test_callback_rejects_mismatched_state(self, client, monkeypatch):
+        frontend_url = "https://frontend.example.test"
+        monkeypatch.setattr(settings, "FRONTEND_URL", frontend_url)
+        monkeypatch.setattr(
+            settings,
+            "GOOGLE_CALLBACK_URL",
+            "https://backend.example.test/api/v1/auth/google/callback",
+        )
+
+        response = client.get(
+            f"{API}/auth/google/callback",
+            params={"code": "test-code", "state": "state-from-google"},
+            cookies={
+                "google_oauth_state": "different-state",
+                "google_oauth_nonce": "test-nonce",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            f"{frontend_url}/login?google_error=invalid_state"
+        )
+
+    def test_callback_rejects_invalid_nonce_without_logging_secrets(
+        self,
+        client,
+        monkeypatch,
+        caplog,
+    ):
+        from google.oauth2 import id_token
+        from app.api.v1.endpoints import auth as auth_module
+
+        frontend_url = "https://frontend.example.test"
+        monkeypatch.setattr(settings, "FRONTEND_URL", frontend_url)
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setattr(
+            settings,
+            "GOOGLE_CALLBACK_URL",
+            "https://backend.example.test/api/v1/auth/google/callback",
+        )
+
+        class FakeTokenResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"id_token": "sensitive-google-id-token"}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def post(self, url, data):
+                return FakeTokenResponse()
+
+        monkeypatch.setattr(auth_module.httpx, "AsyncClient", FakeAsyncClient)
+        monkeypatch.setattr(
+            id_token,
+            "verify_oauth2_token",
+            lambda token, request, audience: {
+                "nonce": "nonce-from-different-login",
+                "email": "google-user@example.com",
+                "sub": "google-subject-id",
+                "email_verified": True,
+            },
+        )
+
+        response = client.get(
+            f"{API}/auth/google/callback",
+            params={"code": "sensitive-authorization-code", "state": "valid-state"},
+            cookies={
+                "google_oauth_state": "valid-state",
+                "google_oauth_nonce": "expected-nonce",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            f"{frontend_url}/login?google_error=invalid_state"
+        )
+        for secret in (
+            "sensitive-google-id-token",
+            "sensitive-authorization-code",
+            "expected-nonce",
+            "nonce-from-different-login",
+        ):
+            assert secret not in caplog.text
+
     def test_new_user_and_repeat_login_authenticate_without_duplicate_email(
         self,
         client,
         db,
         monkeypatch,
+        caplog,
     ):
         from google.oauth2 import id_token
         from app.api.v1.endpoints import auth as auth_module
@@ -280,6 +435,14 @@ class TestGoogleOAuth:
             )
             expected_nonce = authorization_params["nonce"][0]
             assert authorization_params["redirect_uri"] == [callback_url]
+            cookie_values = {}
+            for cookie_header in authorization.headers.get_list("set-cookie"):
+                cookie = SimpleCookie()
+                cookie.load(cookie_header)
+                cookie_values.update({
+                    name: morsel.value
+                    for name, morsel in cookie.items()
+                })
 
             callback = client.get(
                 f"{API}/auth/google/callback",
@@ -287,6 +450,7 @@ class TestGoogleOAuth:
                     "code": f"test-code-{len(exchanged_code)}",
                     "state": authorization_params["state"][0],
                 },
+                cookies=cookie_values,
                 follow_redirects=False,
             )
             assert callback.status_code == 303
@@ -297,6 +461,7 @@ class TestGoogleOAuth:
         assert first_redirect.netloc == "insightforge-ai-72pf.onrender.com"
         assert first_redirect.path == "/auth/google/callback"
         first_token = parse_qs(first_redirect.fragment)["access_token"][0]
+        assert first_token
         first_user = client.get(
             f"{API}/users/me",
             headers={"Authorization": f"Bearer {first_token}"},
@@ -319,6 +484,16 @@ class TestGoogleOAuth:
         ).count() == 1
         assert exchanged_code == ["test-code-0", "test-code-1"]
         assert welcome_emails == [("google-user@example.com", "Google User")]
+        for sensitive_value in (
+            "test-client-secret",
+            "test-google-id-token",
+            "test-code-0",
+            "test-code-1",
+            expected_nonce,
+            first_token,
+            second_token,
+        ):
+            assert sensitive_value not in caplog.text
 
 
 class TestRegistrationEmailService:

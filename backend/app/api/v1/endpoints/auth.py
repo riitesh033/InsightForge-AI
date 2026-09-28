@@ -124,10 +124,10 @@ def begin_google_login(response: Response) -> dict[str, str]:
     cookie_path = urlsplit(callback_url).path
     cookie_options = {
         "httponly": True,
-        "secure": settings.is_production,
-        "samesite": "lax",
+        "secure": True,
+        "samesite": "none",
         "max_age": 600,
-        "path": cookie_path,
+        "path": cookie_path or "/",
     }
     response.set_cookie("google_oauth_state", state, **cookie_options)
     response.set_cookie("google_oauth_nonce", nonce, **cookie_options)
@@ -172,9 +172,9 @@ async def google_callback(
             response.delete_cookie(
                 cookie_name,
                 path=path,
-                secure=settings.is_production,
+                secure=True,
                 httponly=True,
-                samesite="lax",
+                samesite="none",
             )
         return response
 
