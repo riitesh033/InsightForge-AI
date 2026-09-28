@@ -4,7 +4,7 @@ from urllib.parse import urlencode, urlsplit
 
 import httpx
 from app.core.config import settings
-from app.services.email import email_service
+from app.services.email import build_password_reset_url, email_service
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ async def forgot_password(
     # Generate a signed reset token (1 hour expiry).
     reset_token = create_password_reset_token(email=request.email)
 
-    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+    reset_url = build_password_reset_url(reset_token)
 
     # Send the reset email through the email service. The service itself
     # decides whether SMTP is configured; failures are logged server-side

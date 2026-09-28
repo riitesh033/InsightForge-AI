@@ -1,9 +1,23 @@
 import logging
 from typing import Optional
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def build_password_reset_url(reset_token: str) -> str:
+    frontend_url = urlsplit(settings.FRONTEND_URL)
+    return urlunsplit(
+        (
+            frontend_url.scheme,
+            frontend_url.netloc,
+            f"{frontend_url.path.rstrip('/')}/reset-password",
+            urlencode({"token": reset_token}),
+            "",
+        )
+    )
 
 
 class EmailService:
@@ -270,8 +284,7 @@ The InsightForge AI Team
         reset_token: str,
     ) -> bool:
         """Send password reset email."""
-        frontend_url = settings.FRONTEND_URL
-        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+        reset_link = build_password_reset_url(reset_token)
 
         subject = "Reset Your Password - InsightForge AI"
 

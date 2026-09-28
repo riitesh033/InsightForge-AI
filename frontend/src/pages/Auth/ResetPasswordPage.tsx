@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import api, { getApiErrorMessage } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api";
+import { resetPassword } from "@/services/auth";
 import { toast } from "sonner";
 
 const schema = z
@@ -37,10 +38,7 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     try {
-      await api.post("/auth/reset-password", {
-        token,
-        new_password: data.new_password,
-      });
+      await resetPassword(token, data.new_password);
       toast.success("Password reset successful. Please log in.");
       navigate("/login");
     } catch (error) {

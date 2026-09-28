@@ -1,6 +1,7 @@
 """PHASE 4/5/6 — Authentication, password management and reset flow tests."""
 
 from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlsplit
 
 from jose import jwt
 
@@ -12,6 +13,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
+from app.services.email import build_password_reset_url
 
 API = "/api/v1"
 
@@ -222,6 +224,20 @@ class TestChangePassword:
 # ---------------------------------------------------------------------------
 
 class TestForgotPassword:
+    def test_reset_url_encodes_token_and_trims_frontend_slash(self, monkeypatch):
+        monkeypatch.setattr(
+            settings,
+            "FRONTEND_URL",
+            "https://frontend.example.test/",
+        )
+
+        reset_url = build_password_reset_url("token+with/slash=")
+        parsed_url = urlsplit(reset_url)
+
+        assert parsed_url.path == "/reset-password"
+        assert parsed_url.query == "token=token%2Bwith%2Fslash%3D"
+        assert parse_qs(parsed_url.query)["token"] == ["token+with/slash="]
+
     def test_known_email_sends_email_with_token_url(self, client, user_dict, monkeypatch):
         from app.api.v1.endpoints import auth as auth_module
 
@@ -234,6 +250,11 @@ class TestForgotPassword:
         monkeypatch.setattr(
             auth_module.email_service, "send_password_reset_email", fake_send
         )
+        monkeypatch.setattr(
+            auth_module.settings,
+            "FRONTEND_URL",
+            "https://frontend.example.test/",
+        )
 
         r = client.post(f"{API}/auth/forgot-password", json={"email": user_dict["email"]})
         assert r.status_code == 200
@@ -244,12 +265,29 @@ class TestForgotPassword:
         # Email service invoked with correct recipient.
         assert sent["to_email"] == user_dict["email"]
         # Reset URL points at the real frontend route and carries a valid token.
-        assert sent["reset_url"].startswith(f"{settings.FRONTEND_URL}/reset-password?token=")
-        token = sent["reset_url"].split("token=", 1)[1]
+        parsed_url = urlsplit(sent["reset_url"])
+        assert parsed_url.scheme == urlsplit(settings.FRONTEND_URL).scheme
+        assert parsed_url.netloc == urlsplit(settings.FRONTEND_URL).netloc
+        assert parsed_url.path == "/reset-password"
+        assert set(parse_qs(parsed_url.query)) == {"token"}
+        token = parse_qs(parsed_url.query)["token"][0]
         payload = decode_password_reset_token(token)
         assert payload is not None
         assert payload["sub"] == user_dict["email"]
         assert payload["type"] == "password_reset"
+        reset_response = client.post(
+            f"{API}/auth/reset-password",
+            json={"token": token, "new_password": "RoundTripPass789"},
+        )
+        assert reset_response.status_code == 200
+        login_response = client.post(
+            f"{API}/auth/login",
+            data={
+                "username": user_dict["email"],
+                "password": "RoundTripPass789",
+            },
+        )
+        assert login_response.status_code == 200
         # Raw password never appears in the email URL.
         assert user_dict["password"] not in sent["reset_url"]
 
