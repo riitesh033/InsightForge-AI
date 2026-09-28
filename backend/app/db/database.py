@@ -10,8 +10,18 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_database_url(database_url: str) -> str:
+    """Select the installed psycopg2 driver for generic PostgreSQL URLs."""
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + database_url[len("postgresql://"):]
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg2://" + database_url[len("postgres://"):]
+    return database_url
+
+
 engine = create_engine(
-    settings.DATABASE_URL,
+    normalize_database_url(settings.DATABASE_URL),
     echo=settings.DEBUG,
     future=True,
 )
@@ -30,7 +40,8 @@ def run_migrations() -> None:
     from alembic.config import Config
 
     cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+    alembic_url = normalize_database_url(settings.DATABASE_URL).replace("%", "%%")
+    cfg.set_main_option("sqlalchemy.url", alembic_url)
     command.upgrade(cfg, "head")
     logger.info("Database migrations are at Alembic head.")
 

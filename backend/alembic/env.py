@@ -5,15 +5,18 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.base import Base
+from app.db.database import normalize_database_url
 
 import app.models
 
 config = context.config
 
-# Override alembic.ini with DATABASE_URL from .env
+database_url = normalize_database_url(settings.DATABASE_URL)
+
+# ConfigParser interpolation requires percent signs in encoded credentials doubled.
 config.set_main_option(
     "sqlalchemy.url",
-    settings.DATABASE_URL,
+    database_url.replace("%", "%%"),
 )
 
 if config.config_file_name is not None:
