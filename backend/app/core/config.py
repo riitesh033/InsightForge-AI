@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = "no-reply@insightforge.ai"
+    SMTP_FROM_EMAIL: str = ""
     SMTP_FROM_NAME: str = "InsightForge AI"
     SUPPORT_EMAIL: str = "support@insightforge.ai"
     BUSINESS_NAME: str = "InsightForge AI"

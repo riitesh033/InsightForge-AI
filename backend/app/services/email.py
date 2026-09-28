@@ -35,11 +35,17 @@ class EmailService:
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
-        self.is_configured = all([
-            self.smtp_host,
-            self.smtp_user,
-            self.smtp_password,
-        ])
+        self.missing_configuration = tuple(
+            name
+            for name, value in (
+                ("SMTP_HOST", self.smtp_host),
+                ("SMTP_USERNAME", self.smtp_user),
+                ("SMTP_PASSWORD", self.smtp_password),
+                ("SMTP_FROM_EMAIL", self.from_email),
+            )
+            if not value
+        )
+        self.is_configured = not self.missing_configuration
 
     async def send_email(
         self,
@@ -51,13 +57,11 @@ class EmailService:
     ) -> bool:
         """Send an email to the specified recipient."""
         if not self.is_configured:
-            # Log warning but don't fail - allow development without email
             logger.warning(
-                "SMTP not configured; email to %s skipped (%s)",
-                to_email,
-                subject,
+                "SMTP email skipped; missing configuration: %s",
+                ", ".join(self.missing_configuration),
             )
-            return True
+            return False
 
         try:
             import smtplib
@@ -92,9 +96,11 @@ class EmailService:
                 server.send_message(msg)
 
             return True
-        except Exception:
-            # Never leak SMTP errors/credentials to callers or clients.
-            logger.exception("Failed to send email to %s", to_email)
+        except Exception as error:
+            logger.error(
+                "SMTP email delivery failed (%s)",
+                type(error).__name__,
+            )
             return False
 
     async def send_registration_email(self, to_email: str, user_name: str) -> bool:
@@ -121,8 +127,8 @@ class EmailService:
         """
         if not self.is_configured:
             logger.warning(
-                "SMTP not configured; password reset email to %s skipped.",
-                to_email,
+                "SMTP password-reset email skipped; missing configuration: %s",
+                ", ".join(self.missing_configuration),
             )
             return
 

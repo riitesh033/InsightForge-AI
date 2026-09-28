@@ -76,7 +76,12 @@ async def register(
     ))
     db.commit()
     try:
-        await email_service.send_registration_email(created.email, created.full_name)
+        sent = await email_service.send_registration_email(
+            created.email,
+            created.full_name,
+        )
+        if not sent:
+            logger.warning("Registration welcome email was not delivered.")
     except Exception as error:
         logger.error("Registration email failed (%s)", type(error).__name__)
     return created
@@ -239,7 +244,12 @@ async def google_callback(
     db.commit()
     if is_new:
         try:
-            await email_service.send_registration_email(user.email, user.full_name)
+            sent = await email_service.send_registration_email(
+                user.email,
+                user.full_name,
+            )
+            if not sent:
+                logger.warning("Google registration welcome email was not delivered.")
         except Exception as error:
             logger.error("Google registration email failed (%s)", type(error).__name__)
     access_token = create_access_token(user.email)

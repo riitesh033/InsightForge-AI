@@ -1,5 +1,7 @@
 """PHASE 4/5/6 — Authentication, password management and reset flow tests."""
 
+import asyncio
+import smtplib
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
@@ -13,7 +15,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.services.email import build_password_reset_url
+from app.services.email import EmailService, build_password_reset_url
 
 API = "/api/v1"
 
@@ -23,6 +25,85 @@ API = "/api/v1"
 # ---------------------------------------------------------------------------
 
 class TestRegister:
+    def test_registration_attempts_welcome_email(
+        self,
+        client,
+        monkeypatch,
+    ):
+        from app.api.v1.endpoints import auth as auth_module
+
+        sent = []
+
+        async def fake_send(to_email, user_name):
+            sent.append((to_email, user_name))
+            return True
+
+        monkeypatch.setattr(
+            auth_module.email_service,
+            "send_registration_email",
+            fake_send,
+        )
+        response = client.post(f"{API}/auth/register", json={
+            "full_name": "New User",
+            "email": "new-user@example.com",
+            "password": "Password123",
+        })
+
+        assert response.status_code == 201
+        assert sent == [("new-user@example.com", "New User")]
+
+    def test_email_failure_does_not_fail_registration_or_leak_error(
+        self,
+        client,
+        monkeypatch,
+        caplog,
+    ):
+        from app.api.v1.endpoints import auth as auth_module
+
+        sensitive_error = "test-only-provider-error"
+
+        async def failed_send(to_email, user_name):
+            raise OSError(sensitive_error)
+
+        monkeypatch.setattr(
+            auth_module.email_service,
+            "send_registration_email",
+            failed_send,
+        )
+        response = client.post(f"{API}/auth/register", json={
+            "full_name": "Email Failure",
+            "email": "email-failure@example.com",
+            "password": "Password123",
+        })
+
+        assert response.status_code == 201
+        assert response.json()["email"] == "email-failure@example.com"
+        assert sensitive_error not in caplog.text
+
+    def test_unconfigured_smtp_reports_not_sent_without_blocking_registration(
+        self,
+        client,
+        monkeypatch,
+    ):
+        from app.api.v1.endpoints import auth as auth_module
+
+        async def not_configured(to_email, user_name):
+            return False
+
+        monkeypatch.setattr(
+            auth_module.email_service,
+            "send_registration_email",
+            not_configured,
+        )
+        response = client.post(f"{API}/auth/register", json={
+            "full_name": "Email Not Configured",
+            "email": "email-not-configured@example.com",
+            "password": "Password123",
+        })
+
+        assert response.status_code == 201
+        assert response.json()["email"] == "email-not-configured@example.com"
+
     def test_successful_registration(self, client):
         r = client.post(f"{API}/auth/register", json={
             "full_name": "Bob New",
@@ -77,6 +158,211 @@ class TestRegister:
         assert user.hashed_password != "PlainSecret99"
         assert user.hashed_password.startswith("$2")  # bcrypt
         assert verify_password("PlainSecret99", user.hashed_password)
+
+
+class TestGoogleOAuth:
+    def test_new_user_and_repeat_login_authenticate_without_duplicate_email(
+        self,
+        client,
+        db,
+        monkeypatch,
+    ):
+        from google.oauth2 import id_token
+        from app.api.v1.endpoints import auth as auth_module
+
+        callback_url = (
+            "https://insightforge-ai-backend-85vm.onrender.com"
+            "/api/v1/auth/google/callback"
+        )
+        frontend_url = "https://insightforge-ai-72pf.onrender.com"
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setattr(settings, "GOOGLE_CALLBACK_URL", callback_url)
+        monkeypatch.setattr(settings, "FRONTEND_URL", frontend_url)
+
+        expected_nonce = ""
+        exchanged_code = []
+        welcome_emails = []
+
+        class FakeTokenResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"id_token": "test-google-id-token"}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def post(self, url, data):
+                assert url == "https://oauth2.googleapis.com/token"
+                assert data["redirect_uri"] == callback_url
+                exchanged_code.append(data["code"])
+                return FakeTokenResponse()
+
+        async def fake_welcome_email(to_email, user_name):
+            welcome_emails.append((to_email, user_name))
+            return True
+
+        monkeypatch.setattr(auth_module.httpx, "AsyncClient", FakeAsyncClient)
+        monkeypatch.setattr(
+            id_token,
+            "verify_oauth2_token",
+            lambda token, request, audience: {
+                "nonce": expected_nonce,
+                "email": "google-user@example.com",
+                "sub": "google-subject-id",
+                "email_verified": True,
+                "name": "Google User",
+                "picture": "https://example.test/avatar.png",
+            },
+        )
+        monkeypatch.setattr(
+            auth_module.email_service,
+            "send_registration_email",
+            fake_welcome_email,
+        )
+
+        def authorize_and_return():
+            nonlocal expected_nonce
+            authorization = client.get(f"{API}/auth/google/login")
+            assert authorization.status_code == 200
+            authorization_params = parse_qs(
+                urlsplit(authorization.json()["authorization_url"]).query
+            )
+            expected_nonce = authorization_params["nonce"][0]
+            assert authorization_params["redirect_uri"] == [callback_url]
+
+            callback = client.get(
+                f"{API}/auth/google/callback",
+                params={
+                    "code": f"test-code-{len(exchanged_code)}",
+                    "state": authorization_params["state"][0],
+                },
+                follow_redirects=False,
+            )
+            assert callback.status_code == 303
+            return urlsplit(callback.headers["location"])
+
+        first_redirect = authorize_and_return()
+        assert first_redirect.scheme == "https"
+        assert first_redirect.netloc == "insightforge-ai-72pf.onrender.com"
+        assert first_redirect.path == "/auth/google/callback"
+        first_token = parse_qs(first_redirect.fragment)["access_token"][0]
+        first_user = client.get(
+            f"{API}/users/me",
+            headers={"Authorization": f"Bearer {first_token}"},
+        )
+        assert first_user.status_code == 200
+        assert first_user.json()["email"] == "google-user@example.com"
+        first_user_id = first_user.json()["id"]
+
+        second_redirect = authorize_and_return()
+        second_token = parse_qs(second_redirect.fragment)["access_token"][0]
+        second_user = client.get(
+            f"{API}/users/me",
+            headers={"Authorization": f"Bearer {second_token}"},
+        )
+
+        assert second_user.status_code == 200
+        assert second_user.json()["id"] == first_user_id
+        assert db.query(User).filter(
+            User.email == "google-user@example.com"
+        ).count() == 1
+        assert exchanged_code == ["test-code-0", "test-code-1"]
+        assert welcome_emails == [("google-user@example.com", "Google User")]
+
+
+class TestRegistrationEmailService:
+    def test_uses_configured_smtp_and_verified_sender(
+        self,
+        monkeypatch,
+    ):
+        from app.services import email as email_module
+
+        monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.test")
+        monkeypatch.setattr(settings, "SMTP_PORT", 587)
+        monkeypatch.setattr(settings, "SMTP_USERNAME", "test-smtp-login")
+        monkeypatch.setattr(settings, "SMTP_PASSWORD", "test-smtp-password")
+        monkeypatch.setattr(
+            settings,
+            "SMTP_FROM_EMAIL",
+            "verified-sender@example.test",
+        )
+        monkeypatch.setattr(settings, "SMTP_FROM_NAME", "InsightForge Test")
+        sent = {}
+
+        class FakeSMTP:
+            def __init__(self, host, port):
+                sent["host"] = host
+                sent["port"] = port
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def starttls(self):
+                sent["starttls"] = True
+
+            def login(self, username, password):
+                sent["username"] = username
+                sent["password"] = password
+
+            def send_message(self, message):
+                sent["from"] = message["From"]
+                sent["to"] = message["To"]
+
+        monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+        service = EmailService()
+
+        delivered = asyncio.run(
+            service.send_registration_email(
+                "new-user@example.test",
+                "New User",
+            )
+        )
+
+        assert delivered is True
+        assert sent == {
+            "host": "smtp.example.test",
+            "port": 587,
+            "starttls": True,
+            "username": "test-smtp-login",
+            "password": "test-smtp-password",
+            "from": "InsightForge Test <verified-sender@example.test>",
+            "to": "new-user@example.test",
+        }
+
+    def test_unconfigured_smtp_returns_false_without_secret_values(
+        self,
+        monkeypatch,
+        caplog,
+    ):
+        monkeypatch.setattr(settings, "SMTP_HOST", "")
+        monkeypatch.setattr(settings, "SMTP_USERNAME", "")
+        monkeypatch.setattr(settings, "SMTP_PASSWORD", "")
+        monkeypatch.setattr(settings, "SMTP_FROM_EMAIL", "")
+
+        delivered = asyncio.run(
+            EmailService().send_registration_email(
+                "new-user@example.test",
+                "New User",
+            )
+        )
+
+        assert delivered is False
+        assert "SMTP_HOST" in caplog.text
+        assert "SMTP_FROM_EMAIL" in caplog.text
+        assert "test-smtp-password" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
