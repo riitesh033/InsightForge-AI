@@ -19,6 +19,7 @@ import {
 } from "@/utils/storage";
 
 import {
+  adminLogin as adminLoginService,
   login as loginService,
   register as registerService,
 } from "@/services/auth";
@@ -167,6 +168,27 @@ export function AuthProvider({
     await fetchCurrentUser(accessToken);
   }
 
+  async function loginAdmin(
+    email: string,
+    password: string
+  ): Promise<void> {
+    clearAuthStorage();
+    setUser(null);
+    setToken(null);
+
+    const response = await adminLoginService(email, password);
+    saveToken(response.access_token);
+    setToken(response.access_token);
+
+    const authenticatedUser = await fetchCurrentUser(response.access_token);
+    if (!authenticatedUser.is_superuser) {
+      clearAuthStorage();
+      setUser(null);
+      setToken(null);
+      throw new Error("Administrator access could not be verified.");
+    }
+  }
+
   async function loginWithGoogle(): Promise<void> {
     window.location.assign(`${API_BASE_URL}/auth/google/login`);
   }
@@ -239,6 +261,7 @@ export function AuthProvider({
     token,
     loading,
     login,
+    loginAdmin,
     loginWithGoogle,
     completeGoogleLogin,
     register,

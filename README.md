@@ -337,14 +337,18 @@ an antivirus scanner is not configured.
 ### Administrator account management
 
 Admin access is controlled by the database-backed `users.is_superuser` field.
-The field defaults to false for registered and Google-created accounts. There
-is no automatic admin bootstrap. From the backend service shell, inspect current
-admin accounts with `python -m app.scripts.create_admin --list`, check a
-specific existing account with
-`python -m app.scripts.create_admin --email <ADMIN_EMAIL> --check`, or promote
-an existing account with `python -m app.scripts.create_admin --email <ADMIN_EMAIL>`.
-Promotion requires typing `PROMOTE` at the prompt; no user data, password, or
-credential is created or replaced.
+The field defaults to false for registered and Google-created accounts. Admins
+sign in at `/admin/login`; the dedicated form calls
+`POST /api/v1/auth/admin/login`, which uses the normal password hash and JWT
+implementation and refuses accounts without current database admin status.
+There is no automatic admin bootstrap.
+
+From the backend service shell, run `python -m app.scripts.create_admin`.
+The command prompts for the existing account email and hidden password entry
+(plus password confirmation), then sets the new password using the existing
+hashing implementation and enables `is_superuser`. It will not create a user.
+To check an account, run `python -m app.scripts.create_admin --check`; enter
+the account email when prompted. The check never requests or changes a password.
 
 ### Frontend (.env)
 
@@ -365,6 +369,7 @@ Key endpoints:
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register new user |
 | POST | `/api/v1/auth/login` | Login user |
+| POST | `/api/v1/auth/admin/login` | Admin-only credential login |
 | GET | `/api/v1/users/me` | Get current user |
 | POST | `/api/v1/datasets/` | Upload dataset |
 | GET | `/api/v1/datasets/` | List user datasets |

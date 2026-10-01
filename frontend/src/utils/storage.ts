@@ -1,6 +1,7 @@
 //
 // Authentication Storage Utilities
 //
+import { clearAuthSession } from "./authSession.js";
 
 // =========================
 // Storage Keys
@@ -100,8 +101,7 @@ export function removeUser(): void {
  * Clear all authentication-related data.
  */
 export function clearAuthStorage(): void {
-  removeToken();
-  removeUser();
+  clearAuthSession(localStorage);
 }
 
 

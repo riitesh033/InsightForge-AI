@@ -1,20 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getAdminRouteAccess } from "./adminAccess.js";
+import {
+  getAdminLogoutDestination,
+  getAdminRouteAccess,
+} from "./adminAccess.js";
 
-test("allows the admin route only for an authenticated superuser", () => {
+test("admin route redirects unauthenticated users to admin login", () => {
   assert.equal(
-    getAdminRouteAccess({ id: 10, is_superuser: true }),
+    getAdminRouteAccess({ loading: false, user: null }),
+    "admin-login"
+  );
+});
+
+test("admin route allows superusers and denies normal users", () => {
+  assert.equal(
+    getAdminRouteAccess({
+      loading: false,
+      user: { id: 10, is_superuser: true },
+    }),
     "allowed"
   );
   assert.equal(
-    getAdminRouteAccess({ id: 11, is_superuser: false }),
+    getAdminRouteAccess({
+      loading: false,
+      user: { id: 11, is_superuser: false },
+    }),
     "forbidden"
   );
   assert.equal(
-    getAdminRouteAccess({ id: 12 }),
+    getAdminRouteAccess({
+      loading: false,
+      user: { id: 12 },
+    }),
     "forbidden"
   );
-  assert.equal(getAdminRouteAccess(null), "forbidden");
+});
+
+test("admin route waits for server-backed session restoration", () => {
+  assert.equal(
+    getAdminRouteAccess({ loading: true, user: null }),
+    "loading"
+  );
+});
+
+test("admin logout returns to the dedicated login route", () => {
+  assert.equal(getAdminLogoutDestination(), "/admin/login");
+});
+
+test("admin logout clears the shared application token and user storage", async () => {
+  const { clearAuthSession } = await import("../utils/authSession.js");
+  const removedKeys = [];
+  clearAuthSession({
+    removeItem: (key) => removedKeys.push(key),
+  });
+  assert.deepEqual(removedKeys, ["access_token", "user"]);
 });

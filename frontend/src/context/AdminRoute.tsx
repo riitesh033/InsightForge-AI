@@ -10,10 +10,14 @@ export const AdminRoute: React.FC = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const { user, loading } = authContext;
-
-  if (loading) return <div>Loading...</div>;
-  if (getAdminRouteAccess(user) !== "allowed") {
+  const routeAccess = getAdminRouteAccess(authContext);
+  if (routeAccess === "loading") {
+    return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
+  }
+  if (routeAccess === "admin-login") {
+    return <Navigate to="/admin/login" replace />;
+  }
+  if (routeAccess === "forbidden") {
     return <Navigate to="/forbidden" replace />;
   }
 

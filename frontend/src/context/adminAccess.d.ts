@@ -1,3 +1,8 @@
 export function getAdminRouteAccess(
-  user: { is_superuser?: boolean } | null
-): "allowed" | "forbidden";
+  auth: {
+    loading: boolean;
+    user: { is_superuser?: boolean } | null;
+  }
+): "loading" | "admin-login" | "forbidden" | "allowed";
+
+export function getAdminLogoutDestination(): string;

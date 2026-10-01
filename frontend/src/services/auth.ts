@@ -64,6 +64,18 @@ export async function login(
   return response.data;
 }
 
+export async function adminLogin(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  const response = await api.post<LoginResponse>("/auth/admin/login", {
+    email: email.trim(),
+    password,
+  });
+
+  return response.data;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Register

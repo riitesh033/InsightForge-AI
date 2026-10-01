@@ -35,6 +35,7 @@ from app.schemas.user import (
     ResetPasswordRequest,
     Token,
     UserCreate,
+    UserLogin,
     UserResponse,
 )
 from app.services.email import build_password_reset_url, email_service
@@ -461,6 +462,33 @@ def login(
         subject=user.email,
     )
 
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post(
+    "/admin/login",
+    response_model=Token,
+)
+def admin_login(
+    credentials: UserLogin,
+    db: Session = Depends(get_db),
+):
+    user = authenticate_user(
+        db=db,
+        email=str(credentials.email).strip().lower(),
+        password=credentials.password,
+    )
+    if user is None or not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials or administrator access not permitted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(subject=user.email)
     return {
         "access_token": access_token,
         "token_type": "bearer",

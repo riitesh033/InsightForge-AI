@@ -34,6 +34,11 @@ export interface AuthContextType {
     password: string
   ) => Promise<void>;
 
+  loginAdmin: (
+    email: string,
+    password: string
+  ) => Promise<void>;
+
   loginWithGoogle: () => Promise<void>;
   completeGoogleLogin: (accessToken: string) => Promise<void>;
 

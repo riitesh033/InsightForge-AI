@@ -12,6 +12,7 @@ import RegisterPage from "@/pages/Auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/Auth/ForgotPassword";
 import ResetPasswordPage from "@/pages/Auth/ResetPasswordPage";
 import GoogleCallbackPage from "@/pages/Auth/GoogleCallbackPage";
+import AdminLoginPage from "@/pages/Auth/AdminLoginPage";
 
 import DashboardPage from "@/pages/Dashboard/DashBoardPage";
 import UploadDatasetPage from "@/pages/Dashboard/UploadDatasetPage";
@@ -26,6 +27,7 @@ import PaymentHistoryPage from "@/pages/Dashboard/PaymentHistoryPage";
 import { AdminDashboard } from "@/pages/Dashboard/AdminDashboard";
 import StudentVerificationPage from "@/pages/Dashboard/StudentVerificationPage";
 import AdminStudentVerificationPage from "@/pages/Dashboard/AdminStudentVerificationPage";
+import AdminLayout from "@/layouts/AdminLayout";
 
 import NotFoundPage from "@/pages/Error/NotFoundPage";
 import ForbiddenPage from "@/pages/Error/ForbiddenPage";
@@ -75,6 +77,10 @@ export default function AppRouter() {
         element={<ResetPasswordPage />} />
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
+      </Route>
+
+      <Route element={<AuthLayout />}>
+        <Route path="/admin/login" element={<AdminLoginPage />} />
       </Route>
 
 
@@ -163,16 +169,16 @@ export default function AppRouter() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
-            <AdminRoute />
-          </ProtectedRoute>
+          <AdminRoute />
         }
       >
-        <Route index element={<AdminDashboard />} />
-        <Route
-          path="student-verifications"
-          element={<AdminStudentVerificationPage />}
-        />
+        <Route element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route
+            path="student-verifications"
+            element={<AdminStudentVerificationPage />}
+          />
+        </Route>
       </Route>
 
       <Route
