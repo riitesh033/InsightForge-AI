@@ -1,4 +1,5 @@
 import base64
+import html
 import logging
 from typing import Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -257,6 +258,45 @@ class EmailService:
         return await self.send_email(
             to_email=recipient,
             subject="InsightForge AI — Password Reset",
+            html_content=html_content,
+            text_content=text_content,
+        )
+
+    async def send_student_verification_email(
+        self,
+        to_email: str,
+        applicant_name: str,
+        decision: str,
+        reason: str | None = None,
+    ) -> bool:
+        """Notify a student of a review decision without attaching proof."""
+        safe_name = html.escape(applicant_name)
+        safe_reason = html.escape(reason or "")
+        is_approved = decision == "approved"
+        message = (
+            "Your student verification was approved. "
+            "Student Pro access is active for 365 days."
+            if is_approved
+            else "Your student verification application was not approved."
+        )
+        subject = (
+            "Student verification approved"
+            if is_approved
+            else "Student verification update"
+        )
+        reason_markup = (
+            f"<p>Review note: {safe_reason}</p>" if safe_reason else ""
+        )
+        html_content = (
+            f"<p>Hello {safe_name},</p><p>{message}</p>{reason_markup}"
+            "<p>Sign in to InsightForge AI to review your application status.</p>"
+        )
+        text_content = f"Hello {applicant_name},\n\n{message}"
+        if reason:
+            text_content += f"\n\nReview note: {reason}"
+        return await self.send_email(
+            to_email=to_email,
+            subject=subject,
             html_content=html_content,
             text_content=text_content,
         )

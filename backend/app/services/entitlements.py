@@ -9,6 +9,10 @@ from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.models.dataset import Dataset
 from app.models.subscription import Subscription
+from app.models.student_verification import (
+    StudentVerificationApplication,
+    StudentVerificationStatus,
+)
 from app.models.user import User
 from app.services.payment import payment_service
 
@@ -41,6 +45,25 @@ def resolve_plan(db: Session, user_id: int) -> tuple[str, dict[str, Any]]:
             and (period_end is None or period_end > _utcnow_naive())
         ):
             plan_key = candidate
+
+    if plan_key == "free":
+        now = _utcnow_naive()
+        student_access = (
+            db.query(StudentVerificationApplication)
+            .filter(
+                StudentVerificationApplication.user_id == user_id,
+                StudentVerificationApplication.status
+                == StudentVerificationStatus.APPROVED,
+                StudentVerificationApplication.student_entitlement_expires_at
+                > now,
+            )
+            .order_by(
+                StudentVerificationApplication.student_entitlement_expires_at.desc()
+            )
+            .first()
+        )
+        if student_access is not None:
+            plan_key = "pro"
 
     return plan_key, payment_service.get_plan_features(plan_key)
 

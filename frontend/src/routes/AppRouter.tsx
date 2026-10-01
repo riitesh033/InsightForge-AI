@@ -24,6 +24,8 @@ import BillingPage from "@/pages/Dashboard/BillingPage";
 import SubscriptionPage from "@/pages/Dashboard/SubscriptionPage";
 import PaymentHistoryPage from "@/pages/Dashboard/PaymentHistoryPage";
 import { AdminDashboard } from "@/pages/Dashboard/AdminDashboard";
+import StudentVerificationPage from "@/pages/Dashboard/StudentVerificationPage";
+import AdminStudentVerificationPage from "@/pages/Dashboard/AdminStudentVerificationPage";
 
 import NotFoundPage from "@/pages/Error/NotFoundPage";
 import ForbiddenPage from "@/pages/Error/ForbiddenPage";
@@ -144,6 +146,11 @@ export default function AppRouter() {
           element={<PaymentHistoryPage />}
         />
 
+        <Route
+          path="student-verification"
+          element={<StudentVerificationPage />}
+        />
+
 
         {/* /dashboard/settings */}
         <Route
@@ -162,6 +169,10 @@ export default function AppRouter() {
         }
       >
         <Route index element={<AdminDashboard />} />
+        <Route
+          path="student-verifications"
+          element={<AdminStudentVerificationPage />}
+        />
       </Route>
 
       <Route

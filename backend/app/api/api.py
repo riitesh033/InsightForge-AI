@@ -12,6 +12,8 @@ from app.api.v1.endpoints import reports
 from app.api.v1.endpoints import cleaning
 from app.api.v1.endpoints import notifications
 from app.api.v1.endpoints import payments
+from app.api.v1.endpoints import student_verification
+from app.api.v1.endpoints import student_verification_admin
 
 api_router = APIRouter()
 
@@ -79,6 +81,18 @@ api_router.include_router(
     payments.router,
     prefix="/payments",
     tags=["Payments"],
+)
+
+api_router.include_router(
+    student_verification.router,
+    prefix="/student-verification",
+    tags=["Student Verification"],
+)
+
+api_router.include_router(
+    student_verification_admin.router,
+    prefix="/admin/student-verifications",
+    tags=["Admin Student Verification"],
 )
 
 api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])

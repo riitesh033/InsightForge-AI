@@ -322,6 +322,17 @@ InsightForge-AI/
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiration time | `60` |
 | `DEBUG` | Debug mode | `True` |
 | `ENVIRONMENT` | Environment name | `development` |
+| `STUDENT_VERIFICATION_STORAGE_DIR` | Private directory for student proof documents | `private_uploads/student_verification` |
+
+Student verification evidence is stored outside the frontend/static asset tree
+and is served only through authenticated admin endpoints. On Render or another
+ephemeral-filesystem host, set `STUDENT_VERIFICATION_STORAGE_DIR` to a mounted
+persistent disk directory (for example, `/var/data/student_verification`) so
+documents survive deploys. Restrict filesystem access to the backend service.
+Reviewed proof files are deleted after 90 days when student/admin verification
+API activity triggers lazy cleanup; there is no periodic cleanup scheduler yet.
+Current upload validation checks size, declared media type, and file signature;
+an antivirus scanner is not configured.
 
 ### Frontend (.env)
 
@@ -347,6 +358,11 @@ Key endpoints:
 | GET | `/api/v1/datasets/` | List user datasets |
 | GET | `/api/v1/datasets/{id}` | Get dataset details |
 | DELETE | `/api/v1/datasets/{id}` | Delete dataset |
+| GET | `/api/v1/student-verification/me` | Get student verification status |
+| POST | `/api/v1/student-verification/applications` | Submit student verification evidence |
+| GET | `/api/v1/admin/student-verifications` | Admin-only application review queue |
+| POST | `/api/v1/admin/student-verifications/{id}/approve` | Admin-only approval and one-year Pro access |
+| POST | `/api/v1/admin/student-verifications/{id}/reject` | Admin-only rejection with reason |
 | GET | `/api/v1/analysis/{dataset_id}` | Get analysis results |
 | POST | `/api/v1/chat/sessions/` | Create chat session |
 | POST | `/api/v1/chat/sessions/{id}/messages/` | Send message |

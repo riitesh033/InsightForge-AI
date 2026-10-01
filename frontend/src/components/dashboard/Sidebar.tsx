@@ -11,6 +11,7 @@ import {
   CreditCard,
   BadgeCheck,
   ReceiptText,
+  GraduationCap,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -56,6 +57,11 @@ const navigation = [
     name: "Payment History",
     href: "/dashboard/payment-history",
     icon: ReceiptText,
+  },
+  {
+    name: "Student Pro Verification",
+    href: "/dashboard/student-verification",
+    icon: GraduationCap,
   },
   {
     name: "Settings",

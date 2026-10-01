@@ -12,6 +12,10 @@ from .subscription import (
     Invoice,
 )
 from .notification import Notification, NotificationType
+from .student_verification import (
+    StudentVerificationApplication,
+    StudentVerificationStatus,
+)
 
 __all__ = [
     "User",
@@ -27,4 +31,6 @@ __all__ = [
     "Notification",
     "NotificationType",
     "Invoice",
+    "StudentVerificationApplication",
+    "StudentVerificationStatus",
 ]

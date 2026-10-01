@@ -31,6 +31,8 @@ export default function DashboardLayout() {
 
     "/dashboard/payment-history": "Payment History",
 
+    "/dashboard/student-verification": "Student Pro Verification",
+
     "/dashboard/settings": "Settings",
 
   };
@@ -60,6 +62,9 @@ export default function DashboardLayout() {
 
     "/dashboard/payment-history":
       "Review payments recorded for your account.",
+
+    "/dashboard/student-verification":
+      "Apply for student Pro access and track your verification status.",
 
     "/dashboard/settings":
       "Manage your account settings.",

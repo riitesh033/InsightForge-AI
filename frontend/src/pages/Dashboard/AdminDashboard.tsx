@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from "@/lib/api";
-import { Users, Database, FileText, Activity, CheckCircle2 } from 'lucide-react';
+import { Users, Database, FileText, Activity, CheckCircle2, GraduationCap } from 'lucide-react';
+import { Link } from "react-router-dom";
 
 interface AdminDashboardStats {
   total_users: number;
@@ -50,6 +51,13 @@ export const AdminDashboard: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-900">Admin Control Center</h1>
         <p className="text-gray-500 mt-1">Platform overview and system health metrics</p>
       </div>
+      <Link
+        to="/admin/student-verifications"
+        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700"
+      >
+        <GraduationCap className="size-5" />
+        Review student verification applications
+      </Link>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
