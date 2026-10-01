@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import PlanUpgradeLink from "@/components/payments/PlanUpgradeLink";
+import { getApiErrorDetails } from "@/lib/api";
 
 import {
   getReports,
@@ -20,6 +22,7 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(
     null
   );
@@ -36,8 +39,7 @@ export default function ReportsPage() {
 
       setReports(data);
     } catch (err) {
-      console.error("Failed to load reports:", err);
-
+      setUpgradeRequired(getApiErrorDetails(err).status === 403);
       setError(
         "Unable to load reports. Please try again."
       );
@@ -66,8 +68,7 @@ export default function ReportsPage() {
         `${baseName || "dataset"}_analysis_report.pdf`
       );
     } catch (err) {
-      console.error("Failed to download report:", err);
-
+      setUpgradeRequired(getApiErrorDetails(err).status === 403);
       setError(
         "Unable to download the report. Please try again."
       );
@@ -90,8 +91,7 @@ export default function ReportsPage() {
         window.URL.revokeObjectURL(url);
       }, 60000);
     } catch (err) {
-      console.error("Failed to preview report:", err);
-
+      setUpgradeRequired(getApiErrorDetails(err).status === 403);
       setError(
         "Unable to preview the report. Please try again."
       );
@@ -158,7 +158,10 @@ export default function ReportsPage() {
       {/* Error */}
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-          <span>{error}</span>
+          <span>
+            {error}
+            {upgradeRequired && <PlanUpgradeLink />}
+          </span>
 
           <button
             onClick={() => setError("")}

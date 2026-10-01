@@ -34,6 +34,11 @@ from app.services.chat import (
     generate_chat_answer,
     get_dataset_context,
 )
+from app.services.entitlements import (
+    enforce_ai_query_limit,
+    lock_user_for_quota,
+    require_feature,
+)
 
 
 router = APIRouter()
@@ -217,6 +222,8 @@ async def chat_with_dataset(
             detail="Dataset not found.",
         )
 
+    require_feature(db, current_user.id, "ai_chat")
+
     # --------------------------------------------------------
     # Get Requested Session
     # --------------------------------------------------------
@@ -255,6 +262,9 @@ async def chat_with_dataset(
             user_id=current_user.id,
             title=question[:50],
         )
+
+    lock_user_for_quota(db, current_user.id)
+    enforce_ai_query_limit(db, current_user.id)
 
     # --------------------------------------------------------
     # Save User Message

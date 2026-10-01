@@ -6,7 +6,21 @@ import pytest
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.models.subscription import PlanType, Subscription, SubscriptionStatus
+from app.models.user import User
 from app.services import ai_provider, dataset as dataset_service
+
+
+def grant_pro_plan(db, user_dict):
+    user = db.query(User).filter_by(email=user_dict["email"]).one()
+    db.add(
+        Subscription(
+            user_id=user.id,
+            plan=PlanType.PRO,
+            status=SubscriptionStatus.ACTIVE,
+        )
+    )
+    db.commit()
 
 
 def upload_file(client, headers, monkeypatch, tmp_path, filename, content):
@@ -110,7 +124,13 @@ def test_upload_rejects_unsupported_extension(
 def test_upload_enforces_file_size(
     client, auth_headers, db, monkeypatch, tmp_path, workflow_files
 ):
-    monkeypatch.setattr(dataset_service, "MAX_FILE_SIZE", 5)
+    from app.services.payment import payment_service
+
+    monkeypatch.setitem(
+        payment_service.plans["free"]["limits"],
+        "max_file_size_mb",
+        0,
+    )
     response = upload_file(
         client,
         auth_headers,
@@ -120,8 +140,8 @@ def test_upload_enforces_file_size(
         workflow_files["normal.csv"],
     )
 
-    assert response.status_code == 400
-    assert "20 MB" in response.json()["detail"]
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "PLAN_LIMIT_REACHED"
     assert db.query(Dataset).count() == 0
 
 
@@ -214,8 +234,9 @@ def test_dataset_analysis_and_cleaning_are_owner_scoped(
 
 
 def test_cleaning_preview_apply_and_download_preserve_original(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,
@@ -257,8 +278,9 @@ def test_cleaning_preview_apply_and_download_preserve_original(
 
 
 def test_cleaning_removes_duplicates_and_normalizes_categories(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     payload = b"category,value\n red ,1\nred,1\n blue ,2\n"
     upload = upload_file(
         client,
@@ -280,8 +302,9 @@ def test_cleaning_removes_duplicates_and_normalizes_categories(
 
 
 def test_cleaning_download_before_apply_returns_not_found(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,
@@ -422,8 +445,9 @@ def test_chat_rejects_unauthenticated_and_unowned_requests(
 
 
 def test_report_download_generates_pdf(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,
@@ -443,8 +467,9 @@ def test_report_download_generates_pdf(
 
 
 def test_report_handles_missing_source_file_without_exception_details(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,
@@ -466,8 +491,9 @@ def test_report_handles_missing_source_file_without_exception_details(
 
 
 def test_analysis_report_handles_missing_source_file_safely(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,
@@ -537,8 +563,9 @@ def test_ai_router_reports_failure_when_all_mocked_providers_fail(
 
 
 def test_cleaning_missing_source_returns_safe_not_found(
-    client, auth_headers, monkeypatch, tmp_path, workflow_files
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
+    grant_pro_plan(db, user_dict)
     upload = upload_file(
         client,
         auth_headers,

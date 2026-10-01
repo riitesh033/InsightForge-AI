@@ -6,6 +6,7 @@ from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.dataset import Dataset
 from app.models.user import User
+from app.services.entitlements import require_feature
 from app.services.cleaning import (
     apply_cleaning,
     get_cleaned_file_path,
@@ -49,6 +50,7 @@ def preview_cleaning_route(
         db,
         current_user,
     )
+    require_feature(db, current_user.id, "data_cleaning")
 
     return preview_cleaning(dataset)
 
@@ -64,6 +66,7 @@ def apply_cleaning_route(
         db,
         current_user,
     )
+    require_feature(db, current_user.id, "data_cleaning")
 
     return apply_cleaning(dataset)
 
@@ -79,6 +82,7 @@ def download_cleaned_dataset(
         db,
         current_user,
     )
+    require_feature(db, current_user.id, "data_cleaning")
 
     cleaned_path = get_cleaned_file_path(dataset)
 

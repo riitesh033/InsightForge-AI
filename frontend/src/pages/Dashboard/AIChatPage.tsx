@@ -25,6 +25,11 @@ import {
   getChatSessions,
   sendChatMessage,
 } from "@/services/chat";
+import PlanUpgradeLink from "@/components/payments/PlanUpgradeLink";
+import {
+  getApiErrorMessage,
+  isPlanRestrictionError,
+} from "@/lib/api";
 
 
 export default function AIChatPage() {
@@ -88,6 +93,7 @@ export default function AIChatPage() {
 
   const [error, setError] =
     useState("");
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
 
 
   // ==========================================================
@@ -428,6 +434,7 @@ export default function AIChatPage() {
       // ------------------------------------------------------
       // API
       // ------------------------------------------------------
+      setUpgradeRequired(false);
 
       const response =
         await sendChatMessage(
@@ -454,14 +461,13 @@ export default function AIChatPage() {
         updatedSessions
       );
     } catch (err) {
-      console.error(
-        "Chat error:",
-        err
-      );
-
       setError(
-        "Failed to get a response from InsightForge AI."
+        getApiErrorMessage(
+          err,
+          "Failed to get a response from InsightForge AI."
+        )
       );
+      setUpgradeRequired(isPlanRestrictionError(err));
     } finally {
       setSending(false);
     }
@@ -750,6 +756,7 @@ export default function AIChatPage() {
           {error && (
             <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
               {error}
+              {upgradeRequired && <PlanUpgradeLink />}
             </div>
           )}
 

@@ -9,6 +9,7 @@ export interface Plan {
   price: number;
   currency: string;
   features: string[];
+  feature_access: Record<string, boolean>;
   limits: {
     max_datasets: number;
     max_file_size_mb: number;
@@ -16,11 +17,18 @@ export interface Plan {
   };
 }
 
+export interface Usage {
+  datasets: number;
+  ai_queries_this_month: number;
+}
+
 export interface Subscription {
   plan: PlanKey;
   status: string;
   features: string[];
+  feature_access: Record<string, boolean>;
   limits: Plan["limits"];
+  usage: Usage;
   current_period_start: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;

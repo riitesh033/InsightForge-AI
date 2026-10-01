@@ -5,12 +5,13 @@ import {
   Trash2,
   CheckCircle2,
 } from "lucide-react";
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { showError, showSuccess } from "@/lib/toast";
 import { uploadDataset } from "@/services/dataset";
 import { getApiErrorMessage } from "@/lib/api";
+import { getSubscription, type Subscription } from "@/services/payments";
 
 export default function UploadDatasetPage() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,6 +21,30 @@ export default function UploadDatasetPage() {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    getSubscription()
+      .then((currentSubscription) => {
+        if (mounted) setSubscription(currentSubscription);
+      })
+      .catch((error: unknown) => {
+        if (mounted) {
+          setSubscriptionError(
+            getApiErrorMessage(error, "Unable to load your upload limits.")
+          );
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // =========================
   // File Validation
@@ -33,8 +58,15 @@ export default function UploadDatasetPage() {
       return false;
     }
 
-    if (file.size > 20 * 1024 * 1024) {
-      showError("Maximum file size is 20 MB.");
+    const maxFileSizeMB = subscription?.limits.max_file_size_mb;
+    if (
+      subscription &&
+      maxFileSizeMB !== undefined &&
+      file.size > maxFileSizeMB * 1024 * 1024
+    ) {
+      showError(
+        `Your ${subscription.plan} plan allows files up to ${maxFileSizeMB} MB.`
+      );
       return false;
     }
 
@@ -273,8 +305,28 @@ export default function UploadDatasetPage() {
           </p>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            CSV • XLS • XLSX • Maximum 20 MB
+            CSV • XLS • XLSX •{" "}
+            {subscription
+              ? `Maximum ${subscription.limits.max_file_size_mb} MB on your ${subscription.plan} plan`
+              : "Upload limits depend on your plan"}
           </p>
+          {subscriptionError && (
+            <p className="mt-2 text-sm text-amber-600" role="status">
+              {subscriptionError} The backend will still enforce your plan
+              limits.
+            </p>
+          )}
+          {subscription &&
+            subscription.usage.datasets >=
+              subscription.limits.max_datasets &&
+            subscription.limits.max_datasets >= 0 && (
+              <p className="mt-2 text-sm text-amber-600" role="status">
+                You have reached your dataset limit.{" "}
+                <Link className="font-medium underline" to="/dashboard/billing">
+                  View plans
+                </Link>
+              </p>
+            )}
         </div>
       </div>
 

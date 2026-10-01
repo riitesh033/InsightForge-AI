@@ -93,11 +93,32 @@ export function getApiErrorMessage(
   if (typeof details.detail === "string") {
     return details.detail;
   }
+  if (
+    details.detail !== null &&
+    typeof details.detail === "object" &&
+    "message" in details.detail &&
+    typeof details.detail.message === "string"
+  ) {
+    return details.detail.message;
+  }
   if (typeof details.message === "string") {
     return details.message;
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+export function isPlanRestrictionError(error: unknown): boolean {
+  const detail = getApiErrorDetails(error).detail;
+  if (detail === null || typeof detail !== "object" || !("code" in detail)) {
+    return false;
+  }
+
+  return (
+    detail.code === "PLAN_FEATURE_REQUIRED" ||
+    detail.code === "PLAN_LIMIT_REACHED" ||
+    detail.code === "AI_QUERY_LIMIT_REACHED"
+  );
 }
 
 export interface ApiErrorDetails {

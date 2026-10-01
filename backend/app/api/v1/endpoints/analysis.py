@@ -21,6 +21,7 @@ from app.services.insight_engine import (
     generate_professional_insights,
 )
 from app.services.report import generate_analysis_report
+from app.services.entitlements import require_feature
 from app.services.verified_analysis import (
     build_verified_analysis_report,
 )
@@ -107,6 +108,8 @@ def generate_dataset_report(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dataset not found.",
         )
+
+    require_feature(db, current_user.id, "professional_reports")
 
     analysis = get_analysis(
         db=db,

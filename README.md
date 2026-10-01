@@ -37,18 +37,33 @@ InsightForge AI is an intelligent web-based dataset analysis platform that autom
 - Datatype distribution charts
 
 ### 📄 Professional Reports
-- One-click PDF report generation
+- One-click PDF report generation (Pro and Business)
 - Comprehensive analysis summaries
 - AI insights and recommendations
 - Professional formatting for stakeholders
 
 ### 🧹 Data Cleaning
+- Available on Pro and Business
 - Remove duplicate rows
 - Fill missing values (mean/median/mode strategies)
 - Drop rows with missing values
 - Normalize categorical values
 - Preview changes before applying
 - Download cleaned datasets
+
+### 💳 Plan limits
+Plan limits are enforced by the backend using the Stripe-confirmed subscription
+state; client-side plan values are informational only.
+
+| Plan | Datasets | Maximum file size | AI chat queries per UTC calendar month |
+| --- | ---: | ---: | ---: |
+| Free | 3 | 10 MB | 10 |
+| Pro | Unlimited | 100 MB | 500 |
+| Business | Unlimited | 500 MB | Unlimited |
+
+AI chat usage is counted when the user message is saved, including attempts
+where the AI provider is unavailable. Professional PDF reports and data
+cleaning require Pro or Business.
 
 ### 🔒 Security & Authentication
 - Secure user registration and login

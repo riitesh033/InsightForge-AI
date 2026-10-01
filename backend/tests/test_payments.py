@@ -128,11 +128,43 @@ def send_event(client, stripe_event: dict, signature: str = "t=1,v1=valid"):
 def test_plan_catalog_and_default_free_subscription(client, auth_headers):
     plans_response = client.get(f"{API}/payments/plans")
     assert plans_response.status_code == 200
-    assert {item["plan_key"] for item in plans_response.json()["plans"]} == {
+    plans = {
+        item["plan_key"]: item
+        for item in plans_response.json()["plans"]
+    }
+    assert set(plans) == {
         "free",
         "pro",
         "business",
     }
+    assert [plans[key]["price"] for key in ("free", "pro", "business")] == [
+        0,
+        29.0,
+        99.0,
+    ]
+    assert plans["free"]["limits"] == {
+        "max_datasets": 3,
+        "max_file_size_mb": 10,
+        "ai_queries_per_month": 10,
+    }
+    assert plans["pro"]["limits"] == {
+        "max_datasets": -1,
+        "max_file_size_mb": 100,
+        "ai_queries_per_month": 500,
+    }
+    assert plans["business"]["limits"] == {
+        "max_datasets": -1,
+        "max_file_size_mb": 500,
+        "ai_queries_per_month": -1,
+    }
+    assert not any(
+        "support" in feature.lower()
+        or "collaboration" in feature.lower()
+        or "integration" in feature.lower()
+        or "sla" in feature.lower()
+        for plan in plans.values()
+        for feature in plan["features"]
+    )
 
     subscription_response = client.get(
         f"{API}/payments/subscription",

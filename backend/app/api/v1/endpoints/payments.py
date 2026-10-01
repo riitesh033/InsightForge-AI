@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -13,6 +14,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
+from app.services.entitlements import get_usage, resolve_plan
 from app.models.user import User
 from app.models.subscription import Invoice
 from app.services.payment import payment_service
@@ -117,27 +119,37 @@ def get_subscription(
     subscription = db.query(Subscription).filter(
         Subscription.user_id == current_user.id
     ).first()
+    plan_key, plan_info = resolve_plan(db, current_user.id)
 
     if subscription is None:
-        free_plan = payment_service.get_plan_features("free")
         return {
-            "plan": PlanType.FREE.value,
+            "plan": plan_key,
             "status": SubscriptionStatus.ACTIVE.value,
-            "features": free_plan["features"],
-            "limits": free_plan["limits"],
+            "features": plan_info["features"],
+            "feature_access": plan_info["feature_access"],
+            "limits": plan_info["limits"],
+            "usage": get_usage(db, current_user.id),
             "current_period_start": None,
             "current_period_end": None,
             "cancel_at_period_end": False,
             "started_at": None,
         }
 
-    plan_key = subscription.plan.value
-    plan_info = payment_service.get_plan_features(plan_key)
+    status_value = getattr(subscription.status, "value", subscription.status)
+    if (
+        status_value in {"active", "trialing"}
+        and subscription.current_period_end is not None
+        and subscription.current_period_end <= datetime.now(UTC).replace(tzinfo=None)
+        and plan_key == PlanType.FREE.value
+    ):
+        status_value = "expired"
     return {
         "plan": plan_key,
-        "status": subscription.status.value,
+        "status": status_value,
         "features": plan_info["features"],
+        "feature_access": plan_info["feature_access"],
         "limits": plan_info["limits"],
+        "usage": get_usage(db, current_user.id),
         "current_period_start": (
             subscription.current_period_start.isoformat()
             if subscription.current_period_start

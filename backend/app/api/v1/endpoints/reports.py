@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.dataset import Dataset
 from app.models.analysis import Analysis
 from app.services.report import generate_analysis_report
+from app.services.entitlements import require_feature
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -85,6 +86,8 @@ def download_report(
             status_code=404,
             detail="Dataset not found.",
         )
+
+    require_feature(db, current_user.id, "professional_reports")
 
     # --------------------------------------------------------
     # Find analysis for dataset

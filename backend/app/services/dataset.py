@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.services.entitlements import (
+    enforce_dataset_count,
+    enforce_upload_size,
+    lock_user_for_quota,
+)
 from app.services.insights import (
     calculate_quality_score,
     generate_dataset_summary,
@@ -26,9 +31,6 @@ ALLOWED_EXTENSIONS = {
     ".xlsx",
     ".xls",
 }
-
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
-
 
 def make_json_serializable(obj):
     """Recursively convert pandas/numpy objects into JSON-safe values."""
@@ -94,16 +96,14 @@ def upload_dataset(
             detail="Only CSV, XLSX and XLS files are supported.",
         )
 
+    lock_user_for_quota(db, owner_id)
+    enforce_dataset_count(db, owner_id)
+
     # File size
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
-
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail="Maximum upload size is 20 MB.",
-        )
+    enforce_upload_size(db, owner_id, file_size)
 
     unique_filename = f"{uuid4().hex}{extension}"
     save_path = UPLOAD_DIR / unique_filename

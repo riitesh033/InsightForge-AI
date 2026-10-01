@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 
 import api from "@/lib/api";
+import PlanUpgradeLink from "@/components/payments/PlanUpgradeLink";
+import { getApiErrorDetails } from "@/lib/api";
 
 interface Props {
   datasetId: number;
@@ -14,10 +16,14 @@ export default function ReportButton({
   datasetId,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function downloadReport() {
     try {
       setLoading(true);
+      setErrorMessage(null);
+      setUpgradeRequired(false);
 
       const response = await api.get(
         `/analysis/${datasetId}/report`,
@@ -53,13 +59,12 @@ export default function ReportButton({
       window.URL.revokeObjectURL(url);
 
     } catch (error) {
-      console.error(
-        "Report download failed:",
-        error
-      );
-
-      alert(
-        "Failed to generate the report. Please try again."
+      const forbidden = getApiErrorDetails(error).status === 403;
+      setUpgradeRequired(forbidden);
+      setErrorMessage(
+        forbidden
+          ? "Professional PDF reports require the Pro plan."
+          : "Failed to generate the report. Please try again."
       );
 
     } finally {
@@ -68,23 +73,31 @@ export default function ReportButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={downloadReport}
-      disabled={loading}
-      className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {loading ? (
-        <>
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Generating...
-        </>
-      ) : (
-        <>
-          <Download className="h-5 w-5" />
-          Generate Report
-        </>
+    <div>
+      <button
+        type="button"
+        onClick={downloadReport}
+        disabled={loading}
+        className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Download className="h-5 w-5" />
+            Generate Report
+          </>
+        )}
+      </button>
+      {errorMessage && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {errorMessage}
+          {upgradeRequired && <PlanUpgradeLink />}
+        </p>
       )}
-    </button>
+    </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   Dataset,
@@ -33,7 +33,10 @@ import OutlierCard from "@/components/analysis/OutlierCard";
 import AIInsights from "@/components/analysis/AIInsights";
 import ProfessionalInsights from "@/components/analysis/ProfessionalInsights";
 import type { DescriptiveStatistics } from "@/services/analysis";
-import { getApiErrorMessage } from "@/lib/api";
+import {
+  getApiErrorMessage,
+  isPlanRestrictionError,
+} from "@/lib/api";
 import type { OutlierValue } from "@/components/analysis/OutlierCard";
 
 export default function AnalysisPage() {
@@ -80,6 +83,8 @@ export default function AnalysisPage() {
   const [cleaningApplying, setCleaningApplying] = useState(false);
 
   const [cleaningError, setCleaningError] = useState<string | null>(null);
+  const [cleaningUpgradeRequired, setCleaningUpgradeRequired] =
+    useState(false);
 
   const [cleaningApplied, setCleaningApplied] = useState(false);
 
@@ -131,6 +136,7 @@ export default function AnalysisPage() {
     try {
       setCleaningLoading(true);
       setCleaningError(null);
+      setCleaningUpgradeRequired(false);
       setCleaningApplied(false);
       setDownloadError(null);
       setDownloadFormat("pdf");
@@ -139,6 +145,7 @@ export default function AnalysisPage() {
 
       setCleaningData(response);
     } catch (error) {
+      setCleaningUpgradeRequired(isPlanRestrictionError(error));
       setCleaningError(
         getApiErrorMessage(
           error,
@@ -166,12 +173,14 @@ export default function AnalysisPage() {
     try {
       setCleaningApplying(true);
       setCleaningError(null);
+      setCleaningUpgradeRequired(false);
 
       const response = await applyCleaning(Number(datasetId));
 
       setCleaningData(response);
       setCleaningApplied(true);
     } catch (error) {
+      setCleaningUpgradeRequired(isPlanRestrictionError(error));
       setCleaningError(
         getApiErrorMessage(error, "Unable to clean the dataset.")
       );
@@ -904,6 +913,14 @@ export default function AnalysisPage() {
             "
           >
             {cleaningError}
+            {cleaningUpgradeRequired && (
+              <Link
+                className="ml-2 font-medium underline"
+                to="/dashboard/billing"
+              >
+                View plans
+              </Link>
+            )}
           </div>
         )}
 

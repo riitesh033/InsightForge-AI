@@ -30,11 +30,9 @@ class PaymentService:
                 "name": "Free",
                 "price": 0,
                 "currency": "USD",
-                "features": [
-                    "Basic dataset analysis",
-                    "Up to 3 datasets",
-                    "Standard reports",
-                    "Community support",
+                "feature_keys": [
+                    "dataset_analysis",
+                    "ai_chat",
                 ],
                 "limits": {
                     "max_datasets": 3,
@@ -46,13 +44,11 @@ class PaymentService:
                 "name": "Pro",
                 "price": 29.0,
                 "currency": "USD",
-                "features": [
-                    "Advanced dataset analysis",
-                    "Unlimited datasets",
-                    "Professional reports (PDF)",
-                    "AI dataset chat",
-                    "Priority support",
-                    "Data cleaning tools",
+                "feature_keys": [
+                    "dataset_analysis",
+                    "professional_reports",
+                    "ai_chat",
+                    "data_cleaning",
                 ],
                 "limits": {
                     "max_datasets": -1,
@@ -64,14 +60,11 @@ class PaymentService:
                 "name": "Business",
                 "price": 99.0,
                 "currency": "USD",
-                "features": [
-                    "Everything in Pro",
-                    "Team collaboration",
-                    "API access",
-                    "Custom integrations",
-                    "Dedicated support",
-                    "Advanced security",
-                    "SLA guarantee",
+                "feature_keys": [
+                    "dataset_analysis",
+                    "professional_reports",
+                    "ai_chat",
+                    "data_cleaning",
                 ],
                 "limits": {
                     "max_datasets": -1,
@@ -79,6 +72,12 @@ class PaymentService:
                     "ai_queries_per_month": -1,
                 },
             },
+        }
+        self.feature_labels: dict[str, str] = {
+            "dataset_analysis": "Dataset analysis",
+            "professional_reports": "Professional PDF reports",
+            "ai_chat": "AI dataset chat",
+            "data_cleaning": "Data cleaning tools",
         }
 
     @staticmethod
@@ -818,12 +817,27 @@ class PaymentService:
     def get_plan_features(self, plan_type: str) -> dict[str, Any]:
         if plan_type not in self.plans:
             raise HTTPException(status_code=400, detail="Invalid plan type")
-        return self.plans[plan_type]
+        plan = self.plans[plan_type]
+        return {
+            **plan,
+            "features": [
+                self.feature_labels[key]
+                for key in plan["feature_keys"]
+                if key in self.feature_labels
+            ],
+            "feature_access": {
+                key: key in plan["feature_keys"]
+                for key in self.feature_labels
+            },
+        }
 
     def get_all_plans(self) -> list[dict[str, Any]]:
         return [
-            {**plan_info, "plan_key": key}
-            for key, plan_info in self.plans.items()
+            {
+                **self.get_plan_features(key),
+                "plan_key": key,
+            }
+            for key in self.plans
         ]
 
 

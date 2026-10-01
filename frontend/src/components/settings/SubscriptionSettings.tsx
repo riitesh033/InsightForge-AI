@@ -129,6 +129,26 @@ export default function SubscriptionSettings() {
                 </dd>
               </div>
             )}
+            <div>
+              <dt className="text-sm text-muted-foreground">Datasets</dt>
+              <dd className="mt-1 text-foreground">
+                {subscription.usage.datasets}
+                {subscription.limits.max_datasets < 0
+                  ? " (unlimited)"
+                  : ` of ${subscription.limits.max_datasets}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">
+                AI queries this month
+              </dt>
+              <dd className="mt-1 text-foreground">
+                {subscription.usage.ai_queries_this_month}
+                {subscription.limits.ai_queries_per_month < 0
+                  ? " (unlimited)"
+                  : ` of ${subscription.limits.ai_queries_per_month}`}
+              </dd>
+            </div>
           </dl>
           {subscription.cancel_at_period_end && (
             <p className="text-sm text-amber-600">
