@@ -1,5 +1,4 @@
 import {
-  Bell,
   Menu,
   Search,
   User as UserIcon,
@@ -14,6 +13,7 @@ import ThemeToggle from "@/components/common/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { getApiAssetUrl } from "@/lib/api";
 import { showSuccess } from "@/lib/toast";
+import NotificationMenu from "@/components/dashboard/NotificationMenu";
 
 interface TopNavbarProps {
   title?: string;
@@ -54,26 +54,28 @@ export default function TopNavbar({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-border bg-card/95 px-6 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4 md:px-6">
 
       {/* Left */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
 
         {/* Mobile Menu */}
         <button
+          type="button"
+          aria-label="Open navigation menu"
           onClick={onMenuClick}
           className="rounded-lg p-2 transition hover:bg-accent lg:hidden"
         >
           <Menu size={22} />
         </button>
 
-        <div>
+        <div className="min-w-0">
 
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="truncate text-lg font-bold text-foreground sm:text-2xl">
             {title}
           </h1>
 
-          <p className="text-sm text-muted-foreground">
+          <p className="hidden truncate text-sm text-muted-foreground sm:block">
             {subtitle}
           </p>
 
@@ -82,7 +84,7 @@ export default function TopNavbar({
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-3 md:gap-4">
 
         {/* Search */}
         <div className="relative hidden md:block">
@@ -116,30 +118,7 @@ export default function TopNavbar({
         {/* Theme */}
         <ThemeToggle />
 
-        {/* Notifications */}
-        <button
-          className="
-            relative
-            rounded-lg
-            p-2
-            transition
-            hover:bg-accent
-          "
-        >
-          <Bell size={21} />
-
-          <span
-            className="
-              absolute
-              right-2
-              top-2
-              h-2
-              w-2
-              rounded-full
-              bg-red-500
-            "
-          />
-        </button>
+        <NotificationMenu />
 
         {/* Avatar with Dropdown */}
         <div className="relative">
@@ -207,7 +186,11 @@ export default function TopNavbar({
                   </button>
 
                   <button
-                    onClick={() => handleMenuItemClick(() => navigate("/pricing"))}
+                    onClick={() =>
+                      handleMenuItemClick(() =>
+                        navigate("/dashboard/settings#subscription")
+                      )
+                    }
                     className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   >
                     <CreditCard size={16} />

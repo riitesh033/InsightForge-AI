@@ -75,7 +75,10 @@ export default function SubscriptionSettings() {
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6">
+    <section
+      id="subscription"
+      className="scroll-mt-24 rounded-xl border border-border bg-card p-4 sm:p-6"
+    >
       <h2 className="text-xl font-semibold text-foreground">Subscription</h2>
 
       {loading ? (

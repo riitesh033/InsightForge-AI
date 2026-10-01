@@ -112,7 +112,7 @@ export default function DashboardLayout() {
 
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
 
 
         <TopNavbar
@@ -132,9 +132,12 @@ export default function DashboardLayout() {
         <main
           className="
             flex-1
+            min-w-0
             overflow-y-auto
             bg-background
-            p-6
+            p-3
+            sm:p-4
+            md:p-6
           "
         >
 
