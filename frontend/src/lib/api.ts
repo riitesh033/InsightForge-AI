@@ -24,10 +24,10 @@ function withApiVersion(baseUrl: string): string {
   return /(?:^|\/)api\/v1$/i.test(path) ? path : `${path}/api/v1`;
 }
 
-const apiBaseUrl = withApiVersion(configuredBaseUrl);
+export const API_BASE_URL = withApiVersion(configuredBaseUrl);
 
 const api = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: API_BASE_URL,
   headers: {
     Accept: "application/json",
   },
@@ -82,7 +82,7 @@ api.interceptors.response.use(
 );
 
 export function getApiAssetUrl(path: string): string {
-  return new URL(path, new URL(apiBaseUrl, window.location.origin)).toString();
+  return new URL(path, new URL(API_BASE_URL, window.location.origin)).toString();
 }
 
 export function getApiErrorMessage(

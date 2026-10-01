@@ -7,12 +7,14 @@ import httpx
 
 from app.core.config import settings
 
+
 logger = logging.getLogger(__name__)
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def build_password_reset_url(reset_token: str) -> str:
+    """Build the frontend password-reset URL without logging the token."""
     frontend_url = urlsplit(settings.FRONTEND_URL)
 
     return urlunsplit(
@@ -27,11 +29,7 @@ def build_password_reset_url(reset_token: str) -> str:
 
 
 class EmailService:
-    """Transactional email service using the Brevo HTTPS API.
-
-    The Brevo API key is loaded from BREVO_API_KEY.
-    SMTP credentials are not used for email delivery.
-    """
+    """Transactional email service using the Brevo HTTPS API."""
 
     def __init__(self):
         self.api_key = settings.BREVO_API_KEY
@@ -59,6 +57,12 @@ class EmailService:
     ) -> bool:
         """Send a transactional email through Brevo's HTTPS API."""
 
+        recipient = to_email.strip().lower()
+
+        if not recipient:
+            logger.error("Email delivery skipped because recipient is empty.")
+            return False
+
         if not self.is_configured:
             logger.warning(
                 "Brevo email skipped; missing configuration: %s",
@@ -73,7 +77,7 @@ class EmailService:
             },
             "to": [
                 {
-                    "email": to_email,
+                    "email": recipient,
                 }
             ],
             "subject": subject,
@@ -110,8 +114,6 @@ class EmailService:
                 logger.info("Brevo email sent successfully.")
                 return True
 
-            # Do not log the response body because it could contain
-            # information that should not appear in application logs.
             logger.error(
                 "Brevo email delivery failed with HTTP status %s.",
                 response.status_code,
@@ -119,7 +121,7 @@ class EmailService:
             return False
 
         except Exception as error:
-            # Never log the API key, password, reset token, or email body.
+            # Never log API keys, passwords, reset tokens, or email bodies.
             logger.error(
                 "Brevo email delivery failed (%s).",
                 type(error).__name__,
@@ -161,18 +163,31 @@ class EmailService:
         self,
         to_email: str,
         reset_url: str,
-    ) -> None:
-        """Send password reset email.
-
-        The reset URL is sent to the recipient but is never written to logs.
+    ) -> bool:
         """
+        Send a password reset email through Brevo.
+
+        Security:
+        - Never logs the reset URL or token.
+        - Never logs the API key.
+        - Returns False instead of exposing delivery details.
+        """
+
+        recipient = to_email.strip().lower()
+
+        if not recipient:
+            logger.error(
+                "Password reset email was not sent because "
+                "the recipient email is empty."
+            )
+            return False
 
         if not self.is_configured:
             logger.warning(
-                "Brevo password-reset email skipped; missing configuration: %s",
-                ", ".join(self.missing_configuration),
+                "Password reset email skipped because "
+                "Brevo is not configured."
             )
-            return
+            return False
 
         html_content = f"""
 <!DOCTYPE html>
@@ -181,54 +196,70 @@ class EmailService:
     <meta charset="UTF-8">
     <title>Password Reset</title>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <h1>Reset Your Password</h1>
+<body
+    style="
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+    "
+>
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1>Reset Your Password</h1>
 
-    <p>You requested a password reset for your InsightForge AI account.</p>
+        <p>
+            You requested a password reset for your InsightForge AI account.
+        </p>
 
-    <p>
-        <a
-            href="{reset_url}"
-            style="
-                display: inline-block;
-                padding: 12px 24px;
-                background: #667eea;
-                color: white;
-                text-decoration: none;
-                border-radius: 6px;
-            "
-        >
-            Reset Password
-        </a>
-    </p>
+        <p>
+            <a
+                href="{reset_url}"
+                style="
+                    display: inline-block;
+                    padding: 12px 24px;
+                    background: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 6px;
+                "
+            >
+                Reset Password
+            </a>
+        </p>
 
-    <p>This link expires in 1 hour.</p>
+        <p>
+            This link expires in 1 hour.
+        </p>
 
-    <p>
-        If you did not request this password reset,
-        you can safely ignore this email.
-    </p>
+        <p>
+            If you did not request this password reset,
+            you can safely ignore this email.
+        </p>
+
+        <p>
+            Best regards,<br>
+            The InsightForge AI Team
+        </p>
+    </div>
 </body>
 </html>
 """
 
         text_content = (
-            "You requested a password reset for your InsightForge AI account.\n\n"
-            f"Reset your password using this link:\n{reset_url}\n\n"
+            "You requested a password reset for your "
+            "InsightForge AI account.\n\n"
+            "Reset your password using this link:\n"
+            f"{reset_url}\n\n"
             "This link expires in 1 hour.\n\n"
             "If you did not request this password reset, "
             "you can safely ignore this email."
         )
 
-        delivered = await self.send_email(
-            to_email=to_email,
+        return await self.send_email(
+            to_email=recipient,
             subject="InsightForge AI — Password Reset",
             html_content=html_content,
             text_content=text_content,
         )
-
-        if not delivered:
-            raise RuntimeError("Password reset email delivery failed.")
 
     async def send_purchase_confirmation(
         self,
@@ -242,15 +273,22 @@ class EmailService:
         features: list[str],
         attachment: tuple[str, bytes, str] | None = None,
     ) -> bool:
-        """Send purchase confirmation with optional PDF invoice attachment."""
+        """Send purchase confirmation with an optional PDF invoice."""
+
+        recipient = to_email.strip().lower()
 
         subject = (
-            f"Thank you for your {plan_type.capitalize()} subscription!"
+            f"Thank you for your "
+            f"{plan_type.capitalize()} subscription!"
         )
 
         features_list = "".join(
             f"<li>{feature}</li>"
             for feature in features
+        )
+
+        dashboard_url = (
+            f"{settings.FRONTEND_URL.rstrip('/')}/dashboard"
         )
 
         html_content = f"""
@@ -259,12 +297,13 @@ class EmailService:
 <head>
     <meta charset="UTF-8">
     <title>Purchase Confirmation</title>
-
     <style>
         body {{
             font-family: Arial, sans-serif;
             line-height: 1.6;
             color: #333;
+            margin: 0;
+            padding: 0;
         }}
 
         .container {{
@@ -389,7 +428,6 @@ class EmailService:
 
             <div class="features">
                 <h3>✨ Features Unlocked:</h3>
-
                 <ul>
                     {features_list}
                 </ul>
@@ -402,7 +440,6 @@ class EmailService:
                     <span>
                         <strong>Amount Paid:</strong>
                     </span>
-
                     <span>
                         {currency} {amount:.2f}
                     </span>
@@ -412,7 +449,6 @@ class EmailService:
                     <span>
                         <strong>Transaction ID:</strong>
                     </span>
-
                     <span>
                         {transaction_id}
                     </span>
@@ -422,7 +458,6 @@ class EmailService:
                     <span>
                         <strong>Purchase Date:</strong>
                     </span>
-
                     <span>
                         {purchase_date}
                     </span>
@@ -432,16 +467,15 @@ class EmailService:
                     <span>
                         <strong>Billing Email:</strong>
                     </span>
-
                     <span>
-                        {to_email}
+                        {recipient}
                     </span>
                 </div>
             </div>
 
             <div style="text-align: center;">
                 <a
-                    href="{settings.FRONTEND_URL.rstrip('/')}/dashboard"
+                    href="{dashboard_url}"
                     class="button"
                 >
                     Go to Dashboard
@@ -476,7 +510,7 @@ class EmailService:
             </p>
 
             <p>
-                This email was sent to {to_email}
+                This email was sent to {recipient}
             </p>
         </div>
 
@@ -511,173 +545,12 @@ The InsightForge AI Team
 """
 
         return await self.send_email(
-            to_email=to_email,
+            to_email=recipient,
             subject=subject,
             html_content=html_content,
             text_content=text_content,
             attachments=[attachment] if attachment else None,
         )
 
-    async def send_password_reset(
-        self,
-        to_email: str,
-        user_name: str,
-        reset_token: str,
-    ) -> bool:
-        """Send password reset email."""
 
-        reset_link = build_password_reset_url(reset_token)
-
-        subject = "Reset Your Password - InsightForge AI"
-
-        html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Password Reset</title>
-
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-        }}
-
-        .container {{
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }}
-
-        .header {{
-            background: linear-gradient(
-                135deg,
-                #667eea 0%,
-                #764ba2 100%
-            );
-            color: white;
-            padding: 30px;
-            text-align: center;
-            border-radius: 8px 8px 0 0;
-        }}
-
-        .content {{
-            background: #f9f9f9;
-            padding: 30px;
-        }}
-
-        .button {{
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 12px 30px;
-            text-decoration: none;
-            border-radius: 6px;
-            margin: 20px 0;
-        }}
-
-        .warning {{
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            padding: 15px;
-            border-radius: 6px;
-            margin: 20px 0;
-        }}
-
-        .footer {{
-            background: #333;
-            color: white;
-            padding: 20px;
-            text-align: center;
-            border-radius: 0 0 8px 8px;
-            font-size: 14px;
-        }}
-    </style>
-</head>
-
-<body>
-    <div class="container">
-
-        <div class="header">
-            <h1>🔐 Password Reset Request</h1>
-        </div>
-
-        <div class="content">
-
-            <p>Dear {user_name},</p>
-
-            <p>
-                We received a request to reset your password.
-                Click the button below to reset it:
-            </p>
-
-            <div style="text-align: center;">
-                <a href="{reset_link}" class="button">
-                    Reset Password
-                </a>
-            </div>
-
-            <p>
-                Or copy and paste this link into your browser:
-            </p>
-
-            <p style="word-break: break-all; color: #667eea;">
-                {reset_link}
-            </p>
-
-            <div class="warning">
-                <strong>⚠️ Important:</strong>
-                This link will expire in 1 hour.
-                If you did not request this password reset,
-                please ignore this email.
-            </div>
-
-            <p>
-                Best regards,<br>
-                The InsightForge AI Team
-            </p>
-
-        </div>
-
-        <div class="footer">
-            <p>
-                &copy; 2026 InsightForge AI. All rights reserved.
-            </p>
-        </div>
-
-    </div>
-</body>
-</html>
-"""
-
-        text_content = f"""
-Password Reset Request
-
-Dear {user_name},
-
-We received a request to reset your password.
-
-Visit the link below to reset your password:
-
-{reset_link}
-
-This link will expire in 1 hour.
-
-If you did not request this password reset,
-please ignore this email.
-
-Best regards,
-The InsightForge AI Team
-"""
-
-        return await self.send_email(
-            to_email=to_email,
-            subject=subject,
-            html_content=html_content,
-            text_content=text_content,
-        )
-
-
-# Global email service instance
 email_service = EmailService()

@@ -155,14 +155,13 @@ def _google_configuration() -> tuple[str, str, str]:
 
 
 @router.get("/google/login")
-def begin_google_login(response: Response) -> dict[str, str]:
+def begin_google_login() -> RedirectResponse:
     client_id, _, callback_url = _google_configuration()
 
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
 
     cookie_path = urlsplit(callback_url).path
-
     cookie_options = {
         "httponly": True,
         "secure": True,
@@ -170,17 +169,6 @@ def begin_google_login(response: Response) -> dict[str, str]:
         "max_age": 600,
         "path": cookie_path or "/",
     }
-
-    response.set_cookie(
-        "google_oauth_state",
-        state,
-        **cookie_options,
-    )
-    response.set_cookie(
-        "google_oauth_nonce",
-        nonce,
-        **cookie_options,
-    )
 
     authorization_url = (
         "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -197,9 +185,22 @@ def begin_google_login(response: Response) -> dict[str, str]:
         )
     )
 
-    return {
-        "authorization_url": authorization_url,
-    }
+    response = RedirectResponse(
+        authorization_url,
+        status_code=303,
+    )
+    response.set_cookie(
+        "google_oauth_state",
+        state,
+        **cookie_options,
+    )
+    response.set_cookie(
+        "google_oauth_nonce",
+        nonce,
+        **cookie_options,
+    )
+
+    return response
 
 
 def _google_failure(code: str) -> RedirectResponse:
@@ -481,13 +482,16 @@ async def forgot_password(
     Always return the same external response whether the
     account exists or not, so account existence is not disclosed.
     """
+
     generic_message = (
         "If the account exists, a password reset email has been sent."
     )
 
+    email = request.email.strip().lower()
+
     user = get_user_by_email(
         db=db,
-        email=request.email,
+        email=email,
     )
 
     if user is None:
@@ -496,7 +500,7 @@ async def forgot_password(
         }
 
     reset_token = create_password_reset_token(
-        email=request.email,
+        email=email,
     )
 
     reset_url = build_password_reset_url(
@@ -504,13 +508,23 @@ async def forgot_password(
     )
 
     try:
-        await email_service.send_password_reset_email(
-            to_email=request.email,
+        sent = await email_service.send_password_reset_email(
+            to_email=email,
             reset_url=reset_url,
         )
+
+        if sent:
+            logger.info(
+                "Password reset email sent successfully."
+            )
+        else:
+            logger.error(
+                "Password reset email was not sent."
+            )
+
     except Exception as error:
         logger.error(
-            "Failed to deliver password reset email (%s).",
+            "Password reset email failed (%s).",
             type(error).__name__,
         )
 

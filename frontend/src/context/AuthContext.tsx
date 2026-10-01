@@ -20,11 +20,10 @@ import {
 
 import {
   login as loginService,
-  startGoogleLogin as startGoogleLoginService,
   register as registerService,
 } from "@/services/auth";
 
-import api from "@/lib/api";
+import api, { API_BASE_URL } from "@/lib/api";
 
 
 export const AuthContext =
@@ -169,8 +168,7 @@ export function AuthProvider({
   }
 
   async function loginWithGoogle(): Promise<void> {
-    const authorizationUrl = await startGoogleLoginService();
-    window.location.assign(authorizationUrl);
+    window.location.assign(`${API_BASE_URL}/auth/google/login`);
   }
 
   async function completeGoogleLogin(accessToken: string): Promise<void> {

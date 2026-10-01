@@ -260,7 +260,7 @@ class TestRegister:
 # ---------------------------------------------------------------------------
 
 class TestGoogleOAuth:
-    def test_login_sets_secure_cross_site_cookies_at_callback_path(
+    def test_login_redirects_browser_to_google_with_secure_callback_cookies(
         self,
         client,
         monkeypatch,
@@ -293,9 +293,23 @@ class TestGoogleOAuth:
             "development",
         )
 
-        response = client.get(f"{API}/auth/google/login")
+        response = client.get(
+            f"{API}/auth/google/login",
+            follow_redirects=False,
+        )
 
-        assert response.status_code == 200
+        assert response.status_code == 303
+        authorization = urlsplit(response.headers["location"])
+        authorization_params = parse_qs(authorization.query)
+
+        assert authorization.scheme == "https"
+        assert authorization.netloc == "accounts.google.com"
+        assert authorization.path == "/o/oauth2/v2/auth"
+        assert authorization_params["response_type"] == ["code"]
+        assert authorization_params["redirect_uri"] == [callback_url]
+        assert "code" not in authorization_params
+        assert "state" in authorization_params
+        assert "nonce" in authorization_params
 
         set_cookie_headers = response.headers.get_list("set-cookie")
 
@@ -319,7 +333,79 @@ class TestGoogleOAuth:
             assert morsel["httponly"]
             assert morsel["secure"]
             assert morsel["samesite"].lower() == "none"
+            assert morsel["max-age"] == "600"
             assert morsel["path"] == "/api/v1/auth/google/callback"
+
+            expected_value = authorization_params[
+                cookie_name.removeprefix("google_oauth_")
+            ][0]
+            assert morsel.value == expected_value
+
+    def test_new_login_replaces_stale_oauth_cookies(
+        self,
+        client,
+        monkeypatch,
+    ):
+        callback_url = (
+            "https://backend.example.test/api/v1/auth/google/callback"
+        )
+
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setattr(settings, "GOOGLE_CALLBACK_URL", callback_url)
+
+        first_login = client.get(
+            f"{API}/auth/google/login",
+            follow_redirects=False,
+        )
+        first_params = parse_qs(
+            urlsplit(first_login.headers["location"]).query
+        )
+        first_cookies = {}
+        for cookie_header in first_login.headers.get_list("set-cookie"):
+            cookie = SimpleCookie()
+            cookie.load(cookie_header)
+            first_cookies.update({
+                name: morsel.value
+                for name, morsel in cookie.items()
+            })
+
+        second_login = client.get(
+            f"{API}/auth/google/login",
+            follow_redirects=False,
+        )
+        second_params = parse_qs(
+            urlsplit(second_login.headers["location"]).query
+        )
+        second_cookies = {}
+        for cookie_header in second_login.headers.get_list("set-cookie"):
+            cookie = SimpleCookie()
+            cookie.load(cookie_header)
+            second_cookies.update({
+                name: morsel.value
+                for name, morsel in cookie.items()
+            })
+
+        assert second_login.status_code == 303
+        assert first_params["state"] != second_params["state"]
+        assert first_params["nonce"] != second_params["nonce"]
+        assert second_cookies["google_oauth_state"] == second_params["state"][0]
+        assert second_cookies["google_oauth_nonce"] == second_params["nonce"][0]
+
+        stale_callback = client.get(
+            f"{API}/auth/google/callback",
+            params={
+                "code": "unused-code",
+                "state": second_params["state"][0],
+            },
+            cookies=first_cookies,
+            follow_redirects=False,
+        )
+
+        assert stale_callback.status_code == 303
+        assert stale_callback.headers["location"].endswith(
+            "/login?google_error=invalid_state"
+        )
 
     def test_callback_rejects_missing_state_cookie(
         self,
@@ -355,10 +441,26 @@ class TestGoogleOAuth:
             f"{frontend_url}/login?google_error=invalid_state"
         )
 
-        assert "google_oauth_state=" in response.headers.get(
-            "set-cookie",
-            "",
-        )
+        cleanup_headers = response.headers.get_list("set-cookie")
+        assert len(cleanup_headers) == 2
+        for cookie_name in (
+            "google_oauth_state",
+            "google_oauth_nonce",
+        ):
+            header = next(
+                value
+                for value in cleanup_headers
+                if value.startswith(f"{cookie_name}=")
+            )
+            cookie = SimpleCookie()
+            cookie.load(header)
+            morsel = cookie[cookie_name]
+
+            assert morsel["max-age"] == "0"
+            assert morsel["httponly"]
+            assert morsel["secure"]
+            assert morsel["samesite"].lower() == "none"
+            assert morsel["path"] == "/api/v1/auth/google/callback"
 
     def test_callback_rejects_mismatched_state(
         self,
@@ -608,14 +710,15 @@ class TestGoogleOAuth:
             nonlocal expected_nonce
 
             authorization = client.get(
-                f"{API}/auth/google/login"
+                f"{API}/auth/google/login",
+                follow_redirects=False,
             )
 
-            assert authorization.status_code == 200
+            assert authorization.status_code == 303
 
             authorization_params = parse_qs(
                 urlsplit(
-                    authorization.json()["authorization_url"]
+                    authorization.headers["location"]
                 ).query
             )
 
