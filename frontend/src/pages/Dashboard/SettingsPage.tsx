@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
-import SubscriptionSettings from "@/components/settings/SubscriptionSettings";
 import { getApiAssetUrl, getApiErrorMessage } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
 import {
@@ -260,8 +259,6 @@ export default function SettingsPage() {
           Manage your account preferences and application settings.
         </p>
       </div>
-
-      <SubscriptionSettings />
 
       {/* Profile Section */}
       <div className="rounded-xl border border-border bg-card p-6">

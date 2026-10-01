@@ -9,6 +9,7 @@ interface PricingCardProps {
   featured?: boolean;
   loading?: boolean;
   disabled?: boolean;
+  buttonLabel?: string;
   onSelect: () => void;
 }
 
@@ -20,6 +21,7 @@ export default function PricingCard({
   featured = false,
   loading = false,
   disabled = false,
+  buttonLabel,
   onSelect,
 }: PricingCardProps) {
   return (
@@ -36,10 +38,12 @@ export default function PricingCard({
         </div>
       )}
 
-      <h3 className="text-2xl font-bold">{title}</h3>
+      <h3 className="break-words text-2xl font-bold">{title}</h3>
 
       <div className="mt-8">
-        <span className="text-5xl font-bold">{price}</span>
+        <span className="break-words text-4xl font-bold sm:text-5xl">
+          {price}
+        </span>
       </div>
 
       <ul className="mt-8 space-y-4">
@@ -67,11 +71,12 @@ export default function PricingCard({
             : "bg-indigo-600 text-white hover:bg-indigo-700"
         }`}
       >
-        {loading
-          ? "Redirecting..."
-          : isFree
-            ? "Get Started"
-            : "Choose Plan"}
+        {buttonLabel ??
+          (loading
+        ? "Redirecting..."
+        : isFree
+          ? "Get Started"
+          : "Choose Plan")}
       </Button>
     </div>
   );

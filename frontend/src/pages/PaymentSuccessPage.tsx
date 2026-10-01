@@ -121,7 +121,7 @@ export default function PaymentSuccessPage() {
           </>
         )}
         <Link
-          to="/dashboard/settings"
+          to="/dashboard/subscription"
           className="mt-8 inline-flex rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground transition hover:opacity-90"
         >
           View subscription

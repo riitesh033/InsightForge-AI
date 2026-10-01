@@ -8,6 +8,9 @@ import {
   Settings,
   LogOut,
   BarChart3,
+  CreditCard,
+  BadgeCheck,
+  ReceiptText,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +41,21 @@ const navigation = [
     name: "AI Chat",
     href: "/dashboard/ai-chat",
     icon: MessageSquare,
+  },
+  {
+    name: "Plan & Billing",
+    href: "/dashboard/billing",
+    icon: CreditCard,
+  },
+  {
+    name: "Subscription",
+    href: "/dashboard/subscription",
+    icon: BadgeCheck,
+  },
+  {
+    name: "Payment History",
+    href: "/dashboard/payment-history",
+    icon: ReceiptText,
   },
   {
     name: "Settings",

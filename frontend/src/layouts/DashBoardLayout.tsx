@@ -25,6 +25,12 @@ export default function DashboardLayout() {
 
     "/dashboard/ai-chat": "AI Chat",
 
+    "/dashboard/billing": "Plan & Billing",
+
+    "/dashboard/subscription": "Subscription",
+
+    "/dashboard/payment-history": "Payment History",
+
     "/dashboard/settings": "Settings",
 
   };
@@ -45,6 +51,15 @@ export default function DashboardLayout() {
 
     "/dashboard/ai-chat":
       "Interact with your AI Data Analyst.",
+
+    "/dashboard/billing":
+      "Choose or change your membership plan.",
+
+    "/dashboard/subscription":
+      "View your current membership and its status.",
+
+    "/dashboard/payment-history":
+      "Review payments recorded for your account.",
 
     "/dashboard/settings":
       "Manage your account settings.",

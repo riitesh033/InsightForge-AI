@@ -38,7 +38,9 @@ export interface PaymentRecord {
 }
 
 export async function getPlans(): Promise<Plan[]> {
-  const response = await api.get<{ plans: Plan[] }>("/payments/plans");
+  const response = await api.get<{ plans: Plan[] }>("/payments/plans", {
+    timeout: 15000,
+  });
   return response.data.plans;
 }
 

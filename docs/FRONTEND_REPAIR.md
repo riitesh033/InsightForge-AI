@@ -38,6 +38,9 @@ Copy `frontend/.env.example` to `.env` for local development. Production should 
 | `/dashboard/analysis/:datasetId` | Analysis; `datasetId` is parsed as a positive safe integer before API use | Authenticated |
 | `/dashboard/reports` | Reports | Authenticated |
 | `/dashboard/ai-chat/:datasetId?` and `/dashboard/ai-chat` | Dataset chat; an optional ID is validated and matched against the user's datasets | Authenticated |
+| `/dashboard/billing` | Plan catalog and Stripe Checkout entry point | Authenticated |
+| `/dashboard/subscription` | Current subscription and supported cancellation action | Authenticated |
+| `/dashboard/payment-history` | User-scoped payment history | Authenticated |
 | `/dashboard/settings` | Settings | Authenticated |
 | `/admin` | Admin dashboard | Authenticated and requires `is_superuser`; unauthorized users go to `/forbidden` |
 | `/payment-success?session_id=...` | Displays webhook-confirmed payment state; browser redirect does not activate a subscription | Authenticated |
@@ -66,9 +69,10 @@ All paths below are relative to the canonical base URL `/api/v1`. Method, URL an
 | Dashboard service | `GET /dashboard` | Match dashboard router path. |
 | Chat service | `GET /chat/{datasetId}/sessions`, `POST /chat/{datasetId}/sessions`, `GET /chat/sessions/{sessionId}`, `DELETE /chat/sessions/{sessionId}`, `POST /chat/{datasetId}` with JSON message/session ID | Match chat route methods and payloads. |
 | Admin dashboard | `GET /admin/dashboard`, `GET /admin/system-health` | Match admin routes; both remain behind the client-side admin guard and server-side admin dependency. |
-| Pricing section | `GET /payments/plans`; authenticated `POST /payments/create-checkout?plan_type=...` | Matches the plans and checkout routes; checkout sends the plan in the query string and redirects to Stripe's returned hosted URL. Paid-plan selections resume after login/registration. |
+| Public pricing and dashboard billing | `GET /payments/plans`; authenticated `POST /payments/create-checkout?plan_type=...` | Matches the plans and checkout routes; pricing and billing share the same API-backed plan catalog. Plan loading times out after 15 seconds with a retry action; checkout sends the plan in the query string and redirects to Stripe's returned hosted URL. Paid-plan selections resume after login/registration. |
 | Payment-success page | `GET /payments/success?session_id=...` | Matches the backend route. It is read-only and polls for webhook-confirmed subscription state. |
-| Subscription settings | `GET /payments/subscription`, `GET /payments/history`, `POST /payments/cancel` | Matches current-subscription, user-scoped history, and cancellation-request routes. Local subscription state updates after Stripe's webhook. |
+| Subscription page | `GET /payments/subscription`, `POST /payments/cancel` | Matches current-subscription and cancellation-request routes. Local subscription state updates after Stripe's webhook. |
+| Payment history page | `GET /payments/history` | Matches the user-scoped payment-history route. |
 | Stripe webhook | `POST /payments/webhook` | Server-to-server only; not called by frontend code. Signature/idempotency processing is documented in [PAYMENT_REPAIR.md](./PAYMENT_REPAIR.md). |
 
 The payment router prefix is applied once by the backend API aggregator; the frontend uses `/payments/...`, not a duplicated prefix. The Stripe cancellation return now uses `/payment-cancelled` rather than `/pricing`.

@@ -3,9 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api";
 import {
   cancelSubscription,
-  getPaymentHistory,
   getSubscription,
-  type PaymentRecord,
   type Subscription,
 } from "@/services/payments";
 
@@ -13,16 +11,8 @@ function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString() : "Not available";
 }
 
-function formatAmount(amount: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-  }).format(amount);
-}
-
 export default function SubscriptionSettings() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -33,12 +23,8 @@ export default function SubscriptionSettings() {
     setLoading(true);
     setError(null);
     try {
-      const [currentSubscription, history] = await Promise.all([
-        getSubscription(),
-        getPaymentHistory(),
-      ]);
+      const currentSubscription = await getSubscription();
       setSubscription(currentSubscription);
-      setPayments(history.payments);
       if (
         currentSubscription.cancel_at_period_end ||
         currentSubscription.status === "canceled"
@@ -76,10 +62,9 @@ export default function SubscriptionSettings() {
 
   return (
     <section
-      id="subscription"
-      className="scroll-mt-24 rounded-xl border border-border bg-card p-4 sm:p-6"
+      className="rounded-xl border border-border bg-card p-4 sm:p-6"
     >
-      <h2 className="text-xl font-semibold text-foreground">Subscription</h2>
+      <h2 className="text-xl font-semibold text-foreground">Current plan</h2>
 
       {loading ? (
         <p role="status" className="mt-4 text-muted-foreground">
@@ -98,23 +83,58 @@ export default function SubscriptionSettings() {
         </div>
       ) : subscription ? (
         <div className="mt-4 space-y-5">
-          <div>
-            <p className="text-foreground">
-              <span className="font-semibold">{subscription.plan}</span>
-              {" · "}
-              <span className="capitalize">{subscription.status}</span>
-            </p>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm text-muted-foreground">Plan</dt>
+              <dd className="mt-1 font-semibold capitalize text-foreground">
+                {subscription.plan}
+                {subscription.plan === "free" && " (Free)"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">Status</dt>
+              <dd className="mt-1 font-semibold capitalize text-foreground">
+                {subscription.status}
+              </dd>
+            </div>
+            {subscription.started_at && (
+              <div>
+                <dt className="text-sm text-muted-foreground">
+                  Subscription started
+                </dt>
+                <dd className="mt-1 text-foreground">
+                  {formatDate(subscription.started_at)}
+                </dd>
+              </div>
+            )}
+            {subscription.current_period_start && (
+              <div>
+                <dt className="text-sm text-muted-foreground">
+                  Current period started
+                </dt>
+                <dd className="mt-1 text-foreground">
+                  {formatDate(subscription.current_period_start)}
+                </dd>
+              </div>
+            )}
             {subscription.current_period_end && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Current period ends {formatDate(subscription.current_period_end)}.
-              </p>
+              <div>
+                <dt className="text-sm text-muted-foreground">
+                  {subscription.cancel_at_period_end
+                    ? "Subscription ends"
+                    : "Current period ends"}
+                </dt>
+                <dd className="mt-1 text-foreground">
+                  {formatDate(subscription.current_period_end)}
+                </dd>
+              </div>
             )}
-            {subscription.cancel_at_period_end && (
-              <p className="mt-2 text-sm text-amber-600">
-                Cancellation is confirmed for the end of this billing period.
-              </p>
-            )}
-          </div>
+          </dl>
+          {subscription.cancel_at_period_end && (
+            <p className="text-sm text-amber-600">
+              Cancellation is confirmed for the end of this billing period.
+            </p>
+          )}
 
           {cancelMessage && (
             <div role="status" className="text-sm text-muted-foreground">
@@ -153,32 +173,6 @@ export default function SubscriptionSettings() {
               </button>
             )}
 
-          <div>
-            <h3 className="font-semibold text-foreground">Payment history</h3>
-            {payments.length === 0 ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                No payments have been recorded.
-              </p>
-            ) : (
-              <ul className="mt-3 divide-y divide-border">
-                {payments.map((payment) => (
-                  <li
-                    key={payment.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
-                  >
-                    <span className="text-foreground">
-                      {payment.description ?? `${payment.plan_type} subscription`}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {formatAmount(payment.amount, payment.currency)} ·{" "}
-                      <span className="capitalize">{payment.status}</span> ·{" "}
-                      {formatDate(payment.created_at)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </div>
       ) : null}
     </section>

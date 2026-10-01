@@ -188,7 +188,7 @@ export default function TopNavbar({
                   <button
                     onClick={() =>
                       handleMenuItemClick(() =>
-                        navigate("/dashboard/settings#subscription")
+                        navigate("/dashboard/billing")
                       )
                     }
                     className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"

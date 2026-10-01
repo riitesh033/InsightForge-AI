@@ -20,6 +20,9 @@ import AnalysisPage from "@/pages/Dashboard/AnalysisPage";
 import ReportsPage from "@/pages/Dashboard/ReportsPage";
 import AIChatPage from "@/pages/Dashboard/AIChatPage";
 import SettingsPage from "@/pages/Dashboard/SettingsPage";
+import BillingPage from "@/pages/Dashboard/BillingPage";
+import SubscriptionPage from "@/pages/Dashboard/SubscriptionPage";
+import PaymentHistoryPage from "@/pages/Dashboard/PaymentHistoryPage";
 import { AdminDashboard } from "@/pages/Dashboard/AdminDashboard";
 
 import NotFoundPage from "@/pages/Error/NotFoundPage";
@@ -124,6 +127,21 @@ export default function AppRouter() {
         <Route
           path="ai-chat/:datasetId?"
           element={<AIChatPage />}
+        />
+
+        <Route
+          path="billing"
+          element={<BillingPage />}
+        />
+
+        <Route
+          path="subscription"
+          element={<SubscriptionPage />}
+        />
+
+        <Route
+          path="payment-history"
+          element={<PaymentHistoryPage />}
         />
 
 
