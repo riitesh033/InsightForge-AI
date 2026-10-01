@@ -148,7 +148,7 @@ export async function getCurrentUser(): Promise<{
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
-  is_superuser?: boolean;
+  is_superuser: boolean;
   created_at?: string;
 }> {
 
@@ -159,7 +159,7 @@ export async function getCurrentUser(): Promise<{
       email: string;
       profile_picture?: string | null;
       is_active: boolean;
-      is_superuser?: boolean;
+      is_superuser: boolean;
       created_at?: string;
     }>("/users/me");
 
@@ -182,6 +182,7 @@ export async function updateProfile(
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
+  is_superuser: boolean;
 }> {
 
   const response =
@@ -191,6 +192,7 @@ export async function updateProfile(
       email: string;
       profile_picture?: string | null;
       is_active: boolean;
+      is_superuser: boolean;
     }>(
       "/users/me",
       {
@@ -241,6 +243,7 @@ export async function uploadProfilePicture(
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
+  is_superuser: boolean;
 }> {
 
   const formData = new FormData();
@@ -253,6 +256,7 @@ export async function uploadProfilePicture(
       email: string;
       profile_picture?: string | null;
       is_active: boolean;
+      is_superuser: boolean;
     }>(
       "/users/me/profile-picture",
       formData,
@@ -276,6 +280,7 @@ export async function setBuiltinAvatar(
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
+  is_superuser: boolean;
 }> {
 
   const response =
@@ -285,6 +290,7 @@ export async function setBuiltinAvatar(
       email: string;
       profile_picture?: string | null;
       is_active: boolean;
+      is_superuser: boolean;
     }>(
       "/users/me/avatar",
       null,
@@ -311,6 +317,7 @@ export async function removeProfilePicture(): Promise<{
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
+  is_superuser: boolean;
 }> {
 
   const response =
@@ -320,6 +327,7 @@ export async function removeProfilePicture(): Promise<{
       email: string;
       profile_picture?: string | null;
       is_active: boolean;
+      is_superuser: boolean;
     }>("/users/me/profile-picture");
 
   return response.data;

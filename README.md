@@ -334,6 +334,18 @@ API activity triggers lazy cleanup; there is no periodic cleanup scheduler yet.
 Current upload validation checks size, declared media type, and file signature;
 an antivirus scanner is not configured.
 
+### Administrator account management
+
+Admin access is controlled by the database-backed `users.is_superuser` field.
+The field defaults to false for registered and Google-created accounts. There
+is no automatic admin bootstrap. From the backend service shell, inspect current
+admin accounts with `python -m app.scripts.create_admin --list`, check a
+specific existing account with
+`python -m app.scripts.create_admin --email <ADMIN_EMAIL> --check`, or promote
+an existing account with `python -m app.scripts.create_admin --email <ADMIN_EMAIL>`.
+Promotion requires typing `PROMOTE` at the prompt; no user data, password, or
+credential is created or replaced.
+
 ### Frontend (.env)
 
 | Variable | Description | Default |

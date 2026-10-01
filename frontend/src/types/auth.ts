@@ -20,7 +20,7 @@ export interface User {
   email: string;
   profile_picture?: string | null;
   is_active: boolean;
-  is_superuser?: boolean;
+  is_superuser: boolean;
   created_at?: string;
 }
 

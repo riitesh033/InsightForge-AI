@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
+import { getAdminRouteAccess } from './adminAccess.js';
 
 export const AdminRoute: React.FC = () => {
   const authContext = React.useContext(AuthContext);
@@ -12,7 +13,7 @@ export const AdminRoute: React.FC = () => {
   const { user, loading } = authContext;
 
   if (loading) return <div>Loading...</div>;
-  if (!user || !user.is_superuser) {
+  if (getAdminRouteAccess(user) !== "allowed") {
     return <Navigate to="/forbidden" replace />;
   }
 
