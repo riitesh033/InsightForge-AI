@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session
 
 from app.models.chat_message import ChatMessage
@@ -32,8 +34,16 @@ def get_chat_sessions_for_dataset(
     dataset_id: int,
     user_id: int,
 ):
+    last_message = (
+        db.query(ChatMessage.content)
+        .filter(ChatMessage.session_id == ChatSession.id)
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+        .limit(1)
+        .correlate(ChatSession)
+        .scalar_subquery()
+    )
     return (
-        db.query(ChatSession)
+        db.query(ChatSession, last_message.label("last_message"))
         .filter(
             ChatSession.dataset_id == dataset_id,
             ChatSession.user_id == user_id,
@@ -88,6 +98,14 @@ def create_chat_message(
     role: str,
     content: str,
 ):
+    session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id)
+        .first()
+    )
+    if session is not None:
+        session.updated_at = datetime.now(UTC).replace(tzinfo=None)
+
     message = ChatMessage(
         session_id=session_id,
         role=role,

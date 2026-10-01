@@ -39,6 +39,7 @@ from app.services.entitlements import (
     lock_user_for_quota,
     require_feature,
 )
+from app.models.chat_message import ChatMessage
 
 
 router = APIRouter()
@@ -69,11 +70,22 @@ def get_sessions(
             detail="Dataset not found.",
         )
 
-    return get_chat_sessions_for_dataset(
+    sessions = get_chat_sessions_for_dataset(
         db=db,
         dataset_id=dataset_id,
         user_id=current_user.id,
     )
+    summaries = []
+    for session, last_message in sessions:
+        preview = last_message
+        if preview and len(preview) > 180:
+            preview = f"{preview[:177].rstrip()}..."
+        summaries.append(
+            ChatSessionResponse.model_validate(session).model_copy(
+                update={"last_message": preview}
+            )
+        )
+    return summaries
 
 
 # ============================================================
@@ -265,6 +277,15 @@ async def chat_with_dataset(
 
     lock_user_for_quota(db, current_user.id)
     enforce_ai_query_limit(db, current_user.id)
+
+    if (
+        session.title in {"New Chat", "Dataset Chat"}
+        and db.query(ChatMessage.id)
+        .filter(ChatMessage.session_id == session.id)
+        .first()
+        is None
+    ):
+        session.title = question[:50]
 
     # --------------------------------------------------------
     # Save User Message

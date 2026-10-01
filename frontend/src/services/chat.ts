@@ -21,6 +21,7 @@ export interface ChatSession {
   title: string;
   created_at: string;
   updated_at: string;
+  last_message?: string | null;
 }
 
 

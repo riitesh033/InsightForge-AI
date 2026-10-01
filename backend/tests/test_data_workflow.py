@@ -350,6 +350,80 @@ def test_chat_persists_session_and_messages(
     ]
 
 
+def test_new_chat_title_uses_first_saved_user_message(
+    client, auth_headers, monkeypatch, tmp_path, workflow_files
+):
+    upload = upload_file(
+        client,
+        auth_headers,
+        monkeypatch,
+        tmp_path,
+        "normal.csv",
+        workflow_files["normal.csv"],
+    )
+    dataset_id = upload.json()["id"]
+    created = client.post(
+        f"/api/v1/chat/{dataset_id}/sessions",
+        headers=auth_headers,
+    )
+    assert created.status_code == 200, created.text
+    session_id = created.json()["id"]
+    assert created.json()["title"] == "New Chat"
+
+    response = client.post(
+        f"/api/v1/chat/{dataset_id}",
+        headers=auth_headers,
+        json={
+            "message": "How many rows are in this dataset?",
+            "session_id": session_id,
+        },
+    )
+    assert response.status_code == 200, response.text
+    second_created = client.post(
+        f"/api/v1/chat/{dataset_id}/sessions",
+        headers=auth_headers,
+    )
+    assert second_created.status_code == 200, second_created.text
+    second_id = second_created.json()["id"]
+    second_response = client.post(
+        f"/api/v1/chat/{dataset_id}",
+        headers=auth_headers,
+        json={
+            "message": "How many rows are in this dataset?",
+            "session_id": second_id,
+        },
+    )
+    assert second_response.status_code == 200, second_response.text
+
+    sessions = client.get(
+        f"/api/v1/chat/{dataset_id}/sessions",
+        headers=auth_headers,
+    )
+
+    assert sessions.status_code == 200
+    assert [item["id"] for item in sessions.json()] == [second_id, session_id]
+    assert sessions.json()[1]["title"] == "How many rows are in this dataset?"
+    assert sessions.json()[1]["last_message"] == response.json()["answer"]
+
+    refreshed_first = client.get(
+        f"/api/v1/chat/sessions/{session_id}",
+        headers=auth_headers,
+    )
+    refreshed_second = client.get(
+        f"/api/v1/chat/sessions/{second_id}",
+        headers=auth_headers,
+    )
+    assert refreshed_first.status_code == refreshed_second.status_code == 200
+    assert [item["content"] for item in refreshed_first.json()["messages"]] == [
+        "How many rows are in this dataset?",
+        response.json()["answer"],
+    ]
+    assert [item["content"] for item in refreshed_second.json()["messages"]] == [
+        "How many rows are in this dataset?",
+        second_response.json()["answer"],
+    ]
+
+
 def test_chat_provider_failure_returns_safe_answer_and_persists_messages(
     client, auth_headers, monkeypatch, tmp_path, workflow_files
 ):
@@ -442,6 +516,24 @@ def test_chat_rejects_unauthenticated_and_unowned_requests(
         headers=other_headers,
         json={"message": "How many rows?"},
     ).status_code == 404
+
+    created_session = client.post(
+        f"{url}/sessions",
+        headers=auth_headers,
+    )
+    assert created_session.status_code == 200
+    session_id = created_session.json()["id"]
+    session_url = f"/api/v1/chat/sessions/{session_id}"
+
+    assert client.get(session_url).status_code == 401
+    assert client.get(session_url, headers=other_headers).status_code == 404
+    assert client.delete(session_url, headers=other_headers).status_code == 404
+    assert client.get(
+        f"{url}/sessions",
+        headers=other_headers,
+    ).status_code == 404
+    assert client.delete(session_url, headers=auth_headers).status_code == 204
+    assert client.get(session_url, headers=auth_headers).status_code == 404
 
 
 def test_report_download_generates_pdf(
