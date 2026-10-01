@@ -9,21 +9,25 @@ export default function ThemeToggle() {
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="icon"
       onClick={toggleTheme}
       className="
+        shrink-0
         text-foreground
         hover:bg-accent
         hover:text-accent-foreground
-        transition-all
-        duration-300
+        transition-colors
+        duration-200
       "
-      aria-label="Toggle Theme"
+      aria-label={
+        theme === "light" ? "Enable dark mode" : "Enable light mode"
+      }
+      title={theme === "light" ? "Dark mode" : "Light mode"}
     >
       {theme === "light" ? (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-5 w-5" aria-hidden="true" />
       ) : (
-        <Sun className="h-5 w-5 text-yellow-500" />
+        <Sun className="h-5 w-5 text-yellow-500" aria-hidden="true" />
       )}
     </Button>
   );

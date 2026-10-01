@@ -129,7 +129,7 @@ export default function AdminStudentVerificationPage() {
   const canMoveForward = result !== null && offset + result.limit < result.total;
 
   return (
-    <div className="mx-auto min-w-0 max-w-7xl space-y-6">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-6 text-foreground transition-colors duration-200">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
           <ShieldCheck className="mt-1 size-7 shrink-0 text-primary" />
@@ -146,15 +146,15 @@ export default function AdminStudentVerificationPage() {
           type="button"
           onClick={() => void loadApplications()}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground disabled:opacity-60"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className="size-4" />
           Refresh
         </button>
       </header>
 
-      {error && <p role="alert" className="rounded-xl border border-destructive/40 p-4 text-destructive">{error}</p>}
-      {message && <p role="status" className="rounded-xl border border-border bg-card p-4 text-foreground">{message}</p>}
+      {error && <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-destructive transition-colors duration-200">{error}</p>}
+      {message && <p role="status" className="rounded-xl border border-border bg-card p-4 text-foreground transition-colors duration-200">{message}</p>}
 
       <div className="flex flex-wrap gap-2" aria-label="Filter student applications">
         {FILTERS.map((item) => (
@@ -163,10 +163,10 @@ export default function AdminStudentVerificationPage() {
             type="button"
             aria-pressed={filter === item}
             onClick={() => updateFilter(item)}
-            className={`rounded-full px-4 py-2 text-sm font-medium capitalize ${
+            className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
               filter === item
                 ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-secondary-foreground"
+                : "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
           >
             {item}
@@ -191,7 +191,7 @@ export default function AdminStudentVerificationPage() {
                       setSelected(application);
                       setRejectionReason("");
                     }}
-                    className={`w-full min-w-0 p-4 text-left hover:bg-secondary/60 ${
+                    className={`w-full min-w-0 p-4 text-left transition-colors duration-200 hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
                       selected?.id === application.id ? "bg-secondary/60" : ""
                     }`}
                   >
@@ -212,7 +212,7 @@ export default function AdminStudentVerificationPage() {
               type="button"
               disabled={!canMoveBack || loading}
               onClick={() => setOffset((current) => Math.max(0, current - 25))}
-              className="rounded-md px-3 py-2 text-sm text-foreground disabled:opacity-40"
+              className="rounded-md px-3 py-2 text-sm text-foreground transition-colors duration-200 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               Previous
             </button>
@@ -220,7 +220,7 @@ export default function AdminStudentVerificationPage() {
               type="button"
               disabled={!canMoveForward || loading}
               onClick={() => setOffset((current) => current + 25)}
-              className="rounded-md px-3 py-2 text-sm text-foreground disabled:opacity-40"
+              className="rounded-md px-3 py-2 text-sm text-foreground transition-colors duration-200 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
             </button>
@@ -261,7 +261,7 @@ export default function AdminStudentVerificationPage() {
                   type="button"
                   disabled={!selected.proof_available}
                   onClick={() => void handleProofDownload()}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground disabled:opacity-50"
+                  className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Download className="size-4" />
                   {selected.proof_available ? "Download proof" : "Proof expired"}
@@ -274,7 +274,7 @@ export default function AdminStudentVerificationPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void handleApprove()}
-                    className="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:opacity-60 sm:w-auto"
+                    className="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-primary-foreground transition-colors duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
                     {busy ? "Saving..." : "Approve · grant 365 days Pro"}
                   </button>
@@ -286,7 +286,7 @@ export default function AdminStudentVerificationPage() {
                       rows={3}
                       value={rejectionReason}
                       onChange={(event) => setRejectionReason(event.target.value)}
-                      className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5"
+                      className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       placeholder="Explain what is missing or why the proof is not sufficient."
                     />
                   </label>
@@ -294,7 +294,7 @@ export default function AdminStudentVerificationPage() {
                     type="button"
                     disabled={busy || !rejectionReason.trim()}
                     onClick={() => void handleReject()}
-                    className="rounded-lg border border-destructive/50 px-4 py-3 font-semibold text-destructive disabled:opacity-50"
+                    className="rounded-lg border border-destructive/50 px-4 py-3 font-semibold text-destructive transition-colors duration-200 hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Reject application
                   </button>
