@@ -3,6 +3,7 @@ import {
   Columns3,
   Rows3,
   AlertTriangle,
+  ScanSearch,
 } from "lucide-react";
 
 interface MissingValueInfo {
@@ -19,12 +20,14 @@ interface Props {
   summary: Record<string, unknown>;
   missingValues: Record<string, MissingValueInfo>;
   duplicates: DuplicateInfo;
+  potentialOutliers?: number;
 }
 
 export default function AnalysisStats({
   summary,
   missingValues,
   duplicates,
+  potentialOutliers = 0,
 }: Props) {
   const totalRows = Number(summary?.rows ?? 0);
 
@@ -84,10 +87,16 @@ export default function AnalysisStats({
           : "No duplicate rows",
       icon: Database,
     },
+    {
+      title: "Potential Outliers",
+      value: potentialOutliers.toLocaleString(),
+      description: "IQR flags across numeric columns",
+      icon: ScanSearch,
+    },
   ];
 
   return (
-    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
 
       {cards.map((card) => {
         const Icon = card.icon;

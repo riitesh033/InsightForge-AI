@@ -335,6 +335,8 @@ export default function SettingsPage() {
               {BUILTIN_AVATARS.map((avatarId) => (
                 <button
                   key={avatarId}
+                  type="button"
+                  aria-label={`Select avatar ${avatarId.replace("avatar_", "")}`}
                   onClick={() => handleSelectAvatar(avatarId)}
                   className={`
                     relative aspect-square rounded-lg overflow-hidden border-2 transition
@@ -342,11 +344,13 @@ export default function SettingsPage() {
                       ? "border-primary"
                       : "border-transparent hover:border-muted"
                     }
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
                   `}
                 >
                   <img
                     src={`/avatars/${avatarId}.svg`}
-                    alt={avatarId}
+                    alt=""
+                    aria-hidden="true"
                     className="h-full w-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = "/avatars/avatar_01.svg";

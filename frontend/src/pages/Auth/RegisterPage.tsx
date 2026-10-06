@@ -107,11 +107,15 @@ export default function RegisterPage() {
       >
 
         <div>
-          <label className="text-sm font-medium text-foreground">
+          <label
+            htmlFor="register-full-name"
+            className="text-sm font-medium text-foreground"
+          >
             Full Name
           </label>
 
           <input
+            id="register-full-name"
             required
             type="text"
             value={full_name}
@@ -137,11 +141,15 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">
+          <label
+            htmlFor="register-email"
+            className="text-sm font-medium text-foreground"
+          >
             Email
           </label>
 
           <input
+            id="register-email"
             required
             type="email"
             value={email}
@@ -167,11 +175,15 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground">
+          <label
+            htmlFor="register-password"
+            className="text-sm font-medium text-foreground"
+          >
             Password
           </label>
 
           <PasswordInput
+            id="register-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

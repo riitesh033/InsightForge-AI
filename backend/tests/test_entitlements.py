@@ -3,12 +3,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import HTTPException
 
+from app.core.config import settings
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.models.dataset import Dataset
 from app.models.subscription import PlanType, Subscription, SubscriptionStatus
 from app.models.user import User
-from app.services import dataset as dataset_service
 from app.services.payment import payment_service
 
 API = "/api/v1"
@@ -42,7 +42,7 @@ def test_free_dataset_limit_is_enforced_before_upload(
     for index in range(3):
         make_dataset(db, user.id, f"existing-{index}.csv")
 
-    monkeypatch.setattr(dataset_service, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(tmp_path))
     response = client.post(
         f"{API}/datasets/upload",
         headers=auth_headers,
@@ -142,7 +142,7 @@ def test_chat_limit_counts_monthly_user_messages_and_blocks_next_request(
     client, auth_headers, user_dict, db, monkeypatch, tmp_path
 ):
     user = get_user(db, user_dict)
-    monkeypatch.setattr(dataset_service, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(tmp_path))
     upload = client.post(
         f"{API}/datasets/upload",
         headers=auth_headers,

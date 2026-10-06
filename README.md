@@ -2,20 +2,37 @@
 
 ## Your AI Data Analyst
 
-InsightForge AI is an intelligent web-based dataset analysis platform that automates data quality assessment, statistical analysis, and insight generation. Upload your CSV or Excel files and get instant professional analysis with AI-powered insights.
+InsightForge AI is an intelligent web-based dataset analysis platform that automates data quality assessment, statistical analysis, and insight generation. Upload CSV or Excel files (`.csv`, `.xls`, `.xlsx`) for professional analysis and AI-powered insights.
 
 ![Dashboard](docs/images/dashboard.png)
 
 ## Features
 
 ### 📊 Automated Data Analysis
-- **Data Profiling**: Automatic detection of rows, columns, datatypes, and memory usage
-- **Quality Scoring**: Composite score (0-100) based on completeness, uniqueness, validity, and consistency
+- **Data Profiling**: Automatic detection of rows, columns, data types, and memory usage
+- **Quality Scoring**: Deterministic composite score (0-100) based on missing cells, duplicate rows, and potential outliers
 - **Missing Value Detection**: Identify and analyze missing data patterns
 - **Duplicate Detection**: Find and quantify duplicate rows
 - **Outlier Detection**: IQR-based outlier identification for numerical columns
 - **Statistical Summary**: Mean, median, standard deviation, quartiles, and more
 - **Correlation Analysis**: Pearson correlation matrix for numerical features
+
+On upload, InsightForge AI automatically profiles uploaded datasets and
+calculates row/column counts, data types, missing values, duplicate records,
+descriptive statistics, correlations, IQR-based potential outliers, a
+deterministic quality score, and data-driven recommendations. The AI layer
+then converts the verified profile into a natural-language explanation.
+
+The quality score starts at 100 and subtracts up to 45 points for missing
+cells (the missing-cell share of all cells), up to 25 points for duplicate
+rows (the duplicate-row share of records), and up to 30 points for potential
+outliers (the outlier share of observed numeric values). Each penalty is
+proportional to its measured share and capped at its stated maximum; the
+result is rounded to the nearest whole number. Empty datasets score 0 because
+there are no records to assess. Duplicate detection retains the existing
+behavior of ignoring ID-like columns when identifying otherwise repeated
+records. These fixed weights make the score deterministic for unchanged
+input; it is an overview metric, not a statistical guarantee.
 
 ### 🤖 AI-Powered Insights
 - **Automatic Insights**: AI-generated findings about patterns, anomalies, and recommendations
@@ -23,7 +40,7 @@ InsightForge AI is an intelligent web-based dataset analysis platform that autom
 - **Smart Recommendations**: Data cleaning suggestions with preview
 
 ### 📁 Dataset Management
-- **Multi-format Support**: CSV and Excel (.xlsx) file uploads
+- **Multi-format Support**: CSV and Excel (.xls, .xlsx) file uploads
 - **Secure Storage**: User-isolated datasets with ownership enforcement
 - **Version Control**: Original and cleaned dataset versions
 - **Search & Filter**: Find datasets quickly with search functionality
@@ -85,7 +102,7 @@ cleaning require Pro or Business.
 - **Node.js** 18+
 - **Python** 3.10+
 - **PostgreSQL** 14+
-- **Ollama** (optional, for AI features)
+- An AI provider configured for the backend (Gemini, OpenRouter, or Ollama; optional for non-AI workflows)
 
 ### Installation
 
@@ -162,7 +179,7 @@ Frontend will be available at: `http://localhost:5173`
 1. Open browser to `http://localhost:5173`
 2. Register a new account
 3. Login with your credentials
-4. Upload a CSV or Excel dataset
+4. Upload a CSV or Excel (`.xls`/`.xlsx`) dataset
 5. View automatic analysis and AI insights
 
 ### Docker Deployment
@@ -264,11 +281,12 @@ docker build --target production \
 - **PostgreSQL** - Database
 - **Alembic** - Migrations
 - **Pandas** - Data processing
-- **PyPDF2** - PDF generation
+- **ReportLab** - PDF generation
 
 ### AI
-- **Ollama** - Local LLM runtime
-- **qwen3:8b** - Language model (configurable)
+- **Gemini** - Primary provider by default
+- **OpenRouter** - Fallback provider
+- **Ollama** - Local fallback (`qwen3:8b` by default)
 
 ## Project Structure
 
@@ -316,6 +334,7 @@ InsightForge-AI/
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:postgres@localhost:5432/insightforge` |
 | `SECRET_KEY` | JWT signing key (change in production!) | `your-secret-key-change-in-production` |
 | `FRONTEND_URL` | Frontend URL for CORS | `http://localhost:5173` |
+| `DATASET_STORAGE_DIR` | Directory for uploaded datasets | `app/uploads/datasets` |
 | `OLLAMA_BASE_URL` | Ollama API URL | `http://host.docker.internal:11434` |
 | `OLLAMA_MODEL` | AI model name | `qwen3:8b` |
 | `ALGORITHM` | JWT algorithm | `HS256` |
@@ -327,12 +346,28 @@ InsightForge-AI/
 Student verification evidence is stored outside the frontend/static asset tree
 and is served only through authenticated admin endpoints. On Render or another
 ephemeral-filesystem host, set `STUDENT_VERIFICATION_STORAGE_DIR` to a mounted
-persistent disk directory (for example, `/var/data/student_verification`) so
-documents survive deploys. Restrict filesystem access to the backend service.
+persistent disk directory (for example,
+`/var/data/insightforge/student-verification`) so documents survive deploys.
+Restrict filesystem access to the backend service.
 Reviewed proof files are deleted after 90 days when student/admin verification
 API activity triggers lazy cleanup; there is no periodic cleanup scheduler yet.
 Current upload validation checks size, declared media type, and file signature;
 an antivirus scanner is not configured.
+
+Uploaded CSV/XLS/XLSX files are stored under `DATASET_STORAGE_DIR`; the default
+is `backend/app/uploads/datasets` for local development and Docker Compose. On
+Render, service filesystems are ephemeral. To keep uploads available after
+restarts and deploys, attach a Persistent Disk mounted at `/var/data` and set
+`DATASET_STORAGE_DIR=/var/data/insightforge/datasets`. New database records
+store only the generated filename; existing absolute or relative file paths
+continue to resolve by filename under the configured storage root. Dataset
+metadata does not contain original file contents, so a missing file cannot be
+reconstructed from the database.
+
+Student verification proof documents use the separate
+`STUDENT_VERIFICATION_STORAGE_DIR`. For persistence, set it to
+`/var/data/insightforge/student-verification` on that same mounted disk. Do not
+put private proof documents in a public/static directory.
 
 ### Administrator account management
 
@@ -369,23 +404,45 @@ Key endpoints:
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register new user |
 | POST | `/api/v1/auth/login` | Login user |
+| GET | `/api/v1/auth/google/login` | Start Google OAuth login |
+| POST | `/api/v1/auth/forgot-password` | Request a password reset |
+| POST | `/api/v1/auth/reset-password` | Reset a password |
 | POST | `/api/v1/auth/admin/login` | Admin-only credential login |
 | GET | `/api/v1/users/me` | Get current user |
-| POST | `/api/v1/datasets/` | Upload dataset |
-| GET | `/api/v1/datasets/` | List user datasets |
-| GET | `/api/v1/datasets/{id}` | Get dataset details |
-| DELETE | `/api/v1/datasets/{id}` | Delete dataset |
+| POST | `/api/v1/datasets/upload` | Upload a dataset |
+| GET | `/api/v1/datasets` | List the current user's datasets |
+| GET | `/api/v1/datasets/{dataset_id}` | Get an owned dataset |
+| PATCH | `/api/v1/datasets/{dataset_id}` | Rename an owned dataset |
+| DELETE | `/api/v1/datasets/{dataset_id}` | Delete an owned dataset |
+| GET | `/api/v1/datasets/{dataset_id}/download` | Download the original dataset |
 | GET | `/api/v1/student-verification/me` | Get student verification status |
 | POST | `/api/v1/student-verification/applications` | Submit student verification evidence |
+| POST | `/api/v1/student-verification/applications/{application_id}/withdraw` | Withdraw a pending application |
 | GET | `/api/v1/admin/student-verifications` | Admin-only application review queue |
+| GET | `/api/v1/admin/student-verifications/{id}/proof` | Admin-only proof document download |
 | POST | `/api/v1/admin/student-verifications/{id}/approve` | Admin-only approval and one-year Pro access |
 | POST | `/api/v1/admin/student-verifications/{id}/reject` | Admin-only rejection with reason |
 | GET | `/api/v1/analysis/{dataset_id}` | Get analysis results |
-| POST | `/api/v1/chat/sessions/` | Create chat session |
-| POST | `/api/v1/chat/sessions/{id}/messages/` | Send message |
-| POST | `/api/v1/reports/{dataset_id}/generate/` | Generate PDF report |
-| POST | `/api/v1/cleaning/{dataset_id}/preview/` | Preview cleaning |
-| POST | `/api/v1/cleaning/{dataset_id}/apply/` | Apply cleaning |
+| GET | `/api/v1/analysis/{dataset_id}/explanation` | Get a cached AI explanation or generate one from the verified profile |
+| GET | `/api/v1/analysis/{dataset_id}/report` | Generate/download an analysis PDF |
+| GET | `/api/v1/reports/` | List reports for the current user |
+| GET | `/api/v1/reports/{dataset_id}/pdf` | Download a dataset PDF report |
+| GET/POST | `/api/v1/chat/{dataset_id}/sessions` | List/create dataset chat sessions |
+| GET/DELETE | `/api/v1/chat/sessions/{session_id}` | Read/delete an owned chat session |
+| POST | `/api/v1/chat/{dataset_id}` | Send a message about an owned dataset |
+| POST | `/api/v1/cleaning/{dataset_id}/preview` | Preview cleaning |
+| POST | `/api/v1/cleaning/{dataset_id}/apply` | Apply cleaning |
+| GET | `/api/v1/cleaning/{dataset_id}/download` | Download the cleaned dataset |
+| GET | `/api/v1/payments/plans` | List available plans |
+| POST | `/api/v1/payments/create-checkout` | Start paid-plan checkout |
+| GET | `/api/v1/payments/subscription` | Read the current user's subscription |
+| POST | `/api/v1/payments/cancel` | Request subscription cancellation |
+| GET | `/api/v1/payments/history` | Read the current user's payment history |
+| GET | `/api/v1/payments/invoices/{invoice_id}` | Download an owned invoice |
+| POST | `/api/v1/payments/webhook` | Process a Stripe-signed webhook |
+
+The API's OpenAPI schema at `/openapi.json` is the source of truth for all
+routes and request/response schemas.
 
 ## Testing
 
@@ -393,7 +450,7 @@ Key endpoints:
 
 ```bash
 cd backend
-pytest
+pytest -q
 ```
 
 ### Frontend Build & Type Check
@@ -443,15 +500,22 @@ Change ports in configuration files:
 - Frontend: Edit `vite.config.ts` with different port
 - Database: Change port in `DATABASE_URL`
 
-### Migration Errors
+### Migration Status
 
-Reset and re-run migrations:
+Inspect migration state and apply forward migrations:
 
 ```bash
 cd backend
-alembic downgrade base
+alembic current
+alembic heads
+alembic history
 alembic upgrade head
 ```
+
+The current repository migration head is
+`20261001_student_verification`. Back up the database before any migration
+operation. Do not downgrade to `base` or reset an existing database to
+troubleshoot a migration problem.
 
 ## Production Deployment
 
@@ -473,10 +537,18 @@ alembic upgrade head
 - **Database**: Managed PostgreSQL (AWS RDS, Supabase, Neon)
 - **AI**: Self-hosted Ollama or cloud LLM provider
 
+For Render, attach a Persistent Disk to the backend and set
+`DATASET_STORAGE_DIR` and `STUDENT_VERIFICATION_STORAGE_DIR` to directories
+under its configured mount path (for example `/var/data/insightforge/datasets`
+and `/var/data/insightforge/student-verification` for a disk mounted at
+`/var/data`). Render's service filesystem is ephemeral without that disk. The
+repository does not include a Render deployment manifest, so disk attachment
+and environment values must be configured in the Render service settings.
+
 ## Limitations
 
 1. **Dataset Size**: Performance may degrade with files >100MB
-2. **AI Availability**: Requires Ollama service; graceful degradation implemented
+2. **AI Availability**: Requires an available configured AI provider; graceful degradation is implemented
 3. **Concurrent Users**: Single-user per dataset (no real-time collaboration)
 4. **Analytics Scope**: Descriptive statistics only (no predictive modeling)
 

@@ -247,7 +247,10 @@ def load_dataset(
     The original file is read-only for report generation.
     """
 
-    file_path = resolve_dataset_path(dataset.file_path)
+    try:
+        file_path = resolve_dataset_path(dataset.file_path)
+    except ValueError:
+        raise FileNotFoundError("Dataset file not found on server.") from None
 
     if not file_path.is_file():
         raise FileNotFoundError("Dataset file not found on server.")
@@ -2522,6 +2525,30 @@ def generate_analysis_report(
         )
 
     # ========================================================
+    # OPTIONAL CACHED AI EXPLANATION
+    # ========================================================
+
+    cached_explanation = (
+        analysis.summary.get("ai_explanation")
+        if isinstance(analysis.summary, dict)
+        else None
+    )
+    if isinstance(cached_explanation, str) and cached_explanation.strip():
+        story.append(Spacer(1, 10))
+        story.append(
+            Paragraph(
+                "AI Dataset Explanation",
+                section_style,
+            )
+        )
+        story.append(
+            Paragraph(
+                safe_text(cached_explanation),
+                body_style,
+            )
+        )
+
+    # ========================================================
     # 13. FINAL DATA HEALTH ASSESSMENT
     # ========================================================
 
@@ -2557,33 +2584,36 @@ def generate_analysis_report(
     if quality_score_value >= 90:
 
         assessment = (
-            "The dataset demonstrates strong overall "
-            "data quality with relatively few detected "
-            "quality issues."
+            "Excellent data quality. No major data-quality "
+            "issues were detected."
         )
 
     elif quality_score_value >= 75:
 
         assessment = (
-            "The dataset demonstrates acceptable data "
-            "quality, although several areas may benefit "
-            "from additional cleaning."
+            "Good data quality, although some findings may "
+            "benefit from review."
         )
 
-    elif quality_score_value >= 50:
+    elif quality_score_value >= 60:
 
         assessment = (
-            "The dataset contains notable quality issues "
-            "that should be addressed before relying "
-            "heavily on analytical results."
+            "Fair data quality. Review the detected issues "
+            "before relying on the dataset."
+        )
+
+    elif quality_score_value >= 40:
+
+        assessment = (
+            "Poor data quality. Several significant issues "
+            "need attention."
         )
 
     else:
 
         assessment = (
-            "The dataset contains significant quality "
-            "concerns and should undergo substantial "
-            "cleaning and validation."
+            "Critical data quality concerns require "
+            "substantial cleaning and validation."
         )
 
     story.append(
@@ -2612,6 +2642,26 @@ def generate_analysis_report(
             ),
         )
     )
+
+    score_factors = (
+        analysis.summary.get("quality_score_factors", {})
+        if isinstance(analysis.summary, dict)
+        else {}
+    )
+    if isinstance(score_factors, dict) and score_factors:
+        factor_lines = [
+            f"{safe_text(label.replace('_', ' ').title())}: "
+            f"{format_number(value)} point(s) deducted"
+            for label, value in score_factors.items()
+        ]
+        story.append(Spacer(1, 5))
+        story.append(
+            Paragraph(
+                "<b>Quality score factors:</b><br/>"
+                + "<br/>".join(factor_lines),
+                body_style,
+            )
+        )
 
     # ========================================================
     # BUILD PDF

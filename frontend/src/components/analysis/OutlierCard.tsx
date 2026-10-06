@@ -46,6 +46,18 @@ export default function OutlierCard({
       return {
         column,
         count,
+        percentage:
+          typeof value === "object" && value !== null
+            ? value.percentage
+            : null,
+        lowerBound:
+          typeof value === "object" && value !== null
+            ? value.lower_bound
+            : null,
+        upperBound:
+          typeof value === "object" && value !== null
+            ? value.upper_bound
+            : null,
       };
     })
     .filter((item) => item.count > 0)
@@ -78,11 +90,11 @@ export default function OutlierCard({
 
         <div>
           <h2 className="text-xl font-semibold">
-            Outlier Detection
+            Potential Outliers
           </h2>
 
           <p className="text-sm text-muted-foreground">
-            Abnormal values detected in numerical columns.
+            IQR-based flags identify values for review, not automatic errors.
           </p>
         </div>
 
@@ -134,7 +146,7 @@ export default function OutlierCard({
 
           </div>
         ) : (
-          columns.map(({ column, count }) => (
+          columns.map(({ column, count, percentage, lowerBound, upperBound }) => (
 
             <div
               key={column}
@@ -168,13 +180,20 @@ export default function OutlierCard({
               </div>
 
               <p className="mt-2 text-xs text-muted-foreground">
-                {totalOutliers > 0
-                  ? `${(
+                {typeof percentage === "number"
+                  ? `${percentage.toFixed(2)}% of observed values in this column`
+                  : `${(
                       (count / totalOutliers) *
                       100
-                    ).toFixed(1)}% of detected outliers`
-                  : "No outliers"}
+                    ).toFixed(1)}% of detected outliers`}
               </p>
+              {typeof lowerBound === "number" &&
+                typeof upperBound === "number" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    IQR bounds: {lowerBound.toLocaleString()} to{" "}
+                    {upperBound.toLocaleString()}
+                  </p>
+                )}
 
             </div>
 

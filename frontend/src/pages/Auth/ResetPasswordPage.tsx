@@ -61,9 +61,17 @@ export default function ResetPasswordPage() {
       <h1 className="text-2xl font-bold mb-6">Reset Password</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
+          <label
+            htmlFor="reset-new-password"
+            className="mb-1 block text-sm font-medium text-foreground"
+          >
+            New password
+          </label>
           <input
+            id="reset-new-password"
             type="password"
             placeholder="New password"
+            autoComplete="new-password"
             {...register("new_password")}
             className="w-full border rounded px-3 py-2"
           />
@@ -72,9 +80,17 @@ export default function ResetPasswordPage() {
           )}
         </div>
         <div>
+          <label
+            htmlFor="reset-confirm-password"
+            className="mb-1 block text-sm font-medium text-foreground"
+          >
+            Confirm new password
+          </label>
           <input
+            id="reset-confirm-password"
             type="password"
             placeholder="Confirm new password"
+            autoComplete="new-password"
             {...register("confirm_password")}
             className="w-full border rounded px-3 py-2"
           />

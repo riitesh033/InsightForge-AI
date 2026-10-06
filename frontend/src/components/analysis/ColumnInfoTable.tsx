@@ -1,6 +1,7 @@
 interface ColumnInfo {
   name: string;
   dtype: string;
+  pandas_dtype?: string | null;
   unique: number;
   missing: number;
   missing_percentage?: number | null;
@@ -8,9 +9,15 @@ interface ColumnInfo {
 }
 
 interface ColumnStatistics {
+  count?: number | null;
   mean?: number | null;
+  median?: number | null;
   standard_deviation?: number | null;
   std?: number | null;
+  minimum?: number | null;
+  maximum?: number | null;
+  top?: string | null;
+  frequency?: number | null;
 }
 
 interface Props {
@@ -87,7 +94,7 @@ export default function ColumnInfoTable({
 
       <div className="overflow-x-auto">
 
-        <table className="w-full min-w-[800px]">
+        <table className="w-full min-w-[1120px]">
 
           <thead className="bg-muted/40">
 
@@ -114,13 +121,36 @@ export default function ColumnInfoTable({
               </th>
 
               <th className="px-5 py-3 text-center text-sm font-semibold">
+                Count
+              </th>
+
+              <th className="px-5 py-3 text-center text-sm font-semibold">
                 Mean
+              </th>
+
+              <th className="px-5 py-3 text-center text-sm font-semibold">
+                Median
               </th>
 
               <th className="px-5 py-3 text-center text-sm font-semibold">
                 Std
               </th>
 
+              <th className="px-5 py-3 text-center text-sm font-semibold">
+                Min
+              </th>
+
+              <th className="px-5 py-3 text-center text-sm font-semibold">
+                Max
+              </th>
+
+              <th className="px-5 py-3 text-left text-sm font-semibold">
+                Most Frequent
+              </th>
+
+              <th className="px-5 py-3 text-center text-sm font-semibold">
+                Frequency
+              </th>
             </tr>
 
           </thead>
@@ -132,7 +162,7 @@ export default function ColumnInfoTable({
               <tr>
 
                 <td
-                  colSpan={7}
+                  colSpan={13}
                   className="py-10 text-center text-muted-foreground"
                 >
                   No column information available.
@@ -205,6 +235,11 @@ export default function ColumnInfoTable({
                       >
                         {info.dtype || "-"}
                       </span>
+                      {info.pandas_dtype && info.pandas_dtype !== info.dtype && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {info.pandas_dtype}
+                        </span>
+                      )}
 
                     </td>
 
@@ -234,16 +269,38 @@ export default function ColumnInfoTable({
                       {formatPercent(missingPercent)}
                     </td>
 
-                    {/* Mean */}
+                    {/* Descriptive statistics */}
+
+                    <td className="px-5 py-4 text-center">
+                      {formatNumber(stats.count)}
+                    </td>
 
                     <td className="px-5 py-4 text-center">
                       {formatNumber(mean)}
                     </td>
 
-                    {/* Standard Deviation */}
+                    <td className="px-5 py-4 text-center">
+                      {formatNumber(stats.median)}
+                    </td>
 
                     <td className="px-5 py-4 text-center">
                       {formatNumber(std)}
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      {formatNumber(stats.minimum)}
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      {formatNumber(stats.maximum)}
+                    </td>
+
+                    <td className="max-w-48 truncate px-5 py-4" title={stats.top ?? ""}>
+                      {stats.top ?? "-"}
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      {formatNumber(stats.frequency)}
                     </td>
 
                   </tr>
@@ -267,7 +324,8 @@ export default function ColumnInfoTable({
         <div className="border-t px-6 py-4">
 
           <p className="text-xs text-muted-foreground">
-            Showing {columns.length}{" "}
+            Horizontal scrolling is available for the full table. Showing{" "}
+            {columns.length}{" "}
             {columns.length === 1
               ? "column"
               : "columns"}{" "}

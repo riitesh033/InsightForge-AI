@@ -30,7 +30,13 @@ def get_cleaned_file_info(
         original_name_cleaned.extension
     """
 
-    original_path = resolve_dataset_path(dataset.file_path)
+    try:
+        original_path = resolve_dataset_path(dataset.file_path)
+    except ValueError:
+        return {
+            "cleaned_available": False,
+            "cleaned_filename": None,
+        }
 
     if not original_path.is_file():
         return {
@@ -212,7 +218,9 @@ def rename_dataset(
         f"{cleaned_extension}"
     )
 
-    requested_name = Path(new_name)
+    requested_name = Path(
+        new_name.replace("\\", "/").rsplit("/", 1)[-1]
+    )
 
     # If user doesn't provide an extension,
     # preserve the original extension.
@@ -261,9 +269,7 @@ def rename_dataset(
     # Update database record
     dataset.original_filename = new_name
     dataset.filename = new_filename
-    dataset.file_path = str(
-        new_original_path
-    )
+    dataset.file_path = new_filename
 
     db.commit()
     db.refresh(dataset)

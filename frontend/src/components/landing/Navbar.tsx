@@ -89,8 +89,12 @@ export default function Navbar() {
 
           {/* Mobile Menu Button */}
           <button
+            type="button"
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={open}
+            aria-controls="landing-mobile-menu"
             onClick={() => setOpen(!open)}
-            className="md:hidden text-foreground"
+            className="rounded-md text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:hidden"
           >
             {open ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -100,7 +104,10 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {open && (
-        <div className="border-t border-border bg-background md:hidden">
+        <div
+          id="landing-mobile-menu"
+          className="border-t border-border bg-background md:hidden"
+        >
 
           <div className="flex flex-col gap-5 p-6">
 

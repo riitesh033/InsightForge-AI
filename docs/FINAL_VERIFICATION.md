@@ -2,6 +2,27 @@
 
 This report records checks actually run in the local verification environment. A passing mocked test or local container check is not evidence that a third-party production integration is configured.
 
+## Latest repository verification
+
+Results below are the later regression pass, not a rerun of the disposable
+PostgreSQL/Compose integration recorded further down. The current migration
+graph has one head: `20261001_student_verification`.
+
+| Check | Result |
+|---|---|
+| `python -m compileall backend/app backend/alembic` | PASS |
+| Backend `pytest -q` | PASS — 152 passed, 64 warnings |
+| Frontend `npm run test:admin-route` | PASS — 5 passed |
+| Frontend `npm run build` | PASS — existing large-chunk advisory |
+| Frontend `npm run lint` | PASS — 0 errors, 3 Fast Refresh warnings |
+| `git diff --check` | PASS |
+| Current configured database migration drift check (`alembic check`) | NOT RUN |
+| Live Render storage, external AI/email providers, and live Stripe | NOT VERIFIED |
+
+These results do not establish that a Render Persistent Disk is attached or
+that its environment variables are configured. See the current storage
+requirements in the root [README](../README.md).
+
 ## Verified locally
 
 | CHECK | RESULT | COMMAND/TEST | NOTES |

@@ -9,6 +9,7 @@ export interface DatasetReportInfo {
   dataset_id: number | null;
   filename: string | null;
   file_type: string | null;
+  uploaded_at?: string | null;
   rows: number;
   columns: number;
 }
@@ -33,6 +34,7 @@ export interface DuplicateReport {
 
 export interface DataQualityReport {
   quality_score?: number | null;
+  score_factors?: Record<string, number>;
 
   missing_values: MissingValueReport[];
 
@@ -54,6 +56,12 @@ export interface DescriptiveStatistics {
   column: string;
 
   count?: number | null;
+
+  unique?: number | null;
+
+  top?: string | null;
+
+  frequency?: number | null;
 
   mean?: number | null;
 
@@ -151,6 +159,7 @@ export interface TemporalFinding {
 export interface ColumnInfoReport {
   name: string;
   dtype: string;
+  pandas_dtype?: string | null;
   unique: number;
   missing: number;
   missing_percentage?: number | null;
@@ -237,6 +246,11 @@ export interface AnalysisData {
   insights: InsightReport;
 }
 
+export interface DatasetExplanation {
+  available: boolean;
+  explanation: string;
+}
+
 
 // ============================================================
 // Get Analysis
@@ -251,5 +265,14 @@ export async function getAnalysis(
       `/analysis/${datasetId}`
     );
 
+  return response.data;
+}
+
+export async function getDatasetExplanation(
+  datasetId: number
+): Promise<DatasetExplanation> {
+  const response = await api.get<DatasetExplanation>(
+    `/analysis/${datasetId}/explanation`
+  );
   return response.data;
 }

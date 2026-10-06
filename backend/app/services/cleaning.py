@@ -18,7 +18,13 @@ def load_dataset_file(dataset: Dataset) -> pd.DataFrame:
     existing dataset upload/download system.
     """
 
-    file_path = resolve_dataset_path(dataset.file_path)
+    try:
+        file_path = resolve_dataset_path(dataset.file_path)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset file not found on server.",
+        ) from None
 
     if not file_path.is_file():
         logger.warning(

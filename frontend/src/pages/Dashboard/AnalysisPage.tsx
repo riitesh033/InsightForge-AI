@@ -32,7 +32,11 @@ import CorrelationHeatmap from "@/components/analysis/CorrelationHeatmap";
 import OutlierCard from "@/components/analysis/OutlierCard";
 import AIInsights from "@/components/analysis/AIInsights";
 import ProfessionalInsights from "@/components/analysis/ProfessionalInsights";
-import type { DescriptiveStatistics } from "@/services/analysis";
+import {
+  getDatasetExplanation,
+  type DatasetExplanation,
+  type DescriptiveStatistics,
+} from "@/services/analysis";
 import {
   getApiErrorMessage,
   isPlanRestrictionError,
@@ -45,6 +49,10 @@ export default function AnalysisPage() {
   const navigate = useNavigate();
 
   const { data, loading, error } = useAnalysis(datasetId);
+  const [datasetExplanation, setDatasetExplanation] =
+    useState<DatasetExplanation | null>(null);
+  const [explanationLoading, setExplanationLoading] =
+    useState(false);
 
   // ==========================================================
   // Dataset
@@ -123,6 +131,44 @@ export default function AnalysisPage() {
 
     loadDataset();
   }, [datasetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!datasetId || !data) {
+      setDatasetExplanation(null);
+      setExplanationLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setExplanationLoading(true);
+    getDatasetExplanation(Number(datasetId))
+      .then((explanation) => {
+        if (!cancelled) {
+          setDatasetExplanation(explanation);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDatasetExplanation({
+            available: false,
+            explanation:
+              "AI explanation is temporarily unavailable. Your deterministic dataset analysis is still available.",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setExplanationLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data, datasetId]);
 
   // ==========================================================
   // Preview Cleaning
@@ -490,6 +536,17 @@ export default function AnalysisPage() {
       },
       {} as Record<string, OutlierValue>
     );
+  const totalPotentialOutliers =
+    verifiedAnalysis.outliers.reduce(
+      (total, item) => total + item.count,
+      0
+    );
+  const hasCleaningRecommendations =
+    data.insights.top_actions.some(
+      (insight) =>
+        insight.category === "Data Quality" ||
+        insight.category === "Anomaly"
+    );
 
   // ==========================================================
   // Dataset Name
@@ -761,6 +818,44 @@ export default function AnalysisPage() {
 
       </div>
 
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <p className="text-sm font-semibold text-primary">
+          Dataset Intelligence
+        </p>
+        <h2 className="mt-1 text-xl font-semibold">
+          Verified data overview
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Profile, quality checks, descriptive statistics, relationships, and recommendations are calculated from the uploaded dataset.
+        </p>
+        <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-muted-foreground">File</dt>
+            <dd className="mt-1 break-all font-medium">{datasetName}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">File type</dt>
+            <dd className="mt-1 font-medium">
+              {(dataset?.file_type ?? datasetInfo.file_type ?? "Unknown").toUpperCase()}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Uploaded</dt>
+            <dd className="mt-1 font-medium">
+              {dataset?.uploaded_at
+                ? new Date(dataset.uploaded_at).toLocaleString()
+                : datasetInfo.uploaded_at
+                  ? new Date(datasetInfo.uploaded_at).toLocaleString()
+                  : "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Profiling status</dt>
+            <dd className="mt-1 font-medium">Complete</dd>
+          </div>
+        </dl>
+      </section>
+
       {/* =====================================================
           Quality Score
       ====================================================== */}
@@ -769,6 +864,7 @@ export default function AnalysisPage() {
         score={
           dataQuality.quality_score ?? 0
         }
+        factors={dataQuality.score_factors}
       />
 
       {/* =====================================================
@@ -779,6 +875,11 @@ export default function AnalysisPage() {
         insights={
           data.insights.top_findings
         }
+        reviewCleaningHref={
+          hasCleaningRecommendations
+            ? "#data-cleaning"
+            : undefined
+        }
       />
 
       {/* =====================================================
@@ -786,6 +887,7 @@ export default function AnalysisPage() {
       ====================================================== */}
 
       <section
+        id="data-cleaning"
         className="
           overflow-hidden
           rounded-2xl
@@ -1761,6 +1863,7 @@ export default function AnalysisPage() {
         }}
         missingValues={missingValues}
         duplicates={duplicates}
+        potentialOutliers={totalPotentialOutliers}
       />
 
       {/* =====================================================
@@ -1809,16 +1912,9 @@ export default function AnalysisPage() {
       ====================================================== */}
 
       <AIInsights
-        summary={
-          data.insights.top_findings.length > 0
-            ? data.insights.top_findings
-                .map(
-                  (insight) =>
-                    `${insight.title}: ${insight.finding}`
-                )
-                .join("\n\n")
-            : "No professional insights are currently available."
-        }
+        summary={datasetExplanation?.explanation ?? ""}
+        available={datasetExplanation?.available ?? false}
+        loading={explanationLoading}
       />
 
     </div>

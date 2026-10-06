@@ -8,7 +8,8 @@ from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 from app.models.subscription import PlanType, Subscription, SubscriptionStatus
 from app.models.user import User
-from app.services import ai_provider, dataset as dataset_service
+from app.core.config import settings
+from app.services import ai_provider
 from app.services.dataset_storage import (
     dataset_storage_root,
     resolve_dataset_path,
@@ -28,7 +29,7 @@ def grant_pro_plan(db, user_dict):
 
 
 def upload_file(client, headers, monkeypatch, tmp_path, filename, content):
-    monkeypatch.setattr(dataset_service, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(tmp_path))
     return client.post(
         "/api/v1/datasets/upload",
         headers=headers,
@@ -69,9 +70,9 @@ def test_upload_profiles_and_persists_supported_fixtures(
     stored_dataset = db.query(Dataset).filter_by(id=uploaded["id"]).one()
     assert uploaded["rows"] == expected_rows
     assert uploaded["columns"] == expected_columns
-    assert Path(uploaded["file_path"]).parent == tmp_path
-    assert Path(uploaded["file_path"]).is_file()
-    assert stored_dataset.file_path == uploaded["file_path"]
+    assert uploaded["file_path"] == stored_dataset.filename
+    assert Path(stored_dataset.file_path).name == stored_dataset.file_path
+    assert resolve_dataset_path(stored_dataset.file_path).parent == tmp_path
     assert resolve_dataset_path(stored_dataset.file_path).is_file()
 
     analysis = db.query(Analysis).filter(
@@ -91,7 +92,7 @@ def test_upload_profiles_and_persists_supported_fixtures(
     elif filename == "duplicates.csv":
         assert analysis.duplicates["count"] == 1
     elif filename == "outliers.csv":
-        assert analysis.outliers["value"] == 1
+        assert analysis.outliers["value"]["count"] == 1
     elif filename == "categorical.csv":
         assert analysis.statistics["color"]["freq"] == 2
     elif filename == "normal.csv":
@@ -253,7 +254,7 @@ def test_cleaning_preview_apply_and_download_preserve_original(
         workflow_files["missing.csv"],
     )
     dataset = upload.json()
-    original_path = Path(dataset["file_path"])
+    original_path = resolve_dataset_path(dataset["file_path"])
     original_bytes = original_path.read_bytes()
 
     preview = client.post(
@@ -282,6 +283,15 @@ def test_cleaning_preview_apply_and_download_preserve_original(
     )
     assert download.status_code == 200
     assert download.content.startswith(b"age,city")
+    assert Path(summary["cleaned_file_path"]).parent == original_path.parent
+    assert Path(summary["cleaned_file_path"]).is_file()
+
+    original_download = client.get(
+        f"/api/v1/datasets/{dataset['id']}/download",
+        headers=auth_headers,
+    )
+    assert original_download.status_code == 200
+    assert original_download.content == original_bytes
 
 
 def test_xlsx_cleaning_preview_reads_uploaded_file(
@@ -310,14 +320,11 @@ def test_xlsx_cleaning_preview_reads_uploaded_file(
 def test_configured_storage_root_upload_and_legacy_resolution(
     client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
-    from app.core.config import settings
-
     grant_pro_plan(db, user_dict)
     mounted_directory = tmp_path / "mounted-datasets"
     monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(mounted_directory))
     root = dataset_storage_root()
     root.mkdir(parents=True)
-    monkeypatch.setattr(dataset_service, "UPLOAD_DIR", root)
 
     response = client.post(
         "/api/v1/datasets/upload",
@@ -335,7 +342,7 @@ def test_configured_storage_root_upload_and_legacy_resolution(
     dataset_id = response.json()["id"]
     stored_dataset = db.query(Dataset).filter_by(id=dataset_id).one()
     uploaded_file = root / stored_dataset.filename
-    assert Path(stored_dataset.file_path) == uploaded_file
+    assert stored_dataset.file_path == uploaded_file.name
     assert uploaded_file.is_file()
 
     preview = client.post(
@@ -347,6 +354,54 @@ def test_configured_storage_root_upload_and_legacy_resolution(
     assert resolve_dataset_path(
         f"app/uploads/datasets/{stored_dataset.filename}"
     ) == uploaded_file.resolve()
+    assert resolve_dataset_path(
+        str(tmp_path / "old-deployment" / stored_dataset.filename)
+    ) == uploaded_file.resolve()
+    assert resolve_dataset_path(str(uploaded_file)) == uploaded_file.resolve()
+
+
+def test_relative_dataset_storage_root_is_backend_anchored(monkeypatch):
+    configured = "app/uploads/datasets"
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", configured)
+
+    expected_root = (
+        Path(__file__).resolve().parents[1] / configured
+    ).resolve()
+    assert dataset_storage_root() == expected_root
+
+
+def test_dataset_storage_resolver_rejects_path_traversal(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(tmp_path))
+
+    with pytest.raises(ValueError, match="Invalid dataset storage identifier"):
+        resolve_dataset_path("../outside.csv")
+
+    with pytest.raises(ValueError, match="Invalid dataset storage identifier"):
+        resolve_dataset_path("nested/../../outside.csv")
+
+
+def test_dataset_rename_keeps_storage_identifier_inside_configured_root(
+    client, auth_headers, monkeypatch, tmp_path, workflow_files
+):
+    upload = upload_file(
+        client,
+        auth_headers,
+        monkeypatch,
+        tmp_path,
+        "normal.csv",
+        workflow_files["normal.csv"],
+    )
+    dataset_id = upload.json()["id"]
+
+    renamed = client.patch(
+        f"/api/v1/datasets/{dataset_id}",
+        headers=auth_headers,
+        json={"original_filename": r"..\renamed.csv"},
+    )
+
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["file_path"] == "renamed.csv"
+    assert resolve_dataset_path(renamed.json()["file_path"]).is_file()
 
 
 def test_cleaning_preview_rejects_unauthorized_invalid_token_and_missing_dataset(
@@ -667,7 +722,7 @@ def test_report_handles_missing_source_file_without_exception_details(
         "normal.csv",
         workflow_files["normal.csv"],
     )
-    Path(upload.json()["file_path"]).unlink()
+    resolve_dataset_path(upload.json()["file_path"]).unlink()
 
     response = client.get(
         f"/api/v1/reports/{upload.json()['id']}/pdf",
@@ -691,7 +746,7 @@ def test_analysis_report_handles_missing_source_file_safely(
         "normal.csv",
         workflow_files["normal.csv"],
     )
-    Path(upload.json()["file_path"]).unlink()
+    resolve_dataset_path(upload.json()["file_path"]).unlink()
 
     response = client.get(
         f"/api/v1/analysis/{upload.json()['id']}/report",
@@ -763,7 +818,7 @@ def test_cleaning_missing_source_returns_safe_not_found(
         "normal.csv",
         workflow_files["normal.csv"],
     )
-    Path(upload.json()["file_path"]).unlink()
+    resolve_dataset_path(upload.json()["file_path"]).unlink()
 
     response = client.post(
         f"/api/v1/cleaning/{upload.json()['id']}/preview",

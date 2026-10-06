@@ -3,6 +3,11 @@
 **Audit date:** 2026-09-26  
 **Scope:** Static, read-only recheck of the existing application. This document is the only requested deliverable. No application, configuration, or migration code was changed; no files were deleted. Generated/dependency/cache directories (`backend/venv`, `frontend/node_modules`, `.git`, Python caches, build output) were excluded. No test, build, migration, or runtime command was run.
 
+> Historical audit snapshot: its migration inventory and expected head describe
+> the repository as inspected on 2026-09-26. The current repository has one
+> later head, `20261001_student_verification`. Historical findings below are
+> retained in their original context.
+
 **Evidence labels:** **Confirmed** = directly visible in current source/config or tracked-file metadata; **Risk** = a code path is apparent but needs runtime/integration verification; **External blocker** = cannot settle without an isolated database/provider/environment. The earlier [FULL_SYSTEM_AUDIT.md](FULL_SYSTEM_AUDIT.md) was used as a lead, not treated as proof.
 
 ## Contents

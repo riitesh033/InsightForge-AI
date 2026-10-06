@@ -99,7 +99,13 @@ def download_dataset_route(
         )
 
 
-    file_path = resolve_dataset_path(dataset.file_path)
+    try:
+        file_path = resolve_dataset_path(dataset.file_path)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found on server.",
+        ) from None
 
 
     if not file_path.is_file():

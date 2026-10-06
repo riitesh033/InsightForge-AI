@@ -15,6 +15,7 @@ class DatasetReportInfo(BaseModel):
     dataset_id: int | None = None
     filename: str | None = None
     file_type: str | None = None
+    uploaded_at: str | None = None
 
     rows: int = 0
     columns: int = 0
@@ -32,6 +33,7 @@ class ColumnInfoReport(BaseModel):
     name: str
 
     dtype: str
+    pandas_dtype: str | None = None
 
     unique: int = Field(
         default=0,
@@ -103,6 +105,10 @@ class DataQualityReport(BaseModel):
         le=100,
     )
 
+    score_factors: dict[str, float] = Field(
+        default_factory=dict,
+    )
+
     missing_values: list[MissingValueReport] = Field(
         default_factory=list,
     )
@@ -134,6 +140,12 @@ class DescriptiveStatistics(BaseModel):
     column: str
 
     count: int | None = None
+
+    unique: int | None = None
+
+    top: str | None = None
+
+    frequency: int | None = None
 
     mean: float | None = None
 

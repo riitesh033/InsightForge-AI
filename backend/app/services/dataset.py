@@ -10,21 +10,19 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-from app.services.dataset_storage import dataset_storage_root
+from app.services.dataset_storage import dataset_storage_root, resolve_dataset_path
 from app.services.entitlements import (
     enforce_dataset_count,
     enforce_upload_size,
     lock_user_for_quota,
 )
 from app.services.insights import (
-    calculate_quality_score,
+    calculate_quality_score_details,
     generate_dataset_summary,
 )
 from app.services.profiling import profile_dataframe
 from app.services.professional_analysis import generate_professional_analysis
 
-UPLOAD_DIR = dataset_storage_root()
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {
@@ -107,7 +105,9 @@ def upload_dataset(
     enforce_upload_size(db, owner_id, file_size)
 
     unique_filename = f"{uuid4().hex}{extension}"
-    save_path = UPLOAD_DIR / unique_filename
+    storage_root = dataset_storage_root()
+    storage_root.mkdir(parents=True, exist_ok=True)
+    save_path = resolve_dataset_path(unique_filename)
 
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -141,8 +141,13 @@ def upload_dataset(
             analysis_data
         )
         
-        quality_score = calculate_quality_score(
+        quality_score_details = calculate_quality_score_details(
             analysis_data
+        )
+        quality_score = quality_score_details["score"]
+        analysis_data["summary"]["quality_score"] = quality_score
+        analysis_data["summary"]["quality_score_factors"] = (
+            quality_score_details["factors"]
         )
         
     except Exception:
@@ -159,7 +164,7 @@ def upload_dataset(
         original_filename=original_filename,
         file_type=extension.replace(".", ""),
         file_size=file_size,
-        file_path=str(save_path),
+        file_path=unique_filename,
         rows=len(dataframe),
         columns=len(dataframe.columns),
         owner_id=owner_id,

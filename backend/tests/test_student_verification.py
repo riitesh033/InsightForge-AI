@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from app.models.notification import Notification
 from app.models.student_verification import (
@@ -7,10 +8,24 @@ from app.models.student_verification import (
 )
 from app.models.subscription import PlanType, Subscription, SubscriptionStatus
 from app.models.user import User
+from app.core.config import settings
 from app.services.entitlements import resolve_plan
+from app.services.student_verification import storage_root
 
 API = "/api/v1"
 PDF = b"%PDF-1.7\nstudent enrollment proof"
+
+
+def test_student_verification_relative_storage_root_is_backend_anchored(
+    monkeypatch,
+):
+    configured = "private_uploads/student_verification"
+    monkeypatch.setattr(settings, "STUDENT_VERIFICATION_STORAGE_DIR", configured)
+
+    expected_root = (
+        Path(__file__).resolve().parents[1] / configured
+    ).resolve()
+    assert storage_root() == expected_root
 
 
 def application_payload(

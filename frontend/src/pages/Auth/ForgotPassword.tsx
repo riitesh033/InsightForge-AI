@@ -60,11 +60,15 @@ export default function ForgotPasswordPage() {
         className="mt-8"
       >
 
-        <label className="text-sm font-medium text-foreground">
+        <label
+          htmlFor="forgot-password-email"
+          className="text-sm font-medium text-foreground"
+        >
           Email Address
         </label>
 
         <input
+          id="forgot-password-email"
           required
           type="email"
           value={email}

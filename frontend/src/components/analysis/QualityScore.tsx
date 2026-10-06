@@ -1,9 +1,11 @@
 interface Props {
   score: number;
+  factors?: Record<string, number>;
 }
 
 export default function QualityScore({
   score,
+  factors = {},
 }: Props) {
   const safeScore = Math.max(
     0,
@@ -11,36 +13,50 @@ export default function QualityScore({
   );
 
   const getStatus = () => {
-    if (safeScore >= 80) {
+    if (safeScore >= 75) {
       return {
-        label: "Excellent",
-        description:
-          "Your dataset has very few quality issues.",
+        label: safeScore >= 90 ? "Excellent" : "Good",
+        description: safeScore >= 90
+          ? "No major data-quality issues were detected."
+          : "The dataset is in good shape, with some issues worth reviewing.",
         text: "text-green-600 dark:text-green-400",
         ring: "text-green-500",
       };
     }
 
-    if (safeScore >= 50) {
+    if (safeScore >= 60) {
       return {
-        label: "Needs Improvement",
-        description:
-          "Some data quality issues should be reviewed.",
+        label: "Fair",
+        description: "Review the detected data-quality issues before relying on the dataset.",
         text: "text-yellow-600 dark:text-yellow-400",
         ring: "text-yellow-500",
       };
     }
 
+    if (safeScore >= 40) {
+      return {
+        label: "Poor",
+        description: "Several significant data-quality issues need attention.",
+        text: "text-orange-600 dark:text-orange-400",
+        ring: "text-orange-500",
+      };
+    }
+
     return {
-      label: "Poor",
-      description:
-        "The dataset contains significant quality issues.",
+      label: "Critical",
+      description: "The dataset has critical quality concerns and needs substantial review.",
       text: "text-red-600 dark:text-red-400",
       ring: "text-red-500",
     };
   };
 
   const status = getStatus();
+  const factorLabels: Record<string, string> = {
+    no_data_penalty: "No data available",
+    missing_values_penalty: "Missing values",
+    duplicate_rows_penalty: "Duplicate rows",
+    potential_outliers_penalty: "Potential outliers",
+  };
 
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
@@ -123,6 +139,20 @@ export default function QualityScore({
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             {status.description}
           </p>
+
+          {Object.keys(factors).length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {Object.entries(factors).map(([key, penalty]) => (
+                <span
+                  key={key}
+                  className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground"
+                >
+                  {factorLabels[key] ?? key.replace(/_/g, " ")}:{" "}
+                  {Number(penalty).toFixed(2)} points
+                </span>
+              ))}
+            </div>
+          )}
 
         </div>
 

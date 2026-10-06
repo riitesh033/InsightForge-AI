@@ -3,6 +3,12 @@
 **Date:** 2026-09-26  
 **Scope:** SQLAlchemy persistence models, database metadata/session setup, Alembic environment and revisions. No frontend code was changed. No revision IDs were changed or removed.
 
+> Historical audit snapshot: the migration head below describes the repository
+> as inspected on 2026-09-26. The current repository has one later head,
+> `20261001_student_verification`; see the current verification results in
+> [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md). Historical migration IDs and
+> results below are retained as records of that earlier audit.
+
 ## Outcome
 
 - The migration graph has one head: `42420889e6ec`.

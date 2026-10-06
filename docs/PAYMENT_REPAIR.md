@@ -1,5 +1,10 @@
 # Stripe Subscription Repair
 
+> Historical implementation and test snapshot. Its migration head
+> `f3a1b9c8d7e6` was current at the time of that work; the current repository
+> has one later head, `20261001_student_verification`. The historical
+> migration and test results below are not the current full-suite results.
+
 ## Payment flow
 
 ```text

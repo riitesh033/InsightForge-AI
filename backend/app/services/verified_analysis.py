@@ -104,6 +104,11 @@ def build_dataset_info(
         dataset_id=dataset.id,
         filename=dataset.original_filename,
         file_type=dataset.file_type,
+        uploaded_at=(
+            dataset.uploaded_at.isoformat()
+            if dataset.uploaded_at is not None
+            else None
+        ),
         rows=safe_int(dataset.rows, 0) or 0,
         columns=safe_int(dataset.columns, 0) or 0,
     )
@@ -205,11 +210,13 @@ def build_column_info(
         )
 
         memory_usage = item.get("memory_usage")
+        pandas_dtype = item.get("pandas_dtype")
 
         result.append(
             ColumnInfoReport(
                 name=name,
                 dtype=safe_string(dtype) or "",
+                pandas_dtype=safe_string(pandas_dtype),
                 unique=safe_int(unique, 0) or 0,
                 missing=safe_int(missing, 0) or 0,
                 missing_percentage=safe_float(
@@ -371,6 +378,19 @@ def build_data_quality(
         quality_score=safe_float(
             analysis.quality_score
         ),
+        score_factors={
+            str(key): safe_float(value)
+            for key, value in (
+                analysis.summary.get("quality_score_factors", {}).items()
+                if isinstance(analysis.summary, dict)
+                and isinstance(
+                    analysis.summary.get("quality_score_factors"),
+                    dict,
+                )
+                else []
+            )
+            if safe_float(value) is not None
+        },
         missing_values=missing_values,
         duplicates=duplicates,
         invalid_values=[],
@@ -409,12 +429,30 @@ def build_statistics(
                     values.get("count")
                 ),
 
+                unique=safe_int(
+                    values.get("unique")
+                ),
+
+                top=safe_string(
+                    values.get("top")
+                ),
+
+                frequency=safe_int(
+                    first_not_none(
+                        values.get("freq"),
+                        values.get("frequency"),
+                    )
+                ),
+
                 mean=safe_float(
                     values.get("mean")
                 ),
 
                 median=safe_float(
-                    values.get("median")
+                    first_not_none(
+                        values.get("median"),
+                        values.get("50%"),
+                    )
                 ),
 
                 mode=(
@@ -456,6 +494,7 @@ def build_statistics(
                     first_not_none(
                         values.get("q1"),
                         values.get("Q1"),
+                        values.get("25%"),
                     )
                 ),
 
@@ -463,6 +502,7 @@ def build_statistics(
                     first_not_none(
                         values.get("q3"),
                         values.get("Q3"),
+                        values.get("75%"),
                     )
                 ),
 

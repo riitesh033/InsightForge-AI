@@ -127,15 +127,11 @@ export default function CorrelationHeatmap({
                   const rawValue =
                     correlations[row]?.[column];
 
-                  const value =
-                    typeof rawValue === "number"
-                      ? rawValue
-                      : Number(rawValue);
-
                   const safeValue =
-                    Number.isFinite(value)
-                      ? Math.max(-1, Math.min(1, value))
-                      : 0;
+                    typeof rawValue === "number" &&
+                    Number.isFinite(rawValue)
+                      ? Math.max(-1, Math.min(1, rawValue))
+                      : null;
 
                   return (
                     <td
@@ -144,12 +140,18 @@ export default function CorrelationHeatmap({
                     >
 
                       <div
-                        title={`${row} ↔ ${column}: ${safeValue.toFixed(2)}`}
-                        className={`flex h-12 min-w-[70px] items-center justify-center rounded-lg text-sm font-semibold transition-transform hover:scale-105 ${getCellClass(
-                          safeValue
-                        )}`}
+                        title={
+                          safeValue === null
+                            ? `${row} ↔ ${column}: insufficient paired data`
+                            : `${row} ↔ ${column}: ${safeValue.toFixed(2)}`
+                        }
+                        className={`flex h-12 min-w-[70px] items-center justify-center rounded-lg text-sm font-semibold transition-transform hover:scale-105 ${
+                          safeValue === null
+                            ? "bg-muted text-muted-foreground"
+                            : getCellClass(safeValue)
+                        }`}
                       >
-                        {safeValue.toFixed(2)}
+                        {safeValue === null ? "—" : safeValue.toFixed(2)}
                       </div>
 
                     </td>
@@ -176,7 +178,8 @@ export default function CorrelationHeatmap({
           Values close to +1 indicate a strong positive
           relationship, while values close to -1 indicate
           a strong negative relationship. Values near 0
-          indicate little linear relationship.
+          indicate little linear relationship. Correlation
+          describes association and does not establish causation.
         </p>
 
       </div>

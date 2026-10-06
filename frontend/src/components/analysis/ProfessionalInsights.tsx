@@ -16,6 +16,7 @@ import type {
 
 interface ProfessionalInsightsProps {
   insights: ProfessionalInsight[];
+  reviewCleaningHref?: string;
 }
 
 
@@ -105,6 +106,7 @@ function getCategoryIcon(
 
 export default function ProfessionalInsights({
   insights,
+  reviewCleaningHref,
 }: ProfessionalInsightsProps) {
 
   if (!insights.length) {
@@ -122,8 +124,11 @@ export default function ProfessionalInsights({
         <div
           className="
             flex
-            items-center
+            flex-col
+            items-start
+            justify-between
             gap-3
+            sm:flex-row
           "
         >
           <div
@@ -141,7 +146,7 @@ export default function ProfessionalInsights({
             <Lightbulb size={20} />
           </div>
 
-          <div>
+          <div className="flex-1">
             <h2 className="text-lg font-semibold">
               Professional Insights
             </h2>
@@ -209,6 +214,15 @@ export default function ProfessionalInsights({
           </p>
 
         </div>
+
+        {reviewCleaningHref && (
+          <a
+            href={reviewCleaningHref}
+            className="shrink-0 rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Review Cleaning
+          </a>
+        )}
 
       </div>
 

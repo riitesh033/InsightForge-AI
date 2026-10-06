@@ -10,3 +10,8 @@ class VerifiedAnalysisResponse(BaseModel):
 
     verified_analysis: VerifiedAnalysisReport
     insights: InsightReport
+
+
+class DatasetExplanationResponse(BaseModel):
+    available: bool
+    explanation: str
