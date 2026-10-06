@@ -105,6 +105,28 @@ export function getApiErrorMessage(
     return details.message;
   }
 
+  if (axios.isAxiosError(error) && error.response) {
+    const responseData = error.response.data;
+    if (typeof responseData === "string" && responseData.trim()) {
+      try {
+        const parsed = JSON.parse(responseData) as {
+          detail?: unknown;
+          message?: unknown;
+        };
+        if (typeof parsed.detail === "string") {
+          return parsed.detail;
+        }
+        if (typeof parsed.message === "string") {
+          return parsed.message;
+        }
+      } catch {
+        return responseData;
+      }
+    }
+
+    return `Request failed with status code ${error.response.status}`;
+  }
+
   return error instanceof Error ? error.message : fallback;
 }
 
