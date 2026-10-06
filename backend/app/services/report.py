@@ -28,7 +28,10 @@ from reportlab.platypus import (
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-from app.services.dataset_storage import resolve_dataset_path
+from app.services.dataset_storage import (
+    cleanup_dataset_local_path,
+    get_dataset_local_path,
+)
 
 from app.services.verified_analysis import (
     build_verified_analysis_report,
@@ -242,38 +245,56 @@ def load_dataset(
     dataset: Dataset,
 ) -> pd.DataFrame:
     """
-    Load the original dataset from the path stored in the database.
+    Load the original dataset from local storage or Supabase.
 
-    The original file is read-only for report generation.
+    Cloud-backed datasets are reconstructed into a temporary local
+    file by ``get_dataset_local_path`` so Pandas can read them using
+    the same CSV/XLSX logic used for local datasets.
+
+    The temporary reconstructed file is removed immediately after
+    Pandas has loaded the DataFrame. The original dataset is never
+    modified by report generation.
     """
 
+    file_path = None
+    temporary = False
+
     try:
-        file_path = resolve_dataset_path(dataset.file_path)
-    except ValueError:
-        raise FileNotFoundError("Dataset file not found on server.") from None
-
-    if not file_path.is_file():
-        raise FileNotFoundError("Dataset file not found on server.")
-
-    extension = dataset.file_type.lower()
-
-    if extension == "csv":
-        return pd.read_csv(
-            file_path
+        file_path, temporary = get_dataset_local_path(
+            dataset.file_path
         )
 
-    if extension in {
-        "xlsx",
-        "xls",
-    }:
-        return pd.read_excel(
-            file_path
+        extension = dataset.file_type.lower().lstrip(".")
+
+        if extension == "csv":
+            return pd.read_csv(
+                file_path
+            )
+
+        if extension in {
+            "xlsx",
+            "xls",
+        }:
+            return pd.read_excel(
+                file_path
+            )
+
+        raise ValueError(
+            f"Unsupported dataset type: "
+            f"{dataset.file_type}"
         )
 
-    raise ValueError(
-        f"Unsupported dataset type: "
-        f"{dataset.file_type}"
-    )
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            "Dataset file not found on server."
+        ) from None
+
+    finally:
+        if file_path is not None:
+            cleanup_dataset_local_path(
+                file_path,
+                temporary,
+            )
 
 
 # ============================================================

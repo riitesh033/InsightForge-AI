@@ -1,60 +1,102 @@
 import logging
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.dataset import Dataset
-from app.services.dataset_storage import resolve_dataset_path
+from app.services.cloud_storage import supabase_storage
+from app.services.dataset_storage import (
+    build_cloud_storage_id,
+    cleanup_dataset_local_path,
+    get_cloud_storage_id,
+    get_dataset_local_path,
+    is_cloud_dataset,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def load_dataset_file(dataset: Dataset) -> pd.DataFrame:
+def load_dataset_file(
+    dataset: Dataset,
+) -> tuple[pd.DataFrame, Path, bool]:
     """
-    Load a dataset using the same storage information used by the
-    existing dataset upload/download system.
+    Load a dataset into a pandas DataFrame.
+
+    Returns:
+        (dataframe, local_path, temporary)
+
+    For local datasets:
+        temporary = False
+
+    For Supabase datasets:
+        the dataset is reconstructed into a temporary local file.
     """
 
     try:
-        file_path = resolve_dataset_path(dataset.file_path)
-    except ValueError:
+        file_path, temporary = get_dataset_local_path(
+            dataset.file_path
+        )
+    except (
+        FileNotFoundError,
+        ValueError,
+        RuntimeError,
+    ):
+        logger.warning(
+            "Dataset source file is unavailable "
+            "(dataset_id=%s).",
+            dataset.id,
+        )
+
         raise HTTPException(
             status_code=404,
             detail="Dataset file not found on server.",
         ) from None
 
-    if not file_path.is_file():
-        logger.warning(
-            "Dataset source file is unavailable (dataset_id=%s, filename=%s).",
-            dataset.id,
-            file_path.name,
-        )
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset file not found on server.",
-        )
-
     try:
         if dataset.file_type.lower() == "csv":
-            return pd.read_csv(file_path)
+            dataframe = pd.read_csv(file_path)
 
-        if dataset.file_type.lower() in {"xlsx", "xls"}:
-            return pd.read_excel(file_path)
+        elif dataset.file_type.lower() in {
+            "xlsx",
+            "xls",
+        }:
+            dataframe = pd.read_excel(file_path)
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported dataset file type.",
+            )
+
+        return dataframe, file_path, temporary
+
+    except HTTPException:
+        cleanup_dataset_local_path(
+            file_path,
+            temporary,
+        )
+        raise
 
     except Exception:
-        logger.exception("Failed to load dataset for cleaning")
+        logger.exception(
+            "Failed to load dataset for cleaning"
+        )
+
+        cleanup_dataset_local_path(
+            file_path,
+            temporary,
+        )
+
         raise HTTPException(
             status_code=400,
             detail="Unable to read dataset.",
         ) from None
-
-    raise HTTPException(
-        status_code=400,
-        detail="Unsupported dataset file type.",
-    )
 
 
 def _clean_dataframe(
@@ -80,7 +122,9 @@ def _clean_dataframe(
         "columns": len(df.columns),
         "empty_strings_replaced": 0,
         "whitespace_cleaned": 0,
-        "missing_values_before": int(df.isna().sum().sum()),
+        "missing_values_before": int(
+            df.isna().sum().sum()
+        ),
         "missing_values_after": 0,
         "missing_values_filled": 0,
         "duplicates_removed": 0,
@@ -100,7 +144,6 @@ def _clean_dataframe(
     for column in string_columns:
         original = cleaned[column].copy()
 
-        # Strip leading/trailing whitespace.
         cleaned[column] = cleaned[column].apply(
             lambda value: value.strip()
             if isinstance(value, str)
@@ -110,30 +153,44 @@ def _clean_dataframe(
         whitespace_changed = int(
             (
                 original.fillna("__NA__").astype(str)
-                != cleaned[column].fillna("__NA__").astype(str)
+                != cleaned[column]
+                .fillna("__NA__")
+                .astype(str)
             ).sum()
         )
 
         if whitespace_changed:
-            summary["whitespace_cleaned"] += whitespace_changed
+            summary["whitespace_cleaned"] += (
+                whitespace_changed
+            )
 
-        # Empty strings become missing values.
         empty_mask = cleaned[column].apply(
-            lambda value: isinstance(value, str)
-            and value.strip() == ""
+            lambda value: (
+                isinstance(value, str)
+                and value.strip() == ""
+            )
         )
 
-        empty_count = int(empty_mask.sum())
+        empty_count = int(
+            empty_mask.sum()
+        )
 
         if empty_count:
-            cleaned.loc[empty_mask, column] = np.nan
+            cleaned.loc[
+                empty_mask,
+                column,
+            ] = np.nan
 
-            summary["empty_strings_replaced"] += empty_count
+            summary[
+                "empty_strings_replaced"
+            ] += empty_count
 
             summary["changes"].append(
                 {
                     "column": str(column),
-                    "action": "empty_strings_to_missing",
+                    "action": (
+                        "empty_strings_to_missing"
+                    ),
                     "count": empty_count,
                 }
             )
@@ -143,20 +200,30 @@ def _clean_dataframe(
     # ============================================================
 
     duplicate_count = int(
-        cleaned.duplicated(keep="first").sum()
+        cleaned.duplicated(
+            keep="first"
+        ).sum()
     )
 
     if duplicate_count:
-        cleaned = cleaned.drop_duplicates(
-            keep="first"
-        ).reset_index(drop=True)
+        cleaned = (
+            cleaned
+            .drop_duplicates(
+                keep="first"
+            )
+            .reset_index(drop=True)
+        )
 
-        summary["duplicates_removed"] = duplicate_count
+        summary[
+            "duplicates_removed"
+        ] = duplicate_count
 
         summary["changes"].append(
             {
                 "column": None,
-                "action": "duplicate_rows_removed",
+                "action": (
+                    "duplicate_rows_removed"
+                ),
                 "count": duplicate_count,
             }
         )
@@ -177,26 +244,33 @@ def _clean_dataframe(
         if missing_count == 0:
             continue
 
-        # Median is safer than mean when outliers exist.
         median = cleaned[column].median()
 
         if pd.isna(median):
             summary["warnings"].append(
-                f"Column '{column}' contains missing numeric "
-                "values but has no usable median."
+                f"Column '{column}' contains missing "
+                "numeric values but has no usable median."
             )
             continue
 
-        cleaned[column] = cleaned[column].fillna(median)
+        cleaned[column] = (
+            cleaned[column].fillna(median)
+        )
 
-        summary["missing_values_filled"] += missing_count
+        summary[
+            "missing_values_filled"
+        ] += missing_count
 
         summary["changes"].append(
             {
                 "column": str(column),
-                "action": "missing_numeric_filled_with_median",
+                "action": (
+                    "missing_numeric_filled_with_median"
+                ),
                 "count": missing_count,
-                "replacement_value": float(median),
+                "replacement_value": float(
+                    median
+                ),
             }
         )
 
@@ -216,29 +290,39 @@ def _clean_dataframe(
         if missing_count == 0:
             continue
 
-        mode = cleaned[column].mode(dropna=True)
+        mode = cleaned[column].mode(
+            dropna=True
+        )
 
         if mode.empty:
             summary["warnings"].append(
-                f"Column '{column}' contains missing values "
-                "but has no usable mode."
+                f"Column '{column}' contains missing "
+                "values but has no usable mode."
             )
             continue
 
         replacement = mode.iloc[0]
 
-        cleaned[column] = cleaned[column].fillna(
-            replacement
+        cleaned[column] = (
+            cleaned[column].fillna(
+                replacement
+            )
         )
 
-        summary["missing_values_filled"] += missing_count
+        summary[
+            "missing_values_filled"
+        ] += missing_count
 
         summary["changes"].append(
             {
                 "column": str(column),
-                "action": "missing_values_filled_with_mode",
+                "action": (
+                    "missing_values_filled_with_mode"
+                ),
                 "count": missing_count,
-                "replacement_value": str(replacement),
+                "replacement_value": str(
+                    replacement
+                ),
             }
         )
 
@@ -250,7 +334,9 @@ def _clean_dataframe(
         series = cleaned[column].dropna()
 
         if series.empty:
-            summary["outliers_detected"][str(column)] = 0
+            summary[
+                "outliers_detected"
+            ][str(column)] = 0
             continue
 
         q1 = series.quantile(0.25)
@@ -270,7 +356,9 @@ def _clean_dataframe(
                 ).sum()
             )
 
-        summary["outliers_detected"][str(column)] = count
+        summary[
+            "outliers_detected"
+        ][str(column)] = count
 
     # ============================================================
     # 6. FINAL COUNTS
@@ -278,11 +366,15 @@ def _clean_dataframe(
 
     summary["rows_after"] = len(cleaned)
 
-    summary["missing_values_after"] = int(
+    summary[
+        "missing_values_after"
+    ] = int(
         cleaned.isna().sum().sum()
     )
 
-    summary["missing_values_filled"] = (
+    summary[
+        "missing_values_filled"
+    ] = (
         summary["missing_values_before"]
         - summary["missing_values_after"]
     )
@@ -294,109 +386,348 @@ def preview_cleaning(
     dataset: Dataset,
 ) -> dict[str, Any]:
     """
-    Generate a cleaning preview without modifying or creating
-    any files.
+    Generate a cleaning preview without modifying
+    or creating any files.
     """
 
-    df = load_dataset_file(dataset)
+    df, local_path, temporary = (
+        load_dataset_file(dataset)
+    )
 
-    _, summary = _clean_dataframe(df)
+    try:
+        _, summary = _clean_dataframe(df)
 
-    return {
-        "dataset_id": dataset.id,
-        "original_filename": dataset.original_filename,
-        "file_type": dataset.file_type,
-        "preview": summary,
-    }
+        return {
+            "dataset_id": dataset.id,
+            "original_filename": (
+                dataset.original_filename
+            ),
+            "file_type": dataset.file_type,
+            "preview": summary,
+        }
+
+    finally:
+        cleanup_dataset_local_path(
+            local_path,
+            temporary,
+        )
+
+
+def _cleaned_extension(
+    dataset: Dataset,
+) -> str:
+    """
+    Return the output extension for a cleaned dataset.
+    """
+
+    extension = dataset.file_type.lower()
+
+    if extension == "xls":
+        return ".xlsx"
+
+    return f".{extension}"
+
+
+def _cleaned_filename(
+    dataset: Dataset,
+) -> str:
+    """
+    Build a stable human-readable cleaned filename.
+    """
+
+    original_name = Path(
+        dataset.original_filename
+    ).name
+
+    stem = Path(
+        original_name
+    ).stem
+
+    return (
+        f"{stem}_cleaned"
+        f"{_cleaned_extension(dataset)}"
+    )
+
+
+def _build_cleaned_storage_id(
+    dataset: Dataset,
+) -> str:
+    """
+    Build the Supabase storage identifier for a cleaned file.
+    """
+
+    return build_cloud_storage_id(
+        f"{dataset.id}/cleaned"
+    )
 
 
 def apply_cleaning(
     dataset: Dataset,
 ) -> dict[str, Any]:
     """
-    Apply cleaning and save the result as a separate file.
+    Apply cleaning and save the result separately.
 
     The original dataset is never modified.
+
+    With cloud storage enabled:
+        - original is downloaded temporarily
+        - cleaned file is created temporarily
+        - cleaned file is uploaded to Supabase
+        - temporary files are deleted
+
+    With cloud storage disabled:
+        - existing local behavior is preserved.
     """
 
-    df = load_dataset_file(dataset)
+    (
+        df,
+        original_path,
+        original_temporary,
+    ) = load_dataset_file(dataset)
 
-    cleaned_df, summary = _clean_dataframe(df)
-
-    original_path = resolve_dataset_path(dataset.file_path)
-
-    extension = dataset.file_type.lower()
-
-    # XLS cannot reliably be written by pandas without additional
-    # legacy Excel writers, so convert cleaned XLS files to XLSX.
-    if extension == "xls":
-        output_extension = ".xlsx"
-    else:
-        output_extension = f".{extension}"
-
-    cleaned_filename = (
-        f"{original_path.stem}_cleaned{output_extension}"
-    )
-
-    cleaned_path = (
-        original_path.parent / cleaned_filename
-    )
+    cleaned_path: Path | None = None
 
     try:
-        if output_extension == ".csv":
-            cleaned_df.to_csv(
-                cleaned_path,
-                index=False,
+        cleaned_df, summary = _clean_dataframe(
+            df
+        )
+
+        cleaned_filename = _cleaned_filename(
+            dataset
+        )
+
+        output_extension = (
+            _cleaned_extension(dataset)
+        )
+
+        # --------------------------------------------------------
+        # Local storage mode
+        # --------------------------------------------------------
+
+        if not is_cloud_dataset(
+            dataset.file_path
+        ):
+            cleaned_path = (
+                original_path.parent
+                / cleaned_filename
             )
 
-        else:
-            cleaned_df.to_excel(
-                cleaned_path,
-                index=False,
+            try:
+                if output_extension == ".csv":
+                    cleaned_df.to_csv(
+                        cleaned_path,
+                        index=False,
+                    )
+                else:
+                    cleaned_df.to_excel(
+                        cleaned_path,
+                        index=False,
+                    )
+
+            except Exception:
+                logger.exception(
+                    "Failed to save cleaned dataset"
+                )
+
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Unable to save cleaned dataset."
+                    ),
+                ) from None
+
+            summary[
+                "cleaned_filename"
+            ] = cleaned_filename
+
+            summary[
+                "cleaned_file_path"
+            ] = str(cleaned_path)
+
+            return {
+                "dataset_id": dataset.id,
+                "original_filename": (
+                    dataset.original_filename
+                ),
+                "cleaned_filename": (
+                    cleaned_filename
+                ),
+                "download_available": True,
+                "preview": summary,
+            }
+
+        # --------------------------------------------------------
+        # Supabase storage mode
+        # --------------------------------------------------------
+
+        fd, temporary_cleaned_path = (
+            __import__("tempfile").mkstemp(
+                prefix="insightforge_cleaned_",
+                suffix=output_extension,
+            )
+        )
+
+        Path(
+            temporary_cleaned_path
+        ).unlink(
+            missing_ok=True
+        )
+
+        cleaned_path = Path(
+            temporary_cleaned_path
+        )
+
+        try:
+            if output_extension == ".csv":
+                cleaned_df.to_csv(
+                    cleaned_path,
+                    index=False,
+                )
+            else:
+                cleaned_df.to_excel(
+                    cleaned_path,
+                    index=False,
+                )
+
+            cleaned_storage_id = (
+                _build_cleaned_storage_id(
+                    dataset
+                )
             )
 
-    except Exception:
-        logger.exception("Failed to save cleaned dataset")
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to save cleaned dataset.",
-        ) from None
+            supabase_storage.upload_file(
+                cleaned_path,
+                cleaned_storage_id,
+            )
 
-    summary["cleaned_filename"] = cleaned_filename
-    summary["cleaned_file_path"] = str(cleaned_path)
+            summary[
+                "cleaned_filename"
+            ] = cleaned_filename
 
-    return {
-        "dataset_id": dataset.id,
-        "original_filename": dataset.original_filename,
-        "cleaned_filename": cleaned_filename,
-        "download_available": True,
-        "preview": summary,
-    }
+            summary[
+                "cleaned_file_path"
+            ] = cleaned_storage_id
+
+            return {
+                "dataset_id": dataset.id,
+                "original_filename": (
+                    dataset.original_filename
+                ),
+                "cleaned_filename": (
+                    cleaned_filename
+                ),
+                "download_available": True,
+                "preview": summary,
+            }
+
+        finally:
+            cleaned_path.unlink(
+                missing_ok=True
+            )
+            cleaned_path = None
+
+    finally:
+        cleanup_dataset_local_path(
+            original_path,
+            original_temporary,
+        )
 
 
 def get_cleaned_file_path(
     dataset: Dataset,
 ) -> Path:
     """
-    Return the expected cleaned dataset path.
+    Return a local path for the cleaned dataset.
+
+    For local datasets:
+        returns the existing local cleaned file.
+
+    For Supabase datasets:
+        downloads the cleaned file to a temporary
+        local path.
+
+    The caller is responsible for deleting the returned
+    temporary path when the response has completed.
     """
 
-    original_path = resolve_dataset_path(dataset.file_path)
+    # ------------------------------------------------------------
+    # Local dataset
+    # ------------------------------------------------------------
 
-    extension = dataset.file_type.lower()
-
-    if extension == "xls":
-        extension = "xlsx"
-
-    cleaned_path = (
-        original_path.parent
-        / f"{original_path.stem}_cleaned.{extension}"
-    )
-
-    if not cleaned_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Cleaned dataset has not been generated yet.",
+    if not is_cloud_dataset(
+        dataset.file_path
+    ):
+        original_path, _ = (
+            get_dataset_local_path(
+                dataset.file_path
+            )
         )
 
-    return cleaned_path
+        extension = dataset.file_type.lower()
+
+        if extension == "xls":
+            extension = "xlsx"
+
+        cleaned_path = (
+            original_path.parent
+            / f"{original_path.stem}_cleaned.{extension}"
+        )
+
+        if not cleaned_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Cleaned dataset has not "
+                    "been generated yet."
+                ),
+            )
+
+        return cleaned_path
+
+    # ------------------------------------------------------------
+    # Supabase dataset
+    # ------------------------------------------------------------
+
+    cleaned_storage_id = (
+        _build_cleaned_storage_id(
+            dataset
+        )
+    )
+
+    fd, temporary_path = (
+        __import__("tempfile").mkstemp(
+            prefix="insightforge_cleaned_download_",
+            suffix=_cleaned_extension(dataset),
+        )
+    )
+
+    Path(
+        temporary_path
+    ).unlink(
+        missing_ok=True
+    )
+
+    path = Path(
+        temporary_path
+    )
+
+    try:
+        supabase_storage.download_file(
+            cleaned_storage_id,
+            path,
+        )
+
+        return path
+
+    except Exception:
+        path.unlink(
+            missing_ok=True
+        )
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Cleaned dataset has not "
+                "been generated yet."
+            ),
+        ) from None

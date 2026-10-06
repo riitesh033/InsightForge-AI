@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
-from app.services.dataset_storage import resolve_dataset_path
+from app.services.dataset_storage import (
+    build_cloud_storage_id,
+    cleanup_dataset_local_path,
+    delete_dataset_storage,
+    get_dataset_local_path,
+    is_cloud_dataset,
+    resolve_dataset_path,
+)
+from app.services.cloud_storage import supabase_storage
 
 
 def create_dataset(
@@ -20,18 +28,84 @@ def create_dataset(
     return dataset
 
 
+def _build_cleaned_storage_id(dataset_id: int) -> str:
+    return build_cloud_storage_id(
+        f"{dataset_id}/cleaned"
+    )
+
+
 def get_cleaned_file_info(
     dataset: Dataset,
 ):
     """
     Check whether a cleaned version of the dataset exists.
-    The cleaned file is stored beside the original file using:
 
+    Local datasets:
         original_name_cleaned.extension
+
+    Supabase datasets:
+        datasets/<dataset_id>/cleaned
     """
 
+    # Cloud dataset
+    if is_cloud_dataset(dataset.file_path):
+        cleaned_storage_id = _build_cleaned_storage_id(
+            dataset.id
+        )
+
+        try:
+            manifest = supabase_storage.get_manifest(
+                cleaned_storage_id
+            )
+
+            chunks = manifest.get("chunks", [])
+
+            if not chunks:
+                return {
+                    "cleaned_available": False,
+                    "cleaned_filename": None,
+                }
+
+            original_extension = (
+                Path(dataset.original_filename)
+                .suffix
+                .lower()
+            )
+
+            if original_extension == ".xls":
+                cleaned_extension = ".xlsx"
+            else:
+                cleaned_extension = original_extension
+
+            original_stem = Path(
+                dataset.original_filename
+            ).stem
+
+            cleaned_filename = (
+                f"{original_stem}_cleaned"
+                f"{cleaned_extension}"
+            )
+
+            return {
+                "cleaned_available": True,
+                "cleaned_filename": cleaned_filename,
+            }
+
+        except (
+            FileNotFoundError,
+            RuntimeError,
+            ValueError,
+        ):
+            return {
+                "cleaned_available": False,
+                "cleaned_filename": None,
+            }
+
+    # Local dataset
     try:
-        original_path = resolve_dataset_path(dataset.file_path)
+        original_path = resolve_dataset_path(
+            dataset.file_path
+        )
     except ValueError:
         return {
             "cleaned_available": False,
@@ -44,7 +118,9 @@ def get_cleaned_file_info(
             "cleaned_filename": None,
         }
 
-    original_extension = original_path.suffix.lower()
+    original_extension = (
+        original_path.suffix.lower()
+    )
 
     # .xls files are converted to .xlsx during cleaning
     if original_extension == ".xls":
@@ -54,7 +130,8 @@ def get_cleaned_file_info(
 
     cleaned_path = (
         original_path.parent
-        / f"{original_path.stem}_cleaned{cleaned_extension}"
+        / f"{original_path.stem}_cleaned"
+        f"{cleaned_extension}"
     )
 
     if not cleaned_path.exists():
@@ -190,18 +267,43 @@ def rename_dataset(
     """
     Rename the original dataset and its cleaned version.
 
-    Example:
+    Local datasets are physically renamed.
 
-        sales.csv
-        sales_cleaned.csv
-
-    becomes:
-
-        company_sales.csv
-        company_sales_cleaned.csv
+    Cloud datasets keep their Supabase storage identifier
+    because the database stores the logical storage location,
+    not the original filename.
     """
 
-    original_path = resolve_dataset_path(dataset.file_path)
+    requested_name = Path(
+        new_name.replace("\\", "/").rsplit("/", 1)[-1]
+    )
+
+    if requested_name.suffix:
+        new_extension = requested_name.suffix
+    else:
+        new_extension = Path(
+            dataset.original_filename
+        ).suffix
+
+    new_filename = (
+        f"{requested_name.stem}"
+        f"{new_extension}"
+    )
+
+    # Cloud dataset
+    if is_cloud_dataset(dataset.file_path):
+        dataset.original_filename = new_name
+        dataset.filename = new_filename
+
+        db.commit()
+        db.refresh(dataset)
+
+        return dataset
+
+    # Local dataset
+    original_path = resolve_dataset_path(
+        dataset.file_path
+    )
 
     old_stem = original_path.stem
     old_extension = original_path.suffix.lower()
@@ -216,22 +318,6 @@ def rename_dataset(
         original_path.parent
         / f"{old_stem}_cleaned"
         f"{cleaned_extension}"
-    )
-
-    requested_name = Path(
-        new_name.replace("\\", "/").rsplit("/", 1)[-1]
-    )
-
-    # If user doesn't provide an extension,
-    # preserve the original extension.
-    if requested_name.suffix:
-        new_extension = requested_name.suffix
-    else:
-        new_extension = original_path.suffix
-
-    new_filename = (
-        f"{requested_name.stem}"
-        f"{new_extension}"
     )
 
     new_original_path = (
@@ -250,7 +336,6 @@ def rename_dataset(
 
     # Rename cleaned physical file
     if old_cleaned_path.exists():
-
         new_cleaned_path = (
             new_original_path.parent
             / f"{new_original_path.stem}"
@@ -284,6 +369,9 @@ def delete_dataset(
     """
     Delete the dataset, its analysis,
     original file, and cleaned file.
+
+    Cloud datasets additionally remove their
+    Supabase storage objects.
     """
 
     # Delete analysis records
@@ -291,30 +379,72 @@ def delete_dataset(
         Analysis.dataset_id == dataset.id
     ).delete()
 
-    original_path = resolve_dataset_path(dataset.file_path)
+    # Cloud dataset
+    if is_cloud_dataset(dataset.file_path):
+        original_storage_id = (
+            dataset.file_path
+            .removeprefix("supabase:")
+        )
 
-    # Delete original file
-    if original_path.exists():
-        original_path.unlink()
+        cleaned_storage_id = (
+            _build_cleaned_storage_id(
+                dataset.id
+            )
+            .removeprefix("supabase:")
+        )
 
-    # Determine cleaned extension
-    extension = original_path.suffix.lower()
+        # Delete original Supabase dataset
+        delete_dataset_storage(
+            dataset.file_path
+        )
 
-    if extension == ".xls":
-        cleaned_extension = ".xlsx"
-    else:
-        cleaned_extension = extension
+        # Delete cleaned Supabase dataset
+        try:
+            supabase_storage.delete_file(
+                cleaned_storage_id
+            )
+        except Exception:
+            pass
 
-    cleaned_path = (
-        original_path.parent
-        / f"{original_path.stem}"
-        f"_cleaned"
-        f"{cleaned_extension}"
-    )
+        # Delete database record
+        db.delete(dataset)
+        db.commit()
 
-    # Delete cleaned file
-    if cleaned_path.exists():
-        cleaned_path.unlink()
+        return
+
+    # Local dataset
+    try:
+        original_path = resolve_dataset_path(
+            dataset.file_path
+        )
+    except ValueError:
+        original_path = None
+
+    if original_path is not None:
+        # Delete original file
+        if original_path.exists():
+            original_path.unlink()
+
+        # Determine cleaned extension
+        extension = (
+            original_path.suffix.lower()
+        )
+
+        if extension == ".xls":
+            cleaned_extension = ".xlsx"
+        else:
+            cleaned_extension = extension
+
+        cleaned_path = (
+            original_path.parent
+            / f"{original_path.stem}"
+            f"_cleaned"
+            f"{cleaned_extension}"
+        )
+
+        # Delete cleaned file
+        if cleaned_path.exists():
+            cleaned_path.unlink()
 
     # Delete database record
     db.delete(dataset)

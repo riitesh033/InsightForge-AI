@@ -1,9 +1,22 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Project root:
+# backend/
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+# Explicitly load backend/.env
+ENV_FILE = BASE_DIR / ".env"
+
+
 class Settings(BaseSettings):
+    # ============================================================
+    # Project
+    # ============================================================
+
     PROJECT_NAME: str = "InsightForge AI"
     API_V1_STR: str = "/api/v1"
 
@@ -17,8 +30,36 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # ============================================================
+    # Local Storage
+    # ============================================================
+
     DATASET_STORAGE_DIR: str = "app/uploads/datasets"
-    STUDENT_VERIFICATION_STORAGE_DIR: str = "private_uploads/student_verification"
+    STUDENT_VERIFICATION_STORAGE_DIR: str = (
+        "private_uploads/student_verification"
+    )
+
+    # ============================================================
+    # Cloud Storage - Supabase
+    # ============================================================
+
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_BUCKET: str = "insightforge-files"
+
+    # Keep each uploaded cloud-storage chunk below
+    # Supabase's per-file size limit.
+    SUPABASE_CHUNK_SIZE_MB: int = 40
+
+
+        # Use Supabase for persistent dataset storage.
+    # Keep False for local development unless explicitly enabled.
+    USE_CLOUD_STORAGE: bool = False
+
+    # ============================================================
+    # Google OAuth
+    # ============================================================
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
@@ -28,11 +69,8 @@ class Settings(BaseSettings):
     # Email / Brevo
     # ============================================================
 
-    # Brevo HTTPS API key.
-    # Used instead of SMTP for email delivery on Render.
     BREVO_API_KEY: str = ""
 
-    # Sender information.
     SMTP_FROM_EMAIL: str = ""
     SMTP_FROM_NAME: str = "InsightForge AI"
 
@@ -47,7 +85,7 @@ class Settings(BaseSettings):
     BUSINESS_ADDRESS: str = ""
 
     # ============================================================
-    # Payments (Stripe)
+    # Payments - Stripe
     # ============================================================
 
     STRIPE_SECRET_KEY: str = ""
@@ -56,7 +94,7 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ID_BUSINESS: str = ""
 
     # ============================================================
-    # AI PROVIDER
+    # AI Provider
     # ============================================================
 
     # gemini -> openrouter -> ollama
@@ -75,17 +113,25 @@ class Settings(BaseSettings):
 
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "openrouter/free"
-    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_BASE_URL: str = (
+        "https://openrouter.ai/api/v1"
+    )
 
     # ============================================================
     # Ollama
     # ============================================================
 
-    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_BASE_URL: str = (
+        "http://host.docker.internal:11434"
+    )
     OLLAMA_MODEL: str = "qwen3:8b"
 
+    # ============================================================
+    # Pydantic Settings Configuration
+    # ============================================================
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE,
         case_sensitive=True,
         extra="ignore",
     )

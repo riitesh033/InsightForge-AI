@@ -79,3 +79,5 @@ google-genai
 # Payments
 # ==========================
 stripe>=8.0.0
+
+supabase

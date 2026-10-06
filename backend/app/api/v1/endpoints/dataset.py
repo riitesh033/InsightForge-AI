@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -25,11 +28,35 @@ from app.schemas.dataset import (
     DatasetResponse,
 )
 from app.services.dataset import upload_dataset
-from app.services.dataset_storage import resolve_dataset_path
+from app.services.dataset_storage import (
+    cleanup_dataset_local_path,
+    get_dataset_local_path,
+)
 
 
 router = APIRouter()
 
+
+def cleanup_downloaded_dataset(
+    file_path: str,
+    temporary: bool,
+) -> None:
+    """
+    Remove a temporary reconstructed dataset after
+    the download response has completed.
+    """
+
+    if not temporary:
+        return
+
+    try:
+        cleanup_dataset_local_path(
+            Path(file_path),
+            True,
+        )
+    except Exception:
+        # Cleanup failure must never affect the download.
+        pass
 
 
 @router.post(
@@ -49,14 +76,17 @@ def upload_dataset_route(
     )
 
 
-
 @router.get(
     "",
     response_model=DatasetListResponse,
 )
 def get_all_datasets(
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    page_size: int = Query(
+        10,
+        ge=1,
+        le=100,
+    ),
     search: str | None = Query(None),
     sort_by: str = Query("uploaded_at"),
     order: str = Query("desc"),
@@ -74,23 +104,22 @@ def get_all_datasets(
     )
 
 
-
-# IMPORTANT: Keep download BEFORE /{dataset_id}
+# IMPORTANT:
+# Keep download BEFORE /{dataset_id}
 @router.get(
     "/{dataset_id}/download"
 )
 def download_dataset_route(
     dataset_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
-
 
     if dataset is None:
         raise HTTPException(
@@ -98,29 +127,50 @@ def download_dataset_route(
             detail="Dataset not found.",
         )
 
-
     try:
-        file_path = resolve_dataset_path(dataset.file_path)
-    except ValueError:
+        file_path, temporary = (
+            get_dataset_local_path(
+                dataset.file_path
+            )
+        )
+
+    except (
+        FileNotFoundError,
+        ValueError,
+        RuntimeError,
+    ):
         raise HTTPException(
             status_code=404,
             detail="File not found on server.",
         ) from None
 
-
     if not file_path.is_file():
+        cleanup_dataset_local_path(
+            file_path,
+            temporary,
+        )
+
         raise HTTPException(
             status_code=404,
             detail="File not found on server.",
         )
 
+    # Supabase datasets are reconstructed into a temporary
+    # Render/local file. Delete that file only after FastAPI
+    # finishes sending the response.
+    if temporary:
+        background_tasks.add_task(
+            cleanup_downloaded_dataset,
+            str(file_path),
+            temporary,
+        )
 
     return FileResponse(
         path=file_path,
         filename=dataset.original_filename,
         media_type="application/octet-stream",
+        background=background_tasks,
     )
-
 
 
 @router.get(
@@ -132,13 +182,11 @@ def get_dataset_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
-
 
     if dataset is None:
         raise HTTPException(
@@ -146,9 +194,7 @@ def get_dataset_by_id(
             detail="Dataset not found.",
         )
 
-
     return dataset
-
 
 
 @router.patch(
@@ -161,13 +207,11 @@ def rename_dataset_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
-
 
     if dataset is None:
         raise HTTPException(
@@ -175,13 +219,11 @@ def rename_dataset_route(
             detail="Dataset not found.",
         )
 
-
     return rename_dataset(
         db=db,
         dataset=dataset,
         new_name=payload.original_filename,
     )
-
 
 
 @router.delete(
@@ -193,20 +235,17 @@ def delete_dataset_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     dataset = get_dataset(
         db=db,
         dataset_id=dataset_id,
         owner_id=current_user.id,
     )
 
-
     if dataset is None:
         raise HTTPException(
             status_code=404,
             detail="Dataset not found.",
         )
-
 
     delete_dataset(
         db=db,
