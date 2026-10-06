@@ -33,6 +33,7 @@ from app.services.professional_analysis import (
 
 logger = logging.getLogger(__name__)
 
+
 ALLOWED_EXTENSIONS = {
     ".csv",
     ".xlsx",
@@ -73,13 +74,21 @@ def make_json_serializable(obj):
         return int(obj)
 
     if isinstance(obj, np.floating):
-        return float(obj)
+        value = float(obj)
+
+        if not np.isfinite(value):
+            return None
+
+        return value
 
     if isinstance(obj, np.bool_):
         return bool(obj)
 
-    if pd.isna(obj):
-        return None
+    try:
+        if pd.isna(obj):
+            return None
+    except (TypeError, ValueError):
+        pass
 
     return obj
 
@@ -90,15 +99,25 @@ def upload_dataset(
     owner_id: int,
 ):
     """
-    Upload, profile, analyze, and persist a dataset.
+    Upload, persist, profile, and analyze a dataset.
 
-    When USE_CLOUD_STORAGE is False:
-        The existing local filesystem workflow is used.
+    Cloud-storage workflow:
 
-    When USE_CLOUD_STORAGE is True:
-        The uploaded dataset is temporarily stored locally,
-        uploaded to Supabase Storage, and the database stores
-        only a short Supabase storage identifier.
+        Browser
+            ↓
+        Temporary local file
+            ↓
+        Supabase Storage
+            ↓
+        Database dataset record
+            ↓
+        Pandas profiling / professional analysis
+            ↓
+        Database analysis record
+
+    The important difference from the previous implementation is
+    that the durable Supabase copy is created BEFORE the expensive
+    analysis work starts.
     """
 
     if not file.filename:
@@ -152,10 +171,7 @@ def upload_dataset(
     )
 
     # ------------------------------------------------------------
-    # Save the upload locally first.
-    #
-    # This local copy is temporary when cloud storage is enabled.
-    # Pandas needs a local file for profiling/analysis.
+    # Temporary local storage
     # ------------------------------------------------------------
 
     storage_root = dataset_storage_root()
@@ -172,15 +188,71 @@ def upload_dataset(
     cloud_uploaded = False
 
     try:
+        # --------------------------------------------------------
+        # Save the incoming upload locally.
+        # --------------------------------------------------------
+
+        logger.info(
+            "Saving uploaded dataset locally: %s",
+            original_filename,
+        )
+
         with save_path.open("wb") as buffer:
             shutil.copyfileobj(
                 file.file,
                 buffer,
             )
 
+        logger.info(
+            "Temporary dataset saved: %s bytes",
+            file_size,
+        )
+
+        # --------------------------------------------------------
+        # IMPORTANT:
+        # Upload to Supabase BEFORE expensive analysis.
+        #
+        # We use a UUID-based storage ID here rather than the
+        # database ID because the database ID does not exist yet.
+        # --------------------------------------------------------
+
+        if settings.USE_CLOUD_STORAGE:
+            if not supabase_storage.is_configured():
+                raise RuntimeError(
+                    "Cloud storage is enabled but "
+                    "Supabase Storage is not configured."
+                )
+
+            cloud_storage_id = (
+                f"supabase:datasets/uploads/"
+                f"{uuid4().hex}"
+            )
+
+            logger.info(
+                "Uploading dataset to Supabase: %s",
+                cloud_storage_id,
+            )
+
+            supabase_storage.upload_file(
+                save_path,
+                cloud_storage_id,
+            )
+
+            cloud_uploaded = True
+
+            logger.info(
+                "Dataset successfully uploaded to Supabase: %s",
+                cloud_storage_id,
+            )
+
         # --------------------------------------------------------
         # Read the dataset
         # --------------------------------------------------------
+
+        logger.info(
+            "Reading dataset with pandas: %s",
+            original_filename,
+        )
 
         try:
             if extension == ".csv":
@@ -202,11 +274,21 @@ def upload_dataset(
                 detail="Unable to read dataset.",
             ) from None
 
+        logger.info(
+            "Dataset loaded: rows=%s columns=%s",
+            len(dataframe),
+            len(dataframe.columns),
+        )
+
         # --------------------------------------------------------
         # Generate deterministic analysis
         # --------------------------------------------------------
 
         try:
+            logger.info(
+                "Starting dataset profiling."
+            )
+
             analysis_data = profile_dataframe(
                 dataframe
             )
@@ -215,10 +297,18 @@ def upload_dataset(
                 analysis_data
             )
 
+            logger.info(
+                "Starting professional dataset analysis."
+            )
+
             professional_analysis = (
                 generate_professional_analysis(
                     dataframe
                 )
+            )
+
+            professional_analysis = make_json_serializable(
+                professional_analysis
             )
 
             analysis_text = generate_dataset_summary(
@@ -257,11 +347,13 @@ def upload_dataset(
 
         # --------------------------------------------------------
         # Create database objects
-        #
-        # We flush first so dataset.id is available.
-        # The ID is then used to create the stable Supabase
-        # storage identifier.
         # --------------------------------------------------------
+
+        dataset_file_path = (
+            cloud_storage_id
+            if cloud_storage_id
+            else unique_filename
+        )
 
         dataset = Dataset(
             filename=unique_filename,
@@ -271,7 +363,7 @@ def upload_dataset(
                 "",
             ),
             file_size=file_size,
-            file_path=unique_filename,
+            file_path=dataset_file_path,
             rows=len(dataframe),
             columns=len(dataframe.columns),
             owner_id=owner_id,
@@ -329,56 +421,28 @@ def upload_dataset(
             ),
             data_quality_issues=(
                 professional_analysis
-                .get("data_quality", {})
-                .get("issues")
+                .get(
+                    "data_quality",
+                    {},
+                )
+                .get(
+                    "issues"
+                )
             ),
         )
 
         db.add(dataset)
         db.add(analysis)
 
-        # Make dataset.id available.
-        db.flush()
-
-        # --------------------------------------------------------
-        # Cloud storage
-        # --------------------------------------------------------
-
-        if settings.USE_CLOUD_STORAGE:
-            if not supabase_storage.is_configured():
-                raise RuntimeError(
-                    "Cloud storage is enabled but "
-                    "Supabase Storage is not configured."
-                )
-
-            cloud_storage_id = (
-                build_cloud_storage_id(
-                    dataset.id
-                )
-            )
-
-            supabase_storage.upload_file(
-                save_path,
-                cloud_storage_id,
-            )
-
-            cloud_uploaded = True
-
-            dataset.file_path = cloud_storage_id
-
-        # --------------------------------------------------------
-        # Local storage
-        # --------------------------------------------------------
-
-        else:
-            dataset.file_path = unique_filename
-
-        # --------------------------------------------------------
-        # Persist everything
-        # --------------------------------------------------------
-
         db.commit()
         db.refresh(dataset)
+
+        logger.info(
+            "Dataset upload completed successfully: "
+            "dataset_id=%s filename=%s",
+            dataset.id,
+            original_filename,
+        )
 
         return dataset
 
