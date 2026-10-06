@@ -305,3 +305,24 @@ def test_ai_explanation_uses_provider_fallback_and_rejects_unsupported_numbers(
         provider_unavailable,
     )
     assert asyncio.run(generate_dataset_explanation(facts)) is None
+
+
+def test_ai_explanation_times_out_to_deterministic_fallback(monkeypatch):
+    facts = {
+        "dataset": {"rows": 10, "columns": 2},
+        "data_quality": {"quality_score": 82},
+    }
+
+    async def hanging_provider(_prompt):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "app.services.insights.generate_ai_response",
+        hanging_provider,
+    )
+    monkeypatch.setattr(
+        "app.services.insights.AI_REQUEST_TIMEOUT_SECONDS",
+        0.01,
+    )
+
+    assert asyncio.run(generate_dataset_explanation(facts)) is None

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
@@ -9,6 +9,10 @@ from sqlalchemy import Text
 from sqlalchemy.orm import relationship
 
 from app.db.base_models import Base
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ChatMessage(Base):
@@ -42,7 +46,7 @@ class ChatMessage(Base):
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=_utcnow_naive,
         nullable=False,
     )
 

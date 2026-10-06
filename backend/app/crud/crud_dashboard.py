@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import extract
 from sqlalchemy import func
@@ -121,7 +121,7 @@ def get_uploads_per_month(
     db: Session,
     owner_id: int,
 ):
-    current_date = datetime.utcnow()
+    current_date = datetime.now(UTC).replace(tzinfo=None)
 
     current_year = current_date.year
     current_month = current_date.month

@@ -18,6 +18,7 @@ from app.services.dataset_storage import (
     get_dataset_local_path,
     is_cloud_dataset,
 )
+from app.utils.files import create_temporary_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,8 @@ def load_dataset_file(
 
 def _clean_dataframe(
     df: pd.DataFrame,
+    *,
+    copy: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """
     Apply safe automatic cleaning operations.
@@ -112,9 +115,13 @@ def _clean_dataframe(
     - Non-numeric missing values -> mode
     - Duplicate rows -> removed
     - Outliers -> detected only, never automatically removed
+
+    ``copy=False`` lets read-only callers (the preview endpoint) skip a
+    full duplicate of the frame, which matters for multi-hundred-megabyte
+    uploads on memory-constrained hosts.
     """
 
-    cleaned = df.copy()
+    cleaned = df.copy() if copy else df
 
     summary: dict[str, Any] = {
         "rows_before": len(df),
@@ -395,7 +402,10 @@ def preview_cleaning(
     )
 
     try:
-        _, summary = _clean_dataframe(df)
+        _, summary = _clean_dataframe(
+            df,
+            copy=False,
+        )
 
         return {
             "dataset_id": dataset.id,
@@ -446,6 +456,21 @@ def _cleaned_filename(
     return (
         f"{stem}_cleaned"
         f"{_cleaned_extension(dataset)}"
+    )
+
+
+def _local_cleaned_path(
+    dataset: Dataset,
+    original_path: Path,
+) -> Path:
+    """
+    Return the path for a local cleaned dataset based on the
+    user-facing original filename, not the randomized storage name.
+    """
+
+    return (
+        original_path.parent
+        / _cleaned_filename(dataset)
     )
 
 
@@ -507,9 +532,9 @@ def apply_cleaning(
         if not is_cloud_dataset(
             dataset.file_path
         ):
-            cleaned_path = (
-                original_path.parent
-                / cleaned_filename
+            cleaned_path = _local_cleaned_path(
+                dataset,
+                original_path,
             )
 
             try:
@@ -560,21 +585,9 @@ def apply_cleaning(
         # Supabase storage mode
         # --------------------------------------------------------
 
-        fd, temporary_cleaned_path = (
-            __import__("tempfile").mkstemp(
-                prefix="insightforge_cleaned_",
-                suffix=output_extension,
-            )
-        )
-
-        Path(
-            temporary_cleaned_path
-        ).unlink(
-            missing_ok=True
-        )
-
-        cleaned_path = Path(
-            temporary_cleaned_path
+        cleaned_path = create_temporary_file_path(
+            prefix="insightforge_cleaned_",
+            suffix=output_extension,
         )
 
         try:
@@ -663,14 +676,9 @@ def get_cleaned_file_path(
             )
         )
 
-        extension = dataset.file_type.lower()
-
-        if extension == "xls":
-            extension = "xlsx"
-
-        cleaned_path = (
-            original_path.parent
-            / f"{original_path.stem}_cleaned.{extension}"
+        cleaned_path = _local_cleaned_path(
+            dataset,
+            original_path,
         )
 
         if not cleaned_path.exists():
@@ -694,21 +702,9 @@ def get_cleaned_file_path(
         )
     )
 
-    fd, temporary_path = (
-        __import__("tempfile").mkstemp(
-            prefix="insightforge_cleaned_download_",
-            suffix=_cleaned_extension(dataset),
-        )
-    )
-
-    Path(
-        temporary_path
-    ).unlink(
-        missing_ok=True
-    )
-
-    path = Path(
-        temporary_path
+    path = create_temporary_file_path(
+        prefix="insightforge_cleaned_download_",
+        suffix=_cleaned_extension(dataset),
     )
 
     try:

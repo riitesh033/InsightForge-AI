@@ -1,15 +1,58 @@
 import json
 import logging
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from supabase import Client, create_client
 
 from app.core.config import settings
+from app.utils.files import create_temporary_file_path
 
 logger = logging.getLogger(__name__)
+
+CLOUD_STORAGE_PREFIX = "supabase:"
+
+# Supabase rejects any single object larger than the bucket's configured
+# upload limit (50 MiB on the default plan). Chunks are clamped to stay
+# safely below it, and never shrink below 1 MiB.
+MAX_SUPABASE_OBJECT_BYTES = 50 * 1024 * 1024
+MIN_SUPABASE_CHUNK_BYTES = 1024 * 1024
+
+
+def normalize_storage_id(storage_id: str) -> str:
+    """Return the canonical Supabase object prefix for a storage identifier.
+
+    ``datasets.file_path`` stores identifiers such as ``supabase:datasets/12``
+    while Supabase object paths are ``datasets/12/...``. Historic revisions
+    handed the fully prefixed identifier straight to the storage layer, so
+    those objects were written under object paths beginning with ``supabase:``
+    and could never be read back, because every reader strips the prefix first.
+    Normalising at this boundary keeps writers and readers in agreement.
+    """
+
+    if not isinstance(storage_id, str):
+        raise ValueError("Storage identifier must be a string.")
+
+    normalized = storage_id.replace("\\", "/").strip().lstrip("/")
+
+    if normalized.startswith(CLOUD_STORAGE_PREFIX):
+        normalized = normalized[len(CLOUD_STORAGE_PREFIX):]
+
+    normalized = normalized.strip("/")
+
+    if not normalized:
+        raise ValueError("Storage identifier must not be empty.")
+
+    if "\x00" in normalized or ".." in normalized.split("/"):
+        raise ValueError("Invalid storage identifier.")
+
+    return normalized
+
+
+def legacy_storage_id(storage_id: str) -> str:
+    """Return the pre-fix (``supabase:``-prefixed) prefix for an identifier."""
+
+    return f"{CLOUD_STORAGE_PREFIX}{normalize_storage_id(storage_id)}"
 
 
 class SupabaseStorage:
@@ -54,11 +97,24 @@ class SupabaseStorage:
 
     @property
     def chunk_size(self) -> int:
-        return (
+        """Return the chunk size in bytes, safely below Supabase's cap."""
+
+        configured = (
             settings.SUPABASE_CHUNK_SIZE_MB
             * 1024
             * 1024
         )
+
+        if configured > MAX_SUPABASE_OBJECT_BYTES:
+            logger.warning(
+                "SUPABASE_CHUNK_SIZE_MB=%s exceeds the maximum supported "
+                "object size; using %s MiB instead.",
+                settings.SUPABASE_CHUNK_SIZE_MB,
+                MAX_SUPABASE_OBJECT_BYTES // (1024 * 1024),
+            )
+            return MAX_SUPABASE_OBJECT_BYTES
+
+        return max(configured, MIN_SUPABASE_CHUNK_BYTES)
 
     def is_configured(self) -> bool:
         return bool(
@@ -78,7 +134,7 @@ class SupabaseStorage:
         storage_id: str,
     ) -> str:
         return (
-            f"{storage_id}/"
+            f"{normalize_storage_id(storage_id)}/"
             f"{self.MANIFEST_FILENAME}"
         )
 
@@ -92,9 +148,14 @@ class SupabaseStorage:
 
         The file is split into chunks. A manifest containing the
         chunk information is then stored separately.
+
+        ``storage_id`` may be supplied with or without the
+        ``supabase:`` prefix; only the canonical object prefix is used.
         """
 
         self._require_configuration()
+
+        storage_id = normalize_storage_id(storage_id)
 
         if not file_path.exists():
             raise FileNotFoundError(
@@ -213,21 +274,11 @@ class SupabaseStorage:
         self,
         storage_id: str,
     ) -> dict[str, str]:
-        """
-        Create a short-lived signed upload URL for a
-        Supabase Storage object.
-
-        The browser can use the returned token to upload
-        directly to Supabase without receiving the
-        service-role key.
-        """
+        """Create a short-lived signed upload URL for a Supabase object."""
 
         self._require_configuration()
 
-        if not storage_id:
-            raise ValueError(
-                "Storage identifier is required."
-            )
+        storage_id = normalize_storage_id(storage_id)
 
         try:
             response = (
@@ -235,9 +286,7 @@ class SupabaseStorage:
                 .from_(self.bucket)
                 .create_signed_upload_url(
                     storage_id,
-                    options={
-                        "upsert": "false",
-                    },
+                    options={"upsert": "false"},
                 )
             )
 
@@ -262,8 +311,7 @@ class SupabaseStorage:
 
         except Exception as exc:
             logger.exception(
-                "Failed to create Supabase signed "
-                "upload URL: %s",
+                "Failed to create Supabase signed upload URL: %s",
                 exc,
             )
             raise
@@ -273,13 +321,7 @@ class SupabaseStorage:
         storage_id: str,
         chunk_index: int,
     ) -> dict[str, str]:
-        """
-        Create a short-lived signed upload URL for one
-        dataset chunk.
-
-        Each chunk is stored as a separate Supabase
-        Storage object.
-        """
+        """Create a short-lived signed upload URL for one dataset chunk."""
 
         self._require_configuration()
 
@@ -292,6 +334,8 @@ class SupabaseStorage:
             raise ValueError(
                 "chunk_index must be non-negative."
             )
+
+        storage_id = normalize_storage_id(storage_id)
 
         chunk_path = (
             f"{storage_id}/"
@@ -341,18 +385,10 @@ class SupabaseStorage:
         file_size: int,
     ) -> dict[str, Any]:
         """
-        Create a manifest for chunks uploaded directly
-        from the browser to Supabase Storage.
+        Create a manifest for chunks uploaded directly from the browser.
 
-        The chunk objects are stored at:
-
-            <storage_id>/chunk_000000
-            <storage_id>/chunk_000001
-            ...
-
-        The manifest is stored at:
-
-            <storage_id>/manifest.json
+        Chunk objects live at ``<storage_id>/chunk_000000`` and the
+        manifest at ``<storage_id>/manifest.json``.
         """
 
         self._require_configuration()
@@ -372,18 +408,18 @@ class SupabaseStorage:
                 "file_size must be greater than zero."
             )
 
+        storage_id = normalize_storage_id(storage_id)
+
         chunks: list[dict[str, Any]] = []
 
         for chunk_index in range(total_chunks):
-            chunk_path = (
-                f"{storage_id}/"
-                f"chunk_{chunk_index:06d}"
-            )
-
             chunks.append(
                 {
                     "index": chunk_index,
-                    "path": chunk_path,
+                    "path": (
+                        f"{storage_id}/"
+                        f"chunk_{chunk_index:06d}"
+                    ),
                 }
             )
 
@@ -413,9 +449,7 @@ class SupabaseStorage:
                     manifest_path,
                     manifest_bytes,
                     {
-                        "content-type": (
-                            "application/json"
-                        ),
+                        "content-type": "application/json",
                         "upsert": "true",
                     },
                 )
@@ -436,24 +470,35 @@ class SupabaseStorage:
     ) -> dict[str, Any]:
         """
         Download and decode the manifest for a dataset.
+
+        Datasets written before the storage-path fix live under a
+        ``supabase:``-prefixed object path, so both spellings are tried
+        until one resolves.
         """
 
         self._require_configuration()
 
-        manifest_path = self._manifest_path(
-            storage_id
-        )
+        data = None
 
-        try:
-            data = (
-                self.client.storage
-                .from_(self.bucket)
-                .download(manifest_path)
-            )
-        except Exception as exc:
+        for candidate in (
+            self._manifest_path(storage_id),
+            f"{legacy_storage_id(storage_id)}/"
+            f"{self.MANIFEST_FILENAME}",
+        ):
+            try:
+                data = (
+                    self.client.storage
+                    .from_(self.bucket)
+                    .download(candidate)
+                )
+                break
+            except Exception:
+                data = None
+
+        if data is None:
             raise FileNotFoundError(
                 "Supabase dataset manifest was not found."
-            ) from exc
+            )
 
         try:
             manifest = json.loads(
@@ -485,17 +530,7 @@ class SupabaseStorage:
         output_path: Path,
         total_chunks: int,
     ) -> Path:
-        """
-        Reconstruct browser-uploaded chunks into a local file.
-
-        Chunks are stored at:
-
-            <storage_id>/chunk_000000
-            <storage_id>/chunk_000001
-            ...
-
-        The reconstructed file is written to output_path.
-        """
+        """Reconstruct browser-uploaded chunks into a local file."""
 
         self._require_configuration()
 
@@ -508,6 +543,8 @@ class SupabaseStorage:
             raise ValueError(
                 "total_chunks must be greater than zero."
             )
+
+        storage_id = normalize_storage_id(storage_id)
 
         output_path.parent.mkdir(
             parents=True,
@@ -545,7 +582,7 @@ class SupabaseStorage:
 
             logger.exception(
                 "Failed to reconstruct Supabase dataset chunks: %s",
-                exc
+                exc,
             )
             raise
 
@@ -557,10 +594,8 @@ class SupabaseStorage:
         """
         Reconstruct a Supabase dataset into a local file.
 
-        `manifest` may be either:
-
-        - an already-loaded manifest dictionary, or
-        - a Supabase storage identifier.
+        `manifest` may be an already-loaded manifest dictionary or a
+        Supabase storage identifier.
         """
 
         self._require_configuration()
@@ -576,15 +611,9 @@ class SupabaseStorage:
             )
 
         if destination is None:
-            fd, temporary_path = tempfile.mkstemp(
+            destination = create_temporary_file_path(
                 prefix="insightforge_dataset_",
                 suffix=".dataset",
-            )
-
-            os.close(fd)
-
-            destination = Path(
-                temporary_path
             )
 
         destination.parent.mkdir(
@@ -599,8 +628,7 @@ class SupabaseStorage:
 
         if not chunks:
             raise RuntimeError(
-                "Supabase storage manifest contains "
-                "no chunks."
+                "Supabase storage manifest contains no chunks."
             )
 
         expected_size = manifest.get(
@@ -610,14 +638,12 @@ class SupabaseStorage:
         try:
             with destination.open("wb") as output:
                 for chunk in chunks:
-                    object_path = chunk.get(
-                        "path"
-                    )
+                    object_path = chunk.get("path")
 
                     if not object_path:
                         raise RuntimeError(
-                            "Supabase manifest contains "
-                            "an invalid chunk path."
+                            "Supabase manifest contains an "
+                            "invalid chunk path."
                         )
 
                     data = (
@@ -630,12 +656,11 @@ class SupabaseStorage:
 
             if (
                 expected_size is not None
-                and destination.stat().st_size
-                != expected_size
+                and destination.stat().st_size != expected_size
             ):
                 raise RuntimeError(
-                    "Reconstructed dataset size does not "
-                    "match the stored file size."
+                    "Reconstructed dataset size does not match "
+                    "the stored file size."
                 )
 
             return destination
@@ -664,16 +689,48 @@ class SupabaseStorage:
                 "Failed to delete Supabase dataset chunks."
             )
 
+    def _list_object_paths(
+        self,
+        prefix: str,
+    ) -> list[str]:
+        """Return every object path stored directly under ``prefix``."""
+
+        try:
+            entries = (
+                self.client.storage
+                .from_(self.bucket)
+                .list(prefix)
+            )
+        except Exception:
+            logger.warning(
+                "Unable to list Supabase objects under %s.",
+                prefix,
+            )
+            return []
+
+        paths: list[str] = []
+
+        for entry in entries or []:
+            if isinstance(entry, dict):
+                name = entry.get("name")
+            else:
+                name = getattr(entry, "name", None)
+
+            if isinstance(name, str) and name:
+                paths.append(f"{prefix}/{name}")
+
+        return paths
+
     def delete_file(
         self,
         manifest: dict[str, Any] | str,
     ) -> None:
         """
-        Delete all chunks and the manifest belonging to a
-        Supabase dataset.
+        Delete every chunk and the manifest belonging to a Supabase dataset.
 
-        `manifest` may be either a manifest dictionary or
-        a storage identifier.
+        Both the canonical and the legacy (``supabase:``-prefixed) object
+        prefixes are enumerated, so objects orphaned by the storage-path
+        fix are still removed.
         """
 
         if not self.is_configured():
@@ -681,37 +738,66 @@ class SupabaseStorage:
 
         try:
             if isinstance(manifest, str):
-                manifest = self.get_manifest(
-                    manifest
-                )
+                try:
+                    manifest = self.get_manifest(
+                        manifest
+                    )
+                except (
+                    FileNotFoundError,
+                    RuntimeError,
+                    ValueError,
+                ):
+                    manifest = {
+                        "storage_id": manifest,
+                        "chunks": [],
+                    }
 
             if not isinstance(manifest, dict):
                 return
 
-            storage_id = manifest.get(
-                "storage_id"
-            )
-
-            chunks = manifest.get(
-                "chunks",
-                [],
-            )
+            storage_id = manifest.get("storage_id")
 
             paths = [
                 chunk["path"]
-                for chunk in chunks
+                for chunk in manifest.get("chunks", [])
                 if chunk.get("path")
             ]
 
+            prefixes: list[str] = []
+
             if storage_id:
-                paths.append(
-                    self._manifest_path(
-                        storage_id
+                prefixes.append(
+                    normalize_storage_id(storage_id)
+                )
+                prefixes.append(
+                    legacy_storage_id(storage_id)
+                )
+            else:
+                for chunk_path in paths:
+                    prefix = chunk_path.rsplit("/", 1)[0]
+
+                    if prefix and prefix not in prefixes:
+                        prefixes.append(prefix)
+
+            for prefix in prefixes:
+                normalized_prefix = prefix.strip("/")
+
+                if not normalized_prefix:
+                    continue
+
+                paths.extend(
+                    self._list_object_paths(
+                        normalized_prefix
                     )
                 )
 
+                paths.append(
+                    f"{normalized_prefix}/"
+                    f"{self.MANIFEST_FILENAME}"
+                )
+
             self._delete_chunk_paths(
-                paths
+                list(dict.fromkeys(paths))
             )
 
         except Exception:

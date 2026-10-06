@@ -119,7 +119,7 @@ def get_cleaned_file_info(
         }
 
     original_extension = (
-        original_path.suffix.lower()
+        Path(dataset.original_filename).suffix.lower()
     )
 
     # .xls files are converted to .xlsx during cleaning
@@ -128,10 +128,13 @@ def get_cleaned_file_info(
     else:
         cleaned_extension = original_extension
 
+    cleaned_filename = (
+        f"{Path(dataset.original_filename).stem}_cleaned"
+        f"{cleaned_extension}"
+    )
     cleaned_path = (
         original_path.parent
-        / f"{original_path.stem}_cleaned"
-        f"{cleaned_extension}"
+        / cleaned_filename
     )
 
     if not cleaned_path.exists():
@@ -305,8 +308,9 @@ def rename_dataset(
         dataset.file_path
     )
 
-    old_stem = original_path.stem
-    old_extension = original_path.suffix.lower()
+    old_extension = Path(
+        dataset.original_filename
+    ).suffix.lower()
 
     # Cleaning converts .xls -> .xlsx
     if old_extension == ".xls":
@@ -316,7 +320,7 @@ def rename_dataset(
 
     old_cleaned_path = (
         original_path.parent
-        / f"{old_stem}_cleaned"
+        / f"{Path(dataset.original_filename).stem}_cleaned"
         f"{cleaned_extension}"
     )
 

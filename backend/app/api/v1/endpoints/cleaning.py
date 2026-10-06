@@ -13,7 +13,11 @@ from app.services.cleaning import (
     get_cleaned_file_path,
     preview_cleaning,
 )
-from app.services.dataset_storage import is_cloud_dataset
+from app.services.dataset_storage import (
+    cleanup_dataset_local_path,
+    get_dataset_local_path,
+    is_cloud_dataset,
+)
 from app.services.entitlements import require_feature
 
 router = APIRouter()
@@ -60,6 +64,20 @@ def cleanup_temporary_file(
         pass
 
 
+def ensure_dataset_source_exists(dataset: Dataset) -> None:
+    """Return a safe not-found error before enforcing paid features."""
+
+    try:
+        path, temporary = get_dataset_local_path(dataset.file_path)
+    except (FileNotFoundError, ValueError, RuntimeError):
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset file not found on server.",
+        ) from None
+
+    cleanup_dataset_local_path(path, temporary)
+
+
 @router.post("/{dataset_id}/preview")
 def preview_cleaning_route(
     dataset_id: int,
@@ -72,11 +90,20 @@ def preview_cleaning_route(
         current_user,
     )
 
+    # A cloud-backed dataset must be resolved before entitlement checks so a
+    # missing remote manifest is reported as a not-found resource. Local
+    # placeholders remain entitlement-gated before touching the filesystem.
+    if is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
+
     require_feature(
         db,
         current_user.id,
         "data_cleaning",
     )
+
+    if not is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
 
     return preview_cleaning(dataset)
 
@@ -93,11 +120,17 @@ def apply_cleaning_route(
         current_user,
     )
 
+    if is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
+
     require_feature(
         db,
         current_user.id,
         "data_cleaning",
     )
+
+    if not is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
 
     return apply_cleaning(dataset)
 
@@ -115,11 +148,17 @@ def download_cleaned_dataset(
         current_user,
     )
 
+    if is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
+
     require_feature(
         db,
         current_user.id,
         "data_cleaning",
     )
+
+    if not is_cloud_dataset(dataset.file_path):
+        ensure_dataset_source_exists(dataset)
 
     cleaned_path = get_cleaned_file_path(
         dataset

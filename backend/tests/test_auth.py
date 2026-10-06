@@ -392,13 +392,15 @@ class TestGoogleOAuth:
         assert second_cookies["google_oauth_state"] == second_params["state"][0]
         assert second_cookies["google_oauth_nonce"] == second_params["nonce"][0]
 
+        for name, value in first_cookies.items():
+            client.cookies.set(name, value)
+
         stale_callback = client.get(
             f"{API}/auth/google/callback",
             params={
                 "code": "unused-code",
                 "state": second_params["state"][0],
             },
-            cookies=first_cookies,
             follow_redirects=False,
         )
 
@@ -481,15 +483,13 @@ class TestGoogleOAuth:
             "https://backend.example.test/api/v1/auth/google/callback",
         )
 
+        client.cookies.set("google_oauth_state", "different-state")
+        client.cookies.set("google_oauth_nonce", "test-nonce")
         response = client.get(
             f"{API}/auth/google/callback",
             params={
                 "code": "test-code",
                 "state": "state-from-google",
-            },
-            cookies={
-                "google_oauth_state": "different-state",
-                "google_oauth_nonce": "test-nonce",
             },
             follow_redirects=False,
         )
@@ -574,15 +574,13 @@ class TestGoogleOAuth:
             },
         )
 
+        client.cookies.set("google_oauth_state", "valid-state")
+        client.cookies.set("google_oauth_nonce", "expected-nonce")
         response = client.get(
             f"{API}/auth/google/callback",
             params={
                 "code": "sensitive-authorization-code",
                 "state": "valid-state",
-            },
-            cookies={
-                "google_oauth_state": "valid-state",
-                "google_oauth_nonce": "expected-nonce",
             },
             follow_redirects=False,
         )
@@ -741,13 +739,14 @@ class TestGoogleOAuth:
                     for name, morsel in cookie.items()
                 })
 
+            for name, value in cookie_values.items():
+                client.cookies.set(name, value)
             callback = client.get(
                 f"{API}/auth/google/callback",
                 params={
                     "code": f"test-code-{len(exchanged_code)}",
                     "state": authorization_params["state"][0],
                 },
-                cookies=cookie_values,
                 follow_redirects=False,
             )
 

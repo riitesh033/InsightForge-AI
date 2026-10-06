@@ -198,11 +198,22 @@ def upload_dataset(
         unique_filename
     )
 
-    cloud_storage_id: str | None = (
-        existing_cloud_storage_id
+    # Cloud storage is engaged when the deployment enables it, and always
+    # when the caller already uploaded the bytes to Supabase (the chunked
+    # browser flow). In that second case the data genuinely lives in
+    # Supabase, so the database record must reference it there: a
+    # local-only record would lose the dataset on the next container
+    # restart, which is exactly the failure this project must not have.
+    use_cloud_storage = bool(
+        settings.USE_CLOUD_STORAGE or existing_cloud_storage_id
     )
 
+    cloud_storage_id: str | None = None
+
     cloud_uploaded = False
+
+    if use_cloud_storage and existing_cloud_storage_id:
+        cloud_storage_id = existing_cloud_storage_id
 
     try:
         # --------------------------------------------------------
@@ -230,7 +241,7 @@ def upload_dataset(
         # uploaded the file there.
         # --------------------------------------------------------
 
-        if settings.USE_CLOUD_STORAGE:
+        if use_cloud_storage:
             if not supabase_storage.is_configured():
                 raise RuntimeError(
                     "Cloud storage is enabled but "
@@ -475,6 +486,14 @@ def upload_dataset(
             dataset.id,
             original_filename,
         )
+
+        # A cloud-backed dataset is served from Supabase, so the local
+        # staging copy is redundant. Leaving it behind would slowly fill
+        # the host filesystem without ever being read again.
+        if cloud_storage_id:
+            save_path.unlink(
+                missing_ok=True
+            )
 
         return dataset
 

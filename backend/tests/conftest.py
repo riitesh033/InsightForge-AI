@@ -18,6 +18,9 @@ os.environ["SECRET_KEY"] = "unit-test-secret-key-not-a-real-secret"
 os.environ["ENVIRONMENT"] = "development"
 os.environ["DEBUG"] = "false"
 os.environ["FRONTEND_URL"] = "http://localhost:5173"
+# Keep the default test workflow local even when a developer's backend/.env
+# enables Supabase storage. Cloud-storage tests opt in explicitly below.
+os.environ["USE_CLOUD_STORAGE"] = "false"
 # Ensure SMTP is treated as unconfigured unless a test overrides it.
 for var in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"):
     os.environ.pop(var, None)

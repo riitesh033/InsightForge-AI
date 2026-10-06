@@ -1,8 +1,8 @@
-import tempfile
 from pathlib import Path, PurePosixPath
 
 from app.core.config import settings
 from app.services.cloud_storage import supabase_storage
+from app.utils.files import create_temporary_file_path
 
 
 CLOUD_STORAGE_PREFIX = "supabase:"
@@ -213,27 +213,23 @@ def get_dataset_local_path(
         stored_path
     )
 
-    fd, temporary_path = tempfile.mkstemp(
+    temporary_path = create_temporary_file_path(
         prefix="insightforge_dataset_",
         suffix=".dataset",
-    )
-
-    Path(temporary_path).unlink(
-        missing_ok=True
     )
 
     try:
         downloaded = (
             supabase_storage.download_file(
                 storage_id,
-                Path(temporary_path),
+                temporary_path,
             )
         )
 
         return downloaded, True
 
     except Exception:
-        Path(temporary_path).unlink(
+        temporary_path.unlink(
             missing_ok=True
         )
         raise

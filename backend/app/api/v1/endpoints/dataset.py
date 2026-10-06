@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
+from app.core.config import settings
 from app.crud.crud_dataset import (
     delete_dataset,
     get_dataset,
@@ -140,7 +141,7 @@ def initialize_dataset_upload(
         raise HTTPException(
             status_code=500,
             detail=(
-                "Cloud storage is enabled but "
+                "Chunked upload storage is unavailable because "
                 "Supabase Storage is not configured."
             ),
         )
@@ -223,7 +224,7 @@ def finalize_dataset_upload(
         raise HTTPException(
             status_code=500,
             detail=(
-                "Cloud storage is enabled but "
+                "Chunked upload storage is unavailable because "
                 "Supabase Storage is not configured."
             ),
         )
@@ -290,9 +291,14 @@ def finalize_dataset_upload(
                 "match the uploaded file size."
             )
 
-        # The existing upload_dataset() function expects
-        # an UploadFile. Create a compatible object around
-        # the reconstructed temporary file.
+        # ``upload_dataset`` expects an UploadFile. Wrapping the
+        # reconstructed temporary file lets the chunked upload reuse the
+        # exact profiling/analysis workflow used by a direct upload.
+        #
+        # The storage identifier is passed through so the resulting record
+        # points at the Supabase copy that the browser already uploaded;
+        # ``upload_dataset`` derives the stored location itself and the
+        # temporary reconstruction is removed in the ``finally`` block.
         from fastapi import UploadFile as FastAPIUploadFile
 
         with temporary_path.open("rb") as dataset_file:
@@ -307,36 +313,13 @@ def finalize_dataset_upload(
                 owner_id=current_user.id,
                 existing_cloud_storage_id=(
                     f"supabase:{storage_id}"
-                )
+                    if settings.USE_CLOUD_STORAGE
+                    else None
+                ),
             )
 
-        # The existing upload_dataset() creates a second local/cloud
-        # copy. Replace that storage with the browser-uploaded copy.
-        old_file_path = dataset.file_path
-
-        dataset.file_path = (
-            f"supabase:{storage_id}"
-        )
-
-        db.commit()
-        db.refresh(dataset)
-
-        # Remove the temporary copy created by upload_dataset().
-        try:
-            if old_file_path and not old_file_path.startswith(
-                "supabase:"
-            ):
-                old_local_path = Path(old_file_path)
-
-                if old_local_path.exists():
-                    old_local_path.unlink(
-                        missing_ok=True
-                    )
-        except Exception:
-            logger.warning(
-                "Unable to remove temporary dataset copy.",
-                exc_info=True,
-            )
+        if not settings.USE_CLOUD_STORAGE:
+            supabase_storage.delete_file(storage_id)
 
         return dataset
 
@@ -405,7 +388,7 @@ def create_dataset_chunk_upload_url(
         raise HTTPException(
             status_code=500,
             detail=(
-                "Cloud storage is enabled but "
+                "Chunked upload storage is unavailable because "
                 "Supabase Storage is not configured."
             ),
         )
