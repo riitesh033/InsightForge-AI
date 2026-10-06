@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     FRONTEND_URL: str = "http://localhost:5173"
+    DATASET_STORAGE_DIR: str = "app/uploads/datasets"
     STUDENT_VERIFICATION_STORAGE_DIR: str = "private_uploads/student_verification"
 
     GOOGLE_CLIENT_ID: str = ""

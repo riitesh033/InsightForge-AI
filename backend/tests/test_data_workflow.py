@@ -9,6 +9,10 @@ from app.models.dataset import Dataset
 from app.models.subscription import PlanType, Subscription, SubscriptionStatus
 from app.models.user import User
 from app.services import ai_provider, dataset as dataset_service
+from app.services.dataset_storage import (
+    dataset_storage_root,
+    resolve_dataset_path,
+)
 
 
 def grant_pro_plan(db, user_dict):
@@ -62,10 +66,13 @@ def test_upload_profiles_and_persists_supported_fixtures(
 
     assert response.status_code == 201, response.text
     uploaded = response.json()
+    stored_dataset = db.query(Dataset).filter_by(id=uploaded["id"]).one()
     assert uploaded["rows"] == expected_rows
     assert uploaded["columns"] == expected_columns
     assert Path(uploaded["file_path"]).parent == tmp_path
-    assert Path(uploaded["file_path"]).exists()
+    assert Path(uploaded["file_path"]).is_file()
+    assert stored_dataset.file_path == uploaded["file_path"]
+    assert resolve_dataset_path(stored_dataset.file_path).is_file()
 
     analysis = db.query(Analysis).filter(
         Analysis.dataset_id == uploaded["id"]
@@ -275,6 +282,71 @@ def test_cleaning_preview_apply_and_download_preserve_original(
     )
     assert download.status_code == 200
     assert download.content.startswith(b"age,city")
+
+
+def test_xlsx_cleaning_preview_reads_uploaded_file(
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
+):
+    grant_pro_plan(db, user_dict)
+    upload = upload_file(
+        client,
+        auth_headers,
+        monkeypatch,
+        tmp_path,
+        "workbook.xlsx",
+        workflow_files["workbook.xlsx"],
+    )
+
+    response = client.post(
+        f"/api/v1/cleaning/{upload.json()['id']}/preview",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["preview"]["rows_before"] == 3
+    assert response.json()["preview"]["columns"] == 2
+
+
+def test_configured_storage_root_upload_and_legacy_resolution(
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
+):
+    from app.core.config import settings
+
+    grant_pro_plan(db, user_dict)
+    mounted_directory = tmp_path / "mounted-datasets"
+    monkeypatch.setattr(settings, "DATASET_STORAGE_DIR", str(mounted_directory))
+    root = dataset_storage_root()
+    root.mkdir(parents=True)
+    monkeypatch.setattr(dataset_service, "UPLOAD_DIR", root)
+
+    response = client.post(
+        "/api/v1/datasets/upload",
+        headers=auth_headers,
+        files={
+            "file": (
+                "linux-storage.csv",
+                workflow_files["normal.csv"],
+                "text/csv",
+            )
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    dataset_id = response.json()["id"]
+    stored_dataset = db.query(Dataset).filter_by(id=dataset_id).one()
+    uploaded_file = root / stored_dataset.filename
+    assert Path(stored_dataset.file_path) == uploaded_file
+    assert uploaded_file.is_file()
+
+    preview = client.post(
+        f"/api/v1/cleaning/{dataset_id}/preview",
+        headers=auth_headers,
+    )
+    assert preview.status_code == 200, preview.text
+
+    assert resolve_dataset_path(
+        f"app/uploads/datasets/{stored_dataset.filename}"
+    ) == uploaded_file.resolve()
 
 
 def test_cleaning_preview_rejects_unauthorized_invalid_token_and_missing_dataset(
@@ -699,6 +771,7 @@ def test_cleaning_missing_source_returns_safe_not_found(
     )
 
     assert response.status_code == 404
+    assert response.json()["detail"] == "Dataset file not found on server."
     assert "Traceback" not in response.text
 
 

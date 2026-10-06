@@ -7,6 +7,7 @@ import pandas as pd
 from fastapi import HTTPException
 
 from app.models.dataset import Dataset
+from app.services.dataset_storage import resolve_dataset_path
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,14 @@ def load_dataset_file(dataset: Dataset) -> pd.DataFrame:
     existing dataset upload/download system.
     """
 
-    file_path = Path(dataset.file_path)
+    file_path = resolve_dataset_path(dataset.file_path)
 
-    if not file_path.exists():
+    if not file_path.is_file():
+        logger.warning(
+            "Dataset source file is unavailable (dataset_id=%s, filename=%s).",
+            dataset.id,
+            file_path.name,
+        )
         raise HTTPException(
             status_code=404,
             detail="Dataset file not found on server.",
@@ -311,7 +317,7 @@ def apply_cleaning(
 
     cleaned_df, summary = _clean_dataframe(df)
 
-    original_path = Path(dataset.file_path)
+    original_path = resolve_dataset_path(dataset.file_path)
 
     extension = dataset.file_type.lower()
 
@@ -369,7 +375,7 @@ def get_cleaned_file_path(
     Return the expected cleaned dataset path.
     """
 
-    original_path = Path(dataset.file_path)
+    original_path = resolve_dataset_path(dataset.file_path)
 
     extension = dataset.file_type.lower()
 

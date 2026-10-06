@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -27,6 +25,7 @@ from app.schemas.dataset import (
     DatasetResponse,
 )
 from app.services.dataset import upload_dataset
+from app.services.dataset_storage import resolve_dataset_path
 
 
 router = APIRouter()
@@ -100,12 +99,10 @@ def download_dataset_route(
         )
 
 
-    file_path = Path(
-        dataset.file_path
-    )
+    file_path = resolve_dataset_path(dataset.file_path)
 
 
-    if not file_path.exists():
+    if not file_path.is_file():
         raise HTTPException(
             status_code=404,
             detail="File not found on server.",

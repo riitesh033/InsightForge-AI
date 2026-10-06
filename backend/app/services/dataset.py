@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.services.dataset_storage import dataset_storage_root
 from app.services.entitlements import (
     enforce_dataset_count,
     enforce_upload_size,
@@ -22,7 +23,7 @@ from app.services.insights import (
 from app.services.profiling import profile_dataframe
 from app.services.professional_analysis import generate_professional_analysis
 
-UPLOAD_DIR = Path("app/uploads/datasets")
+UPLOAD_DIR = dataset_storage_root()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger(__name__)
 

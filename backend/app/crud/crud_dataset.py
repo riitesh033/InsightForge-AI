@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.services.dataset_storage import resolve_dataset_path
 
 
 def create_dataset(
@@ -29,9 +30,9 @@ def get_cleaned_file_info(
         original_name_cleaned.extension
     """
 
-    original_path = Path(dataset.file_path)
+    original_path = resolve_dataset_path(dataset.file_path)
 
-    if not original_path.exists():
+    if not original_path.is_file():
         return {
             "cleaned_available": False,
             "cleaned_filename": None,
@@ -194,9 +195,7 @@ def rename_dataset(
         company_sales_cleaned.csv
     """
 
-    original_path = Path(
-        dataset.file_path
-    )
+    original_path = resolve_dataset_path(dataset.file_path)
 
     old_stem = original_path.stem
     old_extension = original_path.suffix.lower()
@@ -286,9 +285,7 @@ def delete_dataset(
         Analysis.dataset_id == dataset.id
     ).delete()
 
-    original_path = Path(
-        dataset.file_path
-    )
+    original_path = resolve_dataset_path(dataset.file_path)
 
     # Delete original file
     if original_path.exists():

@@ -1,5 +1,4 @@
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -29,6 +28,7 @@ from reportlab.platypus import (
 
 from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.services.dataset_storage import resolve_dataset_path
 
 from app.services.verified_analysis import (
     build_verified_analysis_report,
@@ -247,14 +247,10 @@ def load_dataset(
     The original file is read-only for report generation.
     """
 
-    file_path = Path(
-        dataset.file_path
-    )
+    file_path = resolve_dataset_path(dataset.file_path)
 
-    if not file_path.exists():
-        raise FileNotFoundError(
-            f"Dataset file not found: {file_path}"
-        )
+    if not file_path.is_file():
+        raise FileNotFoundError("Dataset file not found on server.")
 
     extension = dataset.file_type.lower()
 
