@@ -277,6 +277,31 @@ def test_cleaning_preview_apply_and_download_preserve_original(
     assert download.content.startswith(b"age,city")
 
 
+def test_cleaning_preview_rejects_unauthorized_invalid_token_and_missing_dataset(
+    client, auth_headers
+):
+    preview_url = "/api/v1/cleaning/9/preview"
+
+    unauthorized = client.post(preview_url)
+    assert unauthorized.status_code == 401
+
+    malformed_token = client.post(
+        preview_url,
+        headers={"Authorization": "Bearer malformed-token"},
+    )
+    assert malformed_token.status_code == 401
+
+    missing_dataset = client.post(
+        "/api/v1/cleaning/2147483647/preview",
+        headers=auth_headers,
+    )
+    assert missing_dataset.status_code == 404
+    assert missing_dataset.json() == {"detail": "Dataset not found."}
+
+    for response in (unauthorized, malformed_token, missing_dataset):
+        assert "Traceback" not in response.text
+
+
 def test_cleaning_removes_duplicates_and_normalizes_categories(
     client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
 ):
