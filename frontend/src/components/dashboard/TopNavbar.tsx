@@ -54,22 +54,22 @@ export default function TopNavbar({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-white/10 bg-slate-950/80 px-3 backdrop-blur-xl sm:px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-3 backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-950/80 sm:px-4 md:px-6">
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <button
           type="button"
           aria-label="Open navigation menu"
           onClick={onMenuClick}
-          className="rounded-xl border border-white/10 bg-slate-900/80 p-2 text-slate-200 transition hover:border-indigo-400/40 hover:text-white lg:hidden"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-700 transition hover:border-indigo-400/40 hover:text-indigo-700 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white lg:hidden"
         >
           <Menu size={20} />
         </button>
 
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold text-white sm:text-2xl">
+          <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-white sm:text-2xl">
             {title}
           </h1>
-          <p className="hidden truncate text-sm text-slate-400 sm:block">
+          <p className="hidden truncate text-sm text-slate-500 dark:text-slate-400 sm:block">
             {subtitle}
           </p>
         </div>
@@ -84,22 +84,22 @@ export default function TopNavbar({
 
           <input
             placeholder="Search..."
-            className="w-72 rounded-xl border border-white/10 bg-slate-900/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-indigo-400/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            className="w-32 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-white/10 dark:bg-slate-900/70 dark:text-white dark:placeholder:text-slate-400 sm:w-40 lg:w-48 xl:w-72"
           />
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-slate-900/70 p-1.5 text-slate-200">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-1.5 text-slate-700 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200">
           <ThemeToggle />
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-slate-900/70 p-1.5 text-slate-200">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-1.5 text-slate-700 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200">
           <NotificationMenu />
         </div>
 
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 p-1 pr-3 transition hover:border-indigo-400/40 hover:bg-slate-900"
+            className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1 pr-3 transition hover:border-indigo-400/40 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900/70 dark:hover:bg-slate-900"
           >
             {getProfilePictureUrl() ? (
               <img
@@ -115,7 +115,7 @@ export default function TopNavbar({
                 {user?.full_name?.[0]?.toUpperCase() || "U"}
               </div>
             )}
-            <span className="hidden text-sm font-medium text-slate-100 lg:block">
+            <span className="hidden text-sm font-medium text-slate-800 dark:text-slate-100 lg:block">
               {user?.full_name || "User"}
             </span>
           </button>
@@ -127,12 +127,12 @@ export default function TopNavbar({
                 onClick={() => setShowUserMenu(false)}
               />
 
-              <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-white/10 bg-slate-900/95 py-2 shadow-2xl shadow-slate-950/80 backdrop-blur-xl">
-                <div className="border-b border-white/10 px-4 pb-3 pt-2">
-                  <p className="truncate text-sm font-semibold text-white">
+              <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-slate-200 bg-white py-2 shadow-2xl shadow-slate-950/20 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95 dark:shadow-slate-950/80">
+                <div className="border-b border-slate-200 px-4 pb-3 pt-2 dark:border-white/10">
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                     {user?.full_name}
                   </p>
-                  <p className="truncate text-xs text-slate-400">
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                     {user?.email}
                   </p>
                 </div>
@@ -140,7 +140,7 @@ export default function TopNavbar({
                 <div className="py-2">
                   <button
                     onClick={() => handleMenuItemClick(() => navigate("/dashboard/settings"))}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                   >
                     <UserIcon size={16} />
                     Profile
@@ -148,7 +148,7 @@ export default function TopNavbar({
 
                   <button
                     onClick={() => handleMenuItemClick(() => navigate("/dashboard/settings"))}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                   >
                     <Settings size={16} />
                     Settings
@@ -158,14 +158,14 @@ export default function TopNavbar({
                     onClick={() =>
                       handleMenuItemClick(() => navigate("/dashboard/billing"))
                     }
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                   >
                     <CreditCard size={16} />
                     Plan & Billing
                   </button>
                 </div>
 
-                <div className="border-t border-white/10 pt-2">
+                <div className="border-t border-slate-200 pt-2 dark:border-white/10">
                   <button
                     onClick={() => handleMenuItemClick(handleLogout)}
                     className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-300 hover:bg-red-500/10"

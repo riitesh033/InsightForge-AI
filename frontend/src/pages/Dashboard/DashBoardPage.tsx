@@ -16,7 +16,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
         {error}
       </div>
     );
@@ -24,7 +24,7 @@ export default function DashboardPage() {
 
   if (!data) {
     return (
-      <div className="rounded-xl border p-8 text-center">
+      <div className="rounded-xl border border-border bg-card p-8 text-center text-card-foreground">
         No dashboard data available.
       </div>
     );

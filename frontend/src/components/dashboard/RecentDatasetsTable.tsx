@@ -21,7 +21,7 @@ export default function RecentDatasetsTable({
 
   return (
     <div className="rounded-2xl border bg-card shadow-sm">
-      <div className="border-b p-5">
+      <div className="border-b border-border p-5">
         <h2 className="text-lg font-semibold">
           Recent Datasets
         </h2>
@@ -33,7 +33,7 @@ export default function RecentDatasetsTable({
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="border-b bg-muted/40">
+          <thead className="border-b border-border bg-muted/40">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-medium">
                 Dataset
@@ -74,7 +74,7 @@ export default function RecentDatasetsTable({
                   onClick={() =>
                     handleDatasetClick(dataset.id)
                   }
-                  className="cursor-pointer border-b transition-colors last:border-none hover:bg-muted/40"
+                  className="cursor-pointer border-b border-border transition-colors last:border-none hover:bg-muted/40"
                 >
                   <td className="px-4 py-4">
                     <div className="font-medium">

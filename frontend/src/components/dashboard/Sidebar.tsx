@@ -90,15 +90,15 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
   return (
     <aside
-      className={`flex h-full flex-col border-r border-white/10 bg-slate-950/80 backdrop-blur-xl transition-all duration-300 ${
+      className={`flex h-full flex-col border-r border-slate-200 bg-white/90 backdrop-blur-xl transition-all duration-300 dark:border-white/10 dark:bg-slate-950/80 ${
         collapsed ? "w-24" : "w-72"
       }`}
     >
       <Link
-        to="/"
+        to="/dashboard"
         aria-label="InsightForge AI home"
         onClick={onNavigate}
-        className={`flex items-center border-b border-white/10 px-4 py-5 transition-colors hover:bg-white/5 ${
+        className={`flex items-center border-b border-slate-200 px-4 py-5 transition-colors hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/5 ${
           collapsed ? "justify-center px-3" : "gap-3 px-5"
         }`}
       >
@@ -108,10 +108,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
         {!collapsed && (
           <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold text-white">
+            <h1 className="truncate text-base font-semibold text-slate-900 dark:text-white">
               InsightForge AI
             </h1>
-            <p className="truncate text-[11px] text-slate-400">
+            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
               Your AI Data Analyst
             </p>
           </div>
@@ -134,7 +134,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                 } ${
                   isActive
                     ? "bg-gradient-to-r from-indigo-500/80 to-violet-500/80 text-white shadow-lg shadow-indigo-500/20"
-                    : "text-slate-300 hover:bg-white/5 hover:text-white"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                 }`
               }
             >
@@ -145,23 +145,21 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      <div className="space-y-2 border-t border-white/10 p-3">
+      <div className="space-y-2 border-t border-slate-200 p-3 dark:border-white/10">
         <button
           type="button"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           onClick={() => setCollapsed((value) => !value)}
-          className={`flex w-full items-center rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-300 transition hover:border-indigo-400/40 hover:text-white ${
-            collapsed ? "justify-center" : "gap-3"
-          }`}
+          className="flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600 transition hover:border-indigo-400/40 hover:text-indigo-700 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:text-white"
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          {!collapsed && <span>Collapse</span>}
         </button>
 
         <button
           type="button"
           onClick={handleLogout}
-          className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-slate-300 transition hover:bg-red-500/10 hover:text-red-200 ${
+          className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-slate-600 transition hover:bg-red-500/10 hover:text-red-700 dark:text-slate-300 dark:hover:text-red-200 ${
             collapsed ? "justify-center" : "gap-3"
           }`}
         >

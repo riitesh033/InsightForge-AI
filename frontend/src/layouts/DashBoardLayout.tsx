@@ -122,7 +122,7 @@ export default function DashboardLayout() {
           onMenuClick={() => setMobileOpen(true)}
         />
 
-        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-background p-3 text-foreground transition-colors duration-300 sm:p-4 md:p-6 lg:p-8">
           <div className="mx-auto w-full max-w-7xl">
             <Outlet />
           </div>

@@ -18,7 +18,7 @@ export default function RecentAnalyses({
 
   return (
     <div className="rounded-2xl border bg-card shadow-sm">
-      <div className="border-b p-5">
+      <div className="border-b border-border p-5">
         <h2 className="text-lg font-semibold">
           Recent Analyses
         </h2>
@@ -28,7 +28,7 @@ export default function RecentAnalyses({
         </p>
       </div>
 
-      <div className="divide-y">
+      <div className="divide-y divide-border">
         {analyses.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             No analyses available.

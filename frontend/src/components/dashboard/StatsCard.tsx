@@ -18,17 +18,17 @@ export default function StatsCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
       whileHover={{ y: -6, scale: 1.01 }}
-      className="rounded-[24px] border border-white/10 bg-slate-900/70 p-5 shadow-[0_20px_45px_rgba(15,23,42,0.25)]"
+      className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_35px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_20px_45px_rgba(15,23,42,0.25)]"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-400">{title}</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-white">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             {value}
           </h2>
         </div>
 
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/30">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-indigo-600 ring-1 ring-inset ring-indigo-400/30 dark:text-indigo-200">
           {icon}
         </div>
       </div>

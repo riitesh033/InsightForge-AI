@@ -43,17 +43,17 @@ export default function QuickActions() {
           <Link
             key={action.title}
             to={action.href}
-            className="group rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition-all duration-200 hover:-translate-y-1 hover:border-indigo-400/40 hover:shadow-[0_24px_50px_rgba(99,102,241,0.18)]"
+            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_16px_35px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-1 hover:border-indigo-400/40 hover:shadow-[0_24px_50px_rgba(99,102,241,0.18)] dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_18px_40px_rgba(15,23,42,0.25)]"
           >
             <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${action.accent}`}>
-              <Icon className="h-6 w-6 text-white" />
+              <Icon className="h-6 w-6 text-indigo-700 dark:text-white" />
             </div>
 
-            <h3 className="text-base font-semibold text-white">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
               {action.title}
             </h3>
 
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Open {action.title.toLowerCase()}
             </p>
           </Link>
