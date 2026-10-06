@@ -54,77 +54,52 @@ export default function TopNavbar({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4 md:px-6">
-
-      {/* Left */}
+    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-white/10 bg-slate-950/80 px-3 backdrop-blur-xl sm:px-4 md:px-6">
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-
-        {/* Mobile Menu */}
         <button
           type="button"
           aria-label="Open navigation menu"
           onClick={onMenuClick}
-          className="rounded-lg p-2 transition hover:bg-accent lg:hidden"
+          className="rounded-xl border border-white/10 bg-slate-900/80 p-2 text-slate-200 transition hover:border-indigo-400/40 hover:text-white lg:hidden"
         >
-          <Menu size={22} />
+          <Menu size={20} />
         </button>
 
         <div className="min-w-0">
-
-          <h1 className="truncate text-lg font-bold text-foreground sm:text-2xl">
+          <h1 className="truncate text-lg font-semibold text-white sm:text-2xl">
             {title}
           </h1>
-
-          <p className="hidden truncate text-sm text-muted-foreground sm:block">
+          <p className="hidden truncate text-sm text-slate-400 sm:block">
             {subtitle}
           </p>
-
         </div>
-
       </div>
 
-      {/* Right */}
-      <div className="flex shrink-0 items-center gap-1 sm:gap-3 md:gap-4">
-
-        {/* Search */}
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3 md:gap-4">
         <div className="relative hidden md:block">
-
           <Search
-            size={18}
-            className="absolute left-3 top-3 text-muted-foreground"
+            size={17}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
 
           <input
             placeholder="Search..."
-            className="
-              w-72
-              rounded-lg
-              border
-              border-border
-              bg-background
-              py-2.5
-              pl-10
-              pr-4
-              text-sm
-              text-foreground
-              placeholder:text-muted-foreground
-              focus:border-primary
-              focus:outline-none
-            "
+            className="w-72 rounded-xl border border-white/10 bg-slate-900/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-indigo-400/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
           />
-
         </div>
 
-        {/* Theme */}
-        <ThemeToggle />
+        <div className="rounded-xl border border-white/10 bg-slate-900/70 p-1.5 text-slate-200">
+          <ThemeToggle />
+        </div>
 
-        <NotificationMenu />
+        <div className="rounded-xl border border-white/10 bg-slate-900/70 p-1.5 text-slate-200">
+          <NotificationMenu />
+        </div>
 
-        {/* Avatar with Dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 rounded-full bg-primary/10 p-1 pr-3 transition hover:bg-primary/20"
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 p-1 pr-3 transition hover:border-indigo-400/40 hover:bg-slate-900"
           >
             {getProfilePictureUrl() ? (
               <img
@@ -136,42 +111,36 @@ export default function TopNavbar({
                 }}
               />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">
                 {user?.full_name?.[0]?.toUpperCase() || "U"}
               </div>
             )}
-            <span className="hidden text-sm font-medium text-foreground lg:block">
+            <span className="hidden text-sm font-medium text-slate-100 lg:block">
               {user?.full_name || "User"}
             </span>
           </button>
 
-          {/* Dropdown Menu */}
           {showUserMenu && (
             <>
-              {/* Backdrop */}
               <div
                 className="fixed inset-0 z-40"
                 onClick={() => setShowUserMenu(false)}
               />
 
-              {/* Menu */}
-              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-border bg-card py-2 shadow-lg z-50">
-                
-                {/* User Info */}
-                <div className="border-b border-border px-4 pb-3">
-                  <p className="truncate text-sm font-semibold text-foreground">
+              <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-white/10 bg-slate-900/95 py-2 shadow-2xl shadow-slate-950/80 backdrop-blur-xl">
+                <div className="border-b border-white/10 px-4 pb-3 pt-2">
+                  <p className="truncate text-sm font-semibold text-white">
                     {user?.full_name}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-slate-400">
                     {user?.email}
                   </p>
                 </div>
 
-                {/* Menu Items */}
                 <div className="py-2">
                   <button
                     onClick={() => handleMenuItemClick(() => navigate("/dashboard/settings"))}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
                   >
                     <UserIcon size={16} />
                     Profile
@@ -179,7 +148,7 @@ export default function TopNavbar({
 
                   <button
                     onClick={() => handleMenuItemClick(() => navigate("/dashboard/settings"))}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
                   >
                     <Settings size={16} />
                     Settings
@@ -187,35 +156,29 @@ export default function TopNavbar({
 
                   <button
                     onClick={() =>
-                      handleMenuItemClick(() =>
-                        navigate("/dashboard/billing")
-                      )
+                      handleMenuItemClick(() => navigate("/dashboard/billing"))
                     }
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"
                   >
                     <CreditCard size={16} />
                     Plan & Billing
                   </button>
                 </div>
 
-                {/* Logout */}
-                <div className="border-t border-border pt-2">
+                <div className="border-t border-white/10 pt-2">
                   <button
                     onClick={() => handleMenuItemClick(handleLogout)}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-300 hover:bg-red-500/10"
                   >
                     <LogOut size={16} />
                     Logout
                   </button>
                 </div>
-
               </div>
             </>
           )}
         </div>
-
       </div>
-
     </header>
   );
 }

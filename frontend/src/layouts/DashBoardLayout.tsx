@@ -105,72 +105,29 @@ export default function DashboardLayout() {
 
 
   return (
-
-    <div className="flex min-h-screen bg-background">
-
-
-      {/* Desktop Sidebar */}
+    <div className="dashboard-shell flex min-h-screen">
       <div className="hidden lg:block">
-
         <Sidebar />
-
       </div>
 
-
-
-      {/* Mobile Sidebar */}
       <MobileSidebar
-
         open={mobileOpen}
-
-        onClose={() =>
-          setMobileOpen(false)
-        }
-
+        onClose={() => setMobileOpen(false)}
       />
 
-
-
-      {/* Main Content */}
       <div className="flex min-w-0 flex-1 flex-col">
-
-
         <TopNavbar
-
           title={title}
-
           subtitle={subtitle}
-
-          onMenuClick={() =>
-            setMobileOpen(true)
-          }
-
+          onMenuClick={() => setMobileOpen(true)}
         />
 
-
-
-        <main
-          className="
-            flex-1
-            min-w-0
-            overflow-y-auto
-            bg-background
-            p-3
-            sm:p-4
-            md:p-6
-          "
-        >
-
-          <Outlet />
-
+        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
+          <div className="mx-auto w-full max-w-7xl">
+            <Outlet />
+          </div>
         </main>
-
-
       </div>
-
-
     </div>
-
   );
-
 }

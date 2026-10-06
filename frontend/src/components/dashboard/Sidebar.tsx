@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -12,6 +13,8 @@ import {
   BadgeCheck,
   ReceiptText,
   GraduationCap,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -77,6 +80,7 @@ interface SidebarProps {
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -85,34 +89,36 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
   }
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-border bg-card">
-
-      {/* Logo */}
+    <aside
+      className={`flex h-full flex-col border-r border-white/10 bg-slate-950/80 backdrop-blur-xl transition-all duration-300 ${
+        collapsed ? "w-24" : "w-72"
+      }`}
+    >
       <Link
         to="/"
         aria-label="InsightForge AI home"
         onClick={onNavigate}
-        className="flex h-20 items-center gap-3 border-b border-border px-6"
+        className={`flex items-center border-b border-white/10 px-4 py-5 transition-colors hover:bg-white/5 ${
+          collapsed ? "justify-center px-3" : "gap-3 px-5"
+        }`}
       >
-
-        <div className="rounded-lg bg-primary p-2 text-primary-foreground">
-          <BarChart3 size={22} />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/30">
+          <BarChart3 size={20} />
         </div>
 
-        <div>
-          <h1 className="font-bold text-foreground">
-            InsightForge AI
-          </h1>
-
-          <p className="text-xs text-muted-foreground">
-            Your AI Data Analyst
-          </p>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold text-white">
+              InsightForge AI
+            </h1>
+            <p className="truncate text-[11px] text-slate-400">
+              Your AI Data Analyst
+            </p>
+          </div>
+        )}
       </Link>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-2 p-5">
-
+      <nav className="flex-1 space-y-1.5 p-3">
         {navigation.map((item) => {
           const Icon = item.icon;
 
@@ -123,47 +129,46 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
               end={item.href === "/dashboard"}
               onClick={onNavigate}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-4 py-3 transition-all duration-200 ${
+                `flex items-center rounded-xl px-3 py-2.5 transition-all duration-200 ${
+                  collapsed ? "justify-center" : "gap-3"
+                } ${
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    ? "bg-gradient-to-r from-indigo-500/80 to-violet-500/80 text-white shadow-lg shadow-indigo-500/20"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white"
                 }`
               }
             >
-              <Icon size={20} />
-              <span>{item.name}</span>
+              <Icon size={18} />
+              {!collapsed && <span className="text-sm font-medium">{item.name}</span>}
             </NavLink>
           );
         })}
-
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-border p-5">
-
+      <div className="space-y-2 border-t border-white/10 p-3">
         <button
-          onClick={handleLogout}
-          className="
-            flex
-            w-full
-            items-center
-            gap-3
-            rounded-lg
-            px-4
-            py-3
-            text-muted-foreground
-            transition-all
-            duration-200
-            hover:bg-destructive
-            hover:text-white
-          "
+          type="button"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setCollapsed((value) => !value)}
+          className={`flex w-full items-center rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-300 transition hover:border-indigo-400/40 hover:text-white ${
+            collapsed ? "justify-center" : "gap-3"
+          }`}
         >
-          <LogOut size={20} />
-          Logout
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {!collapsed && <span>Collapse</span>}
         </button>
 
+        <button
+          type="button"
+          onClick={handleLogout}
+          className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-slate-300 transition hover:bg-red-500/10 hover:text-red-200 ${
+            collapsed ? "justify-center" : "gap-3"
+          }`}
+        >
+          <LogOut size={18} />
+          {!collapsed && <span>Logout</span>}
+        </button>
       </div>
-
     </aside>
   );
 }
