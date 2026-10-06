@@ -13,6 +13,12 @@ def test_root_and_health_routes(client):
     assert client.get("/api/v1/health").json()["status"] == "healthy"
 
 
+def test_cleaning_preview_route_is_registered_in_application_openapi():
+    route = app.openapi()["paths"]["/api/v1/cleaning/{dataset_id}/preview"]
+
+    assert "post" in route
+
+
 def test_cleaning_preview_cors_preflight(client):
     response = client.options(
         "/api/v1/cleaning/9/preview",
