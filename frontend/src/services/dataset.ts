@@ -1,4 +1,20 @@
+import { createClient } from "@supabase/supabase-js";
 import api from "@/lib/api";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Supabase frontend configuration is missing."
+  );
+}
+
+const supabase = createClient(
+  supabaseUrl,
+  supabaseAnonKey
+);
 
 // =========================
 // Dataset
@@ -95,19 +111,35 @@ export type DownloadFormat =
   | "csv"
   | "pdf"
   | "original";
-export type DatasetFileFormat = "csv" | "xlsx" | "xls";
+
+export type DatasetFileFormat =
+  | "csv"
+  | "xlsx"
+  | "xls";
+
+// =========================
+// Download Helpers
+// =========================
 
 function downloadBlob(
   blob: Blob,
   filename: string
 ): void {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const url =
+    window.URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
   link.href = url;
   link.download = filename;
+
   document.body.appendChild(link);
+
   link.click();
+
   link.remove();
+
   window.URL.revokeObjectURL(url);
 }
 
@@ -115,7 +147,11 @@ function getDownloadFilename(
   contentDisposition: string | undefined,
   fallback: string
 ): string {
-  const match = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  const match =
+    contentDisposition?.match(
+      /filename="?([^";]+)"?/i
+    );
+
   return match?.[1] ?? fallback;
 }
 
@@ -126,9 +162,13 @@ function getDownloadFilename(
 export async function getDatasets(
   params: DatasetQuery = {}
 ): Promise<DatasetListResponse> {
-  const response = await api.get<DatasetListResponse>("/datasets", {
-    params,
-  });
+  const response =
+    await api.get<DatasetListResponse>(
+      "/datasets",
+      {
+        params,
+      }
+    );
 
   return response.data;
 }
@@ -141,12 +181,13 @@ export async function renameDataset(
   datasetId: number,
   original_filename: string
 ): Promise<Dataset> {
-  const response = await api.patch<Dataset>(
-    `/datasets/${datasetId}`,
-    {
-      original_filename,
-    }
-  );
+  const response =
+    await api.patch<Dataset>(
+      `/datasets/${datasetId}`,
+      {
+        original_filename,
+      }
+    );
 
   return response.data;
 }
@@ -158,7 +199,9 @@ export async function renameDataset(
 export async function deleteDataset(
   datasetId: number
 ): Promise<void> {
-  await api.delete(`/datasets/${datasetId}`);
+  await api.delete(
+    `/datasets/${datasetId}`
+  );
 }
 
 // =========================
@@ -168,16 +211,161 @@ export async function deleteDataset(
 export async function uploadDataset(
   file: File
 ): Promise<Dataset> {
-  const formData = new FormData();
+  /*
+   * Supabase Storage uses separate objects
+   * for each dataset chunk.
+   *
+   * 40 MB keeps every individual object below
+   * the configured Supabase Storage chunk limit.
+   */
+  const DEFAULT_CHUNK_SIZE =
+    40 * 1024 * 1024;
 
-  formData.append("file", file);
+  // ---------------------------------
+  // Step 1: Initialize upload
+  // ---------------------------------
 
-  const response = await api.post<Dataset>(
-    "/datasets/upload",
-    formData
-  );
+  const initResponse =
+    await api.post<{
+      storage_id: string;
+      original_filename: string;
+      file_type: string;
+      file_size: number;
+      chunk_size: number;
+    }>(
+      "/datasets/upload/init",
+      {
+        filename: file.name,
+        file_size: file.size,
+      }
+    );
 
-  return response.data;
+  const {
+    storage_id,
+    chunk_size,
+  } = initResponse.data;
+
+  const chunkSize =
+    chunk_size > 0
+      ? Math.min(
+          chunk_size,
+          DEFAULT_CHUNK_SIZE
+        )
+      : DEFAULT_CHUNK_SIZE;
+
+  const totalChunks =
+    Math.ceil(
+      file.size / chunkSize
+    );
+
+  // ---------------------------------
+  // Step 2: Upload chunks
+  // ---------------------------------
+
+  for (
+    let chunkIndex = 0;
+    chunkIndex < totalChunks;
+    chunkIndex += 1
+  ) {
+    const start =
+      chunkIndex * chunkSize;
+
+    const end = Math.min(
+      start + chunkSize,
+      file.size
+    );
+
+    const chunk = file.slice(
+      start,
+      end
+    );
+
+    // Request a signed upload URL
+    // for this specific chunk.
+    const urlResponse =
+      await api.post<{
+        storage_id: string;
+        chunk_index: number;
+        path: string;
+        token: string;
+      }>(
+        "/datasets/upload/chunk-url",
+        null,
+        {
+          params: {
+            storage_id,
+            chunk_index:
+              chunkIndex,
+          },
+        }
+      );
+
+    const {
+      path,
+      token,
+    } = urlResponse.data;
+
+    // Upload directly from the browser
+    // to Supabase Storage.
+    const {
+      error,
+    } =
+      await supabase.storage
+        .from(
+          "insightforge-files"
+        )
+        .uploadToSignedUrl(
+          path,
+          token,
+          chunk
+        );
+
+    if (error) {
+      throw new Error(
+        `Failed to upload chunk ${
+          chunkIndex + 1
+        } of ${totalChunks}: ${
+          error.message
+        }`
+      );
+    }
+  }
+
+  // ---------------------------------
+  // Step 3: Finalize upload
+  // ---------------------------------
+
+  /*
+   * Tell the backend that all chunks have
+   * been uploaded.
+   *
+   * The backend will:
+   * 1. Create the Supabase manifest.
+   * 2. Reconstruct the chunks temporarily.
+   * 3. Analyze the dataset.
+   * 4. Create the Dataset database record.
+   * 5. Create the Analysis database record.
+   * 6. Keep the original dataset in Supabase.
+   * 7. Return the completed Dataset object.
+   */
+  const finalizeResponse =
+    await api.post<Dataset>(
+      "/datasets/upload/finalize",
+      null,
+      {
+        params: {
+          storage_id,
+          original_filename:
+            file.name,
+          file_size:
+            file.size,
+          total_chunks:
+            totalChunks,
+        },
+      }
+    );
+
+  return finalizeResponse.data;
 }
 
 // =========================
@@ -188,40 +376,46 @@ export async function downloadDataset(
   datasetId: number,
   format: DatasetFileFormat
 ): Promise<void> {
-  const response = await api.get(
-    `/datasets/${datasetId}/download`,
-    {
-      responseType: "blob",
-    }
-  );
+  const response =
+    await api.get(
+      `/datasets/${datasetId}/download`,
+      {
+        responseType: "blob",
+      }
+    );
 
   downloadBlob(
     response.data,
     getDownloadFilename(
-      response.headers["content-disposition"],
+      response.headers[
+        "content-disposition"
+      ],
       `dataset_${datasetId}.${format}`
     )
   );
 }
 
 // =========================
-// Download Original Dataset (Simple)
+// Download Original Dataset
 // =========================
 
 export async function downloadOriginalDataset(
   datasetId: number
 ): Promise<void> {
-  const response = await api.get(
-    `/datasets/${datasetId}/download`,
-    {
-      responseType: "blob",
-    }
-  );
+  const response =
+    await api.get(
+      `/datasets/${datasetId}/download`,
+      {
+        responseType: "blob",
+      }
+    );
 
   downloadBlob(
     response.data,
     getDownloadFilename(
-      response.headers["content-disposition"],
+      response.headers[
+        "content-disposition"
+      ],
       `dataset_${datasetId}_original`
     )
   );
@@ -234,9 +428,10 @@ export async function downloadOriginalDataset(
 export async function previewCleaning(
   datasetId: number
 ): Promise<CleaningResponse> {
-  const response = await api.post<CleaningResponse>(
-    `/cleaning/${datasetId}/preview`
-  );
+  const response =
+    await api.post<CleaningResponse>(
+      `/cleaning/${datasetId}/preview`
+    );
 
   return response.data;
 }
@@ -248,9 +443,10 @@ export async function previewCleaning(
 export async function applyCleaning(
   datasetId: number
 ): Promise<CleaningResponse> {
-  const response = await api.post<CleaningResponse>(
-    `/cleaning/${datasetId}/apply`
-  );
+  const response =
+    await api.post<CleaningResponse>(
+      `/cleaning/${datasetId}/apply`
+    );
 
   return response.data;
 }
@@ -263,17 +459,20 @@ export async function downloadCleanedDataset(
   datasetId: number,
   format: "xlsx" | "csv"
 ): Promise<void> {
-  const response = await api.get(
-    `/cleaning/${datasetId}/download`,
-    {
-      responseType: "blob",
-    }
-  );
+  const response =
+    await api.get(
+      `/cleaning/${datasetId}/download`,
+      {
+        responseType: "blob",
+      }
+    );
 
   downloadBlob(
     response.data,
     getDownloadFilename(
-      response.headers["content-disposition"],
+      response.headers[
+        "content-disposition"
+      ],
       `dataset_${datasetId}_cleaned.${format}`
     )
   );
@@ -286,23 +485,31 @@ export async function downloadCleanedDataset(
 export async function downloadAnalysisReport(
   datasetId: number
 ): Promise<void> {
-  const response = await api.get(
-    `/reports/${datasetId}/pdf`,
+  const response =
+    await api.get(
+      `/reports/${datasetId}/pdf`,
+      {
+        responseType: "blob",
+      }
+    );
+
+  const blob = new Blob(
+    [response.data],
     {
-      responseType: "blob",
+      type: "application/pdf",
     }
   );
 
-  const blob = new Blob([response.data], {
-    type: "application/pdf",
-  });
+  const objectUrl =
+    window.URL.createObjectURL(blob);
 
-  const objectUrl = window.URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
+  const link =
+    document.createElement("a");
 
   link.href = objectUrl;
-  link.download = `dataset_${datasetId}_analysis_report.pdf`;
+
+  link.download =
+    `dataset_${datasetId}_analysis_report.pdf`;
 
   document.body.appendChild(link);
 
@@ -310,7 +517,9 @@ export async function downloadAnalysisReport(
 
   link.remove();
 
-  window.URL.revokeObjectURL(objectUrl);
+  window.URL.revokeObjectURL(
+    objectUrl
+  );
 }
 
 // =========================
@@ -322,14 +531,23 @@ export async function downloadDatasetFile(
   format: DownloadFormat
 ): Promise<void> {
   if (format === "pdf") {
-    await downloadAnalysisReport(datasetId);
+    await downloadAnalysisReport(
+      datasetId
+    );
+
     return;
   }
 
   if (format === "original") {
-    await downloadOriginalDataset(datasetId);
+    await downloadOriginalDataset(
+      datasetId
+    );
+
     return;
   }
 
-  await downloadCleanedDataset(datasetId, format);
+  await downloadCleanedDataset(
+    datasetId,
+    format
+  );
 }

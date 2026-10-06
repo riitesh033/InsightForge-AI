@@ -48,3 +48,7 @@ class DatasetQueryParams(BaseModel):
     search: str | None = None
     sort_by: str = "uploaded_at"
     order: str = "desc"
+
+class DatasetUploadInit(BaseModel):
+    filename: str
+    file_size: int

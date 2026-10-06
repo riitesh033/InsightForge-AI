@@ -73,7 +73,10 @@ class SupabaseStorage:
                 "Supabase Storage is not configured."
             )
 
-    def _manifest_path(self, storage_id: str) -> str:
+    def _manifest_path(
+        self,
+        storage_id: str,
+    ) -> str:
         return (
             f"{storage_id}/"
             f"{self.MANIFEST_FILENAME}"
@@ -196,8 +199,6 @@ class SupabaseStorage:
                 "Failed to upload dataset to Supabase."
             )
 
-            # Best-effort cleanup of chunks created before
-            # the failure.
             self._delete_chunk_paths(
                 [
                     chunk["path"]
@@ -206,6 +207,227 @@ class SupabaseStorage:
                 ]
             )
 
+            raise
+
+    def create_signed_upload_url(
+        self,
+        storage_id: str,
+    ) -> dict[str, str]:
+        """
+        Create a short-lived signed upload URL for a
+        Supabase Storage object.
+
+        The browser can use the returned token to upload
+        directly to Supabase without receiving the
+        service-role key.
+        """
+
+        self._require_configuration()
+
+        if not storage_id:
+            raise ValueError(
+                "Storage identifier is required."
+            )
+
+        try:
+            response = (
+                self.client.storage
+                .from_(self.bucket)
+                .create_signed_upload_url(
+                    storage_id,
+                    options={
+                        "upsert": "false",
+                    },
+                )
+            )
+
+            if not isinstance(response, dict):
+                raise RuntimeError(
+                    "Supabase returned an invalid signed "
+                    "upload response."
+                )
+
+            token = response.get("token")
+
+            if not token:
+                raise RuntimeError(
+                    "Supabase did not return a signed "
+                    "upload token."
+                )
+
+            return {
+                "path": storage_id,
+                "token": token,
+            }
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to create Supabase signed "
+                "upload URL: %s",
+                exc,
+            )
+            raise
+
+    def create_signed_chunk_upload_url(
+        self,
+        storage_id: str,
+        chunk_index: int,
+    ) -> dict[str, str]:
+        """
+        Create a short-lived signed upload URL for one
+        dataset chunk.
+
+        Each chunk is stored as a separate Supabase
+        Storage object.
+        """
+
+        self._require_configuration()
+
+        if not storage_id:
+            raise ValueError(
+                "Storage identifier is required."
+            )
+
+        if chunk_index < 0:
+            raise ValueError(
+                "chunk_index must be non-negative."
+            )
+
+        chunk_path = (
+            f"{storage_id}/"
+            f"chunk_{chunk_index:06d}"
+        )
+
+        try:
+            response = (
+                self.client.storage
+                .from_(self.bucket)
+                .create_signed_upload_url(
+                    chunk_path,
+                )
+            )
+
+            if not isinstance(response, dict):
+                raise RuntimeError(
+                    "Supabase returned an invalid signed "
+                    "chunk upload response."
+                )
+
+            token = response.get("token")
+
+            if not token:
+                raise RuntimeError(
+                    "Supabase did not return a signed "
+                    "chunk upload token."
+                )
+
+            return {
+                "path": chunk_path,
+                "token": token,
+            }
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to create Supabase signed "
+                "chunk upload URL: %s",
+                exc,
+            )
+            raise
+
+    def create_chunk_manifest(
+        self,
+        storage_id: str,
+        total_chunks: int,
+        file_size: int,
+    ) -> dict[str, Any]:
+        """
+        Create a manifest for chunks uploaded directly
+        from the browser to Supabase Storage.
+
+        The chunk objects are stored at:
+
+            <storage_id>/chunk_000000
+            <storage_id>/chunk_000001
+            ...
+
+        The manifest is stored at:
+
+            <storage_id>/manifest.json
+        """
+
+        self._require_configuration()
+
+        if not storage_id:
+            raise ValueError(
+                "Storage identifier is required."
+            )
+
+        if total_chunks <= 0:
+            raise ValueError(
+                "total_chunks must be greater than zero."
+            )
+
+        if file_size <= 0:
+            raise ValueError(
+                "file_size must be greater than zero."
+            )
+
+        chunks: list[dict[str, Any]] = []
+
+        for chunk_index in range(total_chunks):
+            chunk_path = (
+                f"{storage_id}/"
+                f"chunk_{chunk_index:06d}"
+            )
+
+            chunks.append(
+                {
+                    "index": chunk_index,
+                    "path": chunk_path,
+                }
+            )
+
+        manifest = {
+            "storage": "supabase",
+            "storage_id": storage_id,
+            "original_size": file_size,
+            "chunk_size": self.chunk_size,
+            "chunk_count": total_chunks,
+            "chunks": chunks,
+        }
+
+        manifest_path = self._manifest_path(
+            storage_id
+        )
+
+        try:
+            manifest_bytes = json.dumps(
+                manifest,
+                separators=(",", ":"),
+            ).encode("utf-8")
+
+            (
+                self.client.storage
+                .from_(self.bucket)
+                .upload(
+                    manifest_path,
+                    manifest_bytes,
+                    {
+                        "content-type": (
+                            "application/json"
+                        ),
+                        "upsert": "true",
+                    },
+                )
+            )
+
+            return manifest
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to create Supabase chunk manifest: %s",
+                exc,
+            )
             raise
 
     def get_manifest(
@@ -256,6 +478,76 @@ class SupabaseStorage:
             )
 
         return manifest
+
+    def download_chunks_to_file(
+        self,
+        storage_id: str,
+        output_path: Path,
+        total_chunks: int,
+    ) -> Path:
+        """
+        Reconstruct browser-uploaded chunks into a local file.
+
+        Chunks are stored at:
+
+            <storage_id>/chunk_000000
+            <storage_id>/chunk_000001
+            ...
+
+        The reconstructed file is written to output_path.
+        """
+
+        self._require_configuration()
+
+        if not storage_id:
+            raise ValueError(
+                "Storage identifier is required."
+            )
+
+        if total_chunks <= 0:
+            raise ValueError(
+                "total_chunks must be greater than zero."
+            )
+
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        try:
+            with output_path.open("wb") as output_file:
+                for chunk_index in range(total_chunks):
+                    chunk_path = (
+                        f"{storage_id}/"
+                        f"chunk_{chunk_index:06d}"
+                    )
+
+                    response = (
+                        self.client.storage
+                        .from_(self.bucket)
+                        .download(chunk_path)
+                    )
+
+                    if not response:
+                        raise FileNotFoundError(
+                            f"Dataset chunk {chunk_index} "
+                            "was not found."
+                        )
+
+                    output_file.write(response)
+
+            return output_path
+
+        except Exception as exc:
+            output_path.unlink(
+                missing_ok=True
+            )
+
+            logger.exception(
+                "Failed to reconstruct Supabase dataset chunks: %s",
+                exc
+            )
+            raise
 
     def download_file(
         self,

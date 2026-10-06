@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import (
     APIRouter,
@@ -26,13 +28,22 @@ from app.schemas.dataset import (
     DatasetListResponse,
     DatasetRename,
     DatasetResponse,
+    DatasetUploadInit,
 )
+from app.services.cloud_storage import supabase_storage
 from app.services.dataset import upload_dataset
 from app.services.dataset_storage import (
     cleanup_dataset_local_path,
     get_dataset_local_path,
 )
+from app.services.entitlements import (
+    enforce_dataset_count,
+    enforce_upload_size,
+    lock_user_for_quota,
+)
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -57,6 +68,372 @@ def cleanup_downloaded_dataset(
     except Exception:
         # Cleanup failure must never affect the download.
         pass
+
+
+@router.post(
+    "/upload/init",
+)
+def initialize_dataset_upload(
+    payload: DatasetUploadInit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Initialize a direct browser-to-Supabase dataset upload.
+
+    The browser receives a storage ID that is used for the
+    individual dataset chunks.
+    """
+
+    if not payload.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid filename.",
+        )
+
+    original_filename = Path(
+        payload.filename.replace("\\", "/")
+    ).name
+
+    extension = Path(
+        original_filename
+    ).suffix.lower()
+
+    allowed_extensions = {
+        ".csv",
+        ".xlsx",
+        ".xls",
+    }
+
+    if extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Only CSV, XLSX and XLS files are supported."
+            ),
+        )
+
+    if payload.file_size <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="File size must be greater than zero.",
+        )
+
+    # Preserve the existing quota checks.
+    lock_user_for_quota(
+        db,
+        current_user.id,
+    )
+
+    enforce_dataset_count(
+        db,
+        current_user.id,
+    )
+
+    enforce_upload_size(
+        db,
+        current_user.id,
+        payload.file_size,
+    )
+
+    if not supabase_storage.is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Cloud storage is enabled but "
+                "Supabase Storage is not configured."
+            ),
+        )
+
+    storage_id = (
+        f"datasets/uploads/"
+        f"{uuid4().hex}"
+    )
+
+    return {
+        "storage_id": storage_id,
+        "original_filename": original_filename,
+        "file_type": extension.replace(
+            ".",
+            "",
+        ),
+        "file_size": payload.file_size,
+        "chunk_size": supabase_storage.chunk_size,
+    }
+
+@router.post(
+    "/upload/finalize",
+    response_model=DatasetResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def finalize_dataset_upload(
+    storage_id: str,
+    original_filename: str,
+    file_size: int,
+    total_chunks: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Finalize a direct browser-to-Supabase dataset upload.
+
+    The uploaded chunks are reconstructed into a temporary local
+    file and passed through the existing dataset analysis workflow.
+    """
+
+    if not storage_id.startswith("datasets/uploads/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid dataset storage ID.",
+        )
+
+    if file_size <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="File size must be greater than zero.",
+        )
+
+    if total_chunks <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Total chunks must be greater than zero.",
+        )
+
+    safe_filename = Path(
+        original_filename.replace("\\", "/")
+    ).name
+
+    extension = Path(
+        safe_filename
+    ).suffix.lower()
+
+    if extension not in {
+        ".csv",
+        ".xlsx",
+        ".xls",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Only CSV, XLSX and XLS files are supported."
+            ),
+        )
+
+    if not supabase_storage.is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Cloud storage is enabled but "
+                "Supabase Storage is not configured."
+            ),
+        )
+
+    # Re-check quota before creating the permanent dataset record.
+    lock_user_for_quota(
+        db,
+        current_user.id,
+    )
+
+    enforce_dataset_count(
+        db,
+        current_user.id,
+    )
+
+    enforce_upload_size(
+        db,
+        current_user.id,
+        file_size,
+    )
+
+    temporary_path: Path | None = None
+
+    try:
+        # Create the manifest for the browser-uploaded chunks.
+        supabase_storage.create_chunk_manifest(
+            storage_id=storage_id,
+            total_chunks=total_chunks,
+            file_size=file_size,
+        )
+
+        import tempfile
+
+        temporary_directory = Path(
+            tempfile.mkdtemp(
+                prefix="insightforge-upload-"
+            )
+        )
+
+        temporary_path = (
+            temporary_directory
+            / safe_filename
+        )
+
+        # Reconstruct the Supabase chunks locally.
+        supabase_storage.download_chunks_to_file(
+            storage_id=storage_id,
+            output_path=temporary_path,
+            total_chunks=total_chunks,
+        )
+
+        if not temporary_path.is_file():
+            raise FileNotFoundError(
+                "Reconstructed dataset file was not created."
+            )
+
+        reconstructed_size = (
+            temporary_path.stat().st_size
+        )
+
+        if reconstructed_size != file_size:
+            raise ValueError(
+                "Reconstructed dataset size does not "
+                "match the uploaded file size."
+            )
+
+        # The existing upload_dataset() function expects
+        # an UploadFile. Create a compatible object around
+        # the reconstructed temporary file.
+        from fastapi import UploadFile as FastAPIUploadFile
+
+        with temporary_path.open("rb") as dataset_file:
+            upload_file = FastAPIUploadFile(
+                file=dataset_file,
+                filename=safe_filename,
+            )
+
+            dataset = upload_dataset(
+                db=db,
+                file=upload_file,
+                owner_id=current_user.id,
+                existing_cloud_storage_id=(
+                    f"supabase:{storage_id}"
+                )
+            )
+
+        # The existing upload_dataset() creates a second local/cloud
+        # copy. Replace that storage with the browser-uploaded copy.
+        old_file_path = dataset.file_path
+
+        dataset.file_path = (
+            f"supabase:{storage_id}"
+        )
+
+        db.commit()
+        db.refresh(dataset)
+
+        # Remove the temporary copy created by upload_dataset().
+        try:
+            if old_file_path and not old_file_path.startswith(
+                "supabase:"
+            ):
+                old_local_path = Path(old_file_path)
+
+                if old_local_path.exists():
+                    old_local_path.unlink(
+                        missing_ok=True
+                    )
+        except Exception:
+            logger.warning(
+                "Unable to remove temporary dataset copy.",
+                exc_info=True,
+            )
+
+        return dataset
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception:
+        db.rollback()
+
+        logger.exception(
+            "Failed to finalize dataset upload."
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to finalize dataset upload.",
+        ) from None
+
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(
+                    missing_ok=True
+                )
+
+                temporary_path.parent.rmdir()
+
+            except OSError:
+                pass
+
+@router.post(
+    "/upload/chunk-url",
+)
+def create_dataset_chunk_upload_url(
+    storage_id: str,
+    chunk_index: int,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create a short-lived signed upload URL for one dataset chunk.
+
+    The browser uploads the chunk directly to Supabase, so the
+    large dataset does not have to pass through the Render server.
+    """
+
+    if not storage_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Storage ID is required.",
+        )
+
+    if not storage_id.startswith("datasets/uploads/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid dataset storage ID.",
+        )
+
+    if chunk_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Chunk index must be non-negative.",
+        )
+
+    if not supabase_storage.is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Cloud storage is enabled but "
+                "Supabase Storage is not configured."
+            ),
+        )
+
+    try:
+        signed_upload = (
+            supabase_storage.create_signed_chunk_upload_url(
+                storage_id=storage_id,
+                chunk_index=chunk_index,
+            )
+        )
+
+    except Exception:
+        logger.exception(
+            "Failed to create Supabase signed chunk upload URL."
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to initialize dataset chunk upload.",
+        ) from None
+
+    return {
+        "storage_id": storage_id,
+        "chunk_index": chunk_index,
+        "path": signed_upload["path"],
+        "token": signed_upload["token"],
+    }
 
 
 @router.post(

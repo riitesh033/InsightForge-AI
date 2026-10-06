@@ -97,13 +97,16 @@ def upload_dataset(
     db: Session,
     file: UploadFile,
     owner_id: int,
+    existing_cloud_storage_id: str | None = None,
 ):
     """
-    Upload, persist, profile, and analyze a dataset.
+    Persist, profile, and analyze a dataset.
 
-    Cloud-storage workflow:
+    Normal upload workflow:
 
         Browser
+            ↓
+        Render
             ↓
         Temporary local file
             ↓
@@ -111,13 +114,23 @@ def upload_dataset(
             ↓
         Database dataset record
             ↓
-        Pandas profiling / professional analysis
-            ↓
-        Database analysis record
+        Pandas analysis
 
-    The important difference from the previous implementation is
-    that the durable Supabase copy is created BEFORE the expensive
-    analysis work starts.
+    Chunked cloud upload workflow:
+
+        Browser
+            ↓
+        Supabase Storage chunks
+            ↓
+        Render temporary reconstructed file
+            ↓
+        Database dataset record
+            ↓
+        Pandas analysis
+
+    When existing_cloud_storage_id is provided, the file has
+    already been uploaded to Supabase and must not be uploaded
+    again.
     """
 
     if not file.filename:
@@ -175,6 +188,7 @@ def upload_dataset(
     # ------------------------------------------------------------
 
     storage_root = dataset_storage_root()
+
     storage_root.mkdir(
         parents=True,
         exist_ok=True,
@@ -184,16 +198,19 @@ def upload_dataset(
         unique_filename
     )
 
-    cloud_storage_id: str | None = None
+    cloud_storage_id: str | None = (
+        existing_cloud_storage_id
+    )
+
     cloud_uploaded = False
 
     try:
         # --------------------------------------------------------
-        # Save the incoming upload locally.
+        # Save the reconstructed/incoming upload locally.
         # --------------------------------------------------------
 
         logger.info(
-            "Saving uploaded dataset locally: %s",
+            "Saving dataset locally: %s",
             original_filename,
         )
 
@@ -209,11 +226,8 @@ def upload_dataset(
         )
 
         # --------------------------------------------------------
-        # IMPORTANT:
-        # Upload to Supabase BEFORE expensive analysis.
-        #
-        # We use a UUID-based storage ID here rather than the
-        # database ID because the database ID does not exist yet.
+        # Upload to Supabase only when the caller has not already
+        # uploaded the file there.
         # --------------------------------------------------------
 
         if settings.USE_CLOUD_STORAGE:
@@ -223,27 +237,45 @@ def upload_dataset(
                     "Supabase Storage is not configured."
                 )
 
-            cloud_storage_id = (
-                f"supabase:datasets/uploads/"
-                f"{uuid4().hex}"
-            )
+            if existing_cloud_storage_id:
+                if not existing_cloud_storage_id.startswith(
+                    "supabase:"
+                ):
+                    raise ValueError(
+                        "Invalid existing cloud storage ID."
+                    )
 
-            logger.info(
-                "Uploading dataset to Supabase: %s",
-                cloud_storage_id,
-            )
+                cloud_storage_id = (
+                    existing_cloud_storage_id
+                )
 
-            supabase_storage.upload_file(
-                save_path,
-                cloud_storage_id,
-            )
+                logger.info(
+                    "Using existing Supabase dataset: %s",
+                    cloud_storage_id,
+                )
 
-            cloud_uploaded = True
+            else:
+                cloud_storage_id = (
+                    f"supabase:datasets/uploads/"
+                    f"{uuid4().hex}"
+                )
 
-            logger.info(
-                "Dataset successfully uploaded to Supabase: %s",
-                cloud_storage_id,
-            )
+                logger.info(
+                    "Uploading dataset to Supabase: %s",
+                    cloud_storage_id,
+                )
+
+                supabase_storage.upload_file(
+                    save_path,
+                    cloud_storage_id,
+                )
+
+                cloud_uploaded = True
+
+                logger.info(
+                    "Dataset successfully uploaded to Supabase: %s",
+                    cloud_storage_id,
+                )
 
         # --------------------------------------------------------
         # Read the dataset
@@ -449,6 +481,8 @@ def upload_dataset(
     except HTTPException:
         db.rollback()
 
+        # Delete from Supabase only when this function itself
+        # created the cloud upload.
         if cloud_uploaded and cloud_storage_id:
             supabase_storage.delete_file(
                 cloud_storage_id
@@ -463,6 +497,8 @@ def upload_dataset(
     except Exception:
         db.rollback()
 
+        # Delete from Supabase only when this function itself
+        # created the cloud upload.
         if cloud_uploaded and cloud_storage_id:
             supabase_storage.delete_file(
                 cloud_storage_id
