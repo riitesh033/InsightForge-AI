@@ -250,7 +250,19 @@ async def google_callback(
     )
 
     def clear_oauth_cookies(response: Response) -> Response:
-        callback_url = settings.GOOGLE_CALLBACK_URL
+        callback_url = settings.GOOGLE_CALLBACK_URL.strip()
+        if not callback_url:
+            forwarded_proto = request.headers.get("x-forwarded-proto")
+            scheme = (
+                forwarded_proto.split(",")[0].strip()
+                if forwarded_proto
+                else request.url.scheme
+            )
+            scheme = scheme or "https"
+            callback_url = (
+                f"{scheme}://{request.url.netloc}"
+                f"{settings.API_V1_STR}/auth/google/callback"
+            )
         path = urlsplit(callback_url).path or "/"
 
         for cookie_name in response_cookies:
