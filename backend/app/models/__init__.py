@@ -16,6 +16,7 @@ from .student_verification import (
     StudentVerificationApplication,
     StudentVerificationStatus,
 )
+from .upload_session import UploadSession
 
 __all__ = [
     "User",
@@ -33,4 +34,5 @@ __all__ = [
     "Invoice",
     "StudentVerificationApplication",
     "StudentVerificationStatus",
+    "UploadSession",
 ]

@@ -14,6 +14,7 @@ def _utcnow_naive() -> datetime:
 if TYPE_CHECKING:
     from app.models.dataset import Dataset
     from app.models.subscription import Subscription
+    from app.models.upload_session import UploadSession
 
 
 class User(Base):
@@ -43,11 +44,16 @@ class User(Base):
     )
 
     google_id: Mapped[str | None] = mapped_column(
-        String(255), unique=True, nullable=True, index=True
+        String(255),
+        unique=True,
+        nullable=True,
+        index=True,
     )
 
     is_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
+        Boolean,
+        default=False,
+        nullable=False,
     )
 
     profile_picture: Mapped[str | None] = mapped_column(
@@ -90,5 +96,11 @@ class User(Base):
         "Subscription",
         back_populates="user",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    upload_sessions: Mapped[list["UploadSession"]] = relationship(
+        "UploadSession",
+        back_populates="owner",
         cascade="all, delete-orphan",
     )

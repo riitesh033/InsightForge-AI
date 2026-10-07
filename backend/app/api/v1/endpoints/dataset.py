@@ -1,4 +1,6 @@
 import logging
+import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,6 +26,7 @@ from app.crud.crud_dataset import (
     rename_dataset,
 )
 from app.db.session import get_db
+from app.models.upload_session import UploadSession
 from app.models.user import User
 from app.schemas.dataset import (
     DatasetListResponse,
@@ -48,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+UPLOAD_SESSION_EXPIRY_HOURS = 24
+
 
 def cleanup_downloaded_dataset(
     file_path: str,
@@ -71,6 +76,46 @@ def cleanup_downloaded_dataset(
         pass
 
 
+def _get_upload_session(
+    db: Session,
+    storage_id: str,
+    current_user: User,
+) -> UploadSession:
+    """
+    Return an upload session owned by the current user.
+
+    Expired sessions cannot be used for further upload operations.
+    """
+
+    upload_session = (
+        db.query(UploadSession)
+        .filter(
+            UploadSession.storage_id == storage_id,
+            UploadSession.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if upload_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Upload session not found.",
+        )
+
+    if upload_session.expires_at <= datetime.now(UTC).replace(
+        tzinfo=None
+    ):
+        upload_session.status = "expired"
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Upload session has expired.",
+        )
+
+    return upload_session
+
+
 @router.post(
     "/upload/init",
 )
@@ -82,8 +127,8 @@ def initialize_dataset_upload(
     """
     Initialize a direct browser-to-Supabase dataset upload.
 
-    The browser receives a storage ID that is used for the
-    individual dataset chunks.
+    Creates a persistent upload session tied to the authenticated
+    user before the browser starts uploading individual chunks.
     """
 
     if not payload.filename:
@@ -151,6 +196,45 @@ def initialize_dataset_upload(
         f"{uuid4().hex}"
     )
 
+    chunk_size = supabase_storage.chunk_size
+
+    total_chunks = (
+        payload.file_size + chunk_size - 1
+    ) // chunk_size
+
+    expires_at = (
+        datetime.now(UTC).replace(tzinfo=None)
+        + timedelta(hours=UPLOAD_SESSION_EXPIRY_HOURS)
+    )
+
+    upload_session = UploadSession(
+        storage_id=storage_id,
+        owner_id=current_user.id,
+        filename=original_filename,
+        file_size=payload.file_size,
+        chunk_size=chunk_size,
+        total_chunks=total_chunks,
+        status="initialized",
+        expires_at=expires_at,
+    )
+
+    try:
+        db.add(upload_session)
+        db.commit()
+        db.refresh(upload_session)
+
+    except Exception:
+        db.rollback()
+
+        logger.exception(
+            "Failed to create upload session."
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to initialize dataset upload.",
+        ) from None
+
     return {
         "storage_id": storage_id,
         "original_filename": original_filename,
@@ -159,8 +243,106 @@ def initialize_dataset_upload(
             "",
         ),
         "file_size": payload.file_size,
-        "chunk_size": supabase_storage.chunk_size,
+        "chunk_size": chunk_size,
+        "total_chunks": total_chunks,
+        "upload_session_id": upload_session.id,
+        "expires_at": upload_session.expires_at.isoformat(),
     }
+
+
+@router.post(
+    "/upload/chunk-url",
+)
+def create_dataset_chunk_upload_url(
+    storage_id: str,
+    chunk_index: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create a short-lived signed upload URL for one dataset chunk.
+
+    The upload session is checked against the authenticated user so
+    one user cannot request signed URLs for another user's upload.
+    """
+
+    if not storage_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Storage ID is required.",
+        )
+
+    if not storage_id.startswith("datasets/uploads/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid dataset storage ID.",
+        )
+
+    if chunk_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Chunk index must be non-negative.",
+        )
+
+    if not supabase_storage.is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Chunked upload storage is unavailable because "
+                "Supabase Storage is not configured."
+            ),
+        )
+
+    upload_session = _get_upload_session(
+        db=db,
+        storage_id=storage_id,
+        current_user=current_user,
+    )
+
+    if chunk_index >= upload_session.total_chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Chunk index is outside the upload session.",
+        )
+
+    if upload_session.status in {
+        "completed",
+        "cancelled",
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail="Upload session is no longer active.",
+        )
+
+    if upload_session.status == "initialized":
+        upload_session.status = "uploading"
+        db.commit()
+
+    try:
+        signed_upload = (
+            supabase_storage.create_signed_chunk_upload_url(
+                storage_id=storage_id,
+                chunk_index=chunk_index,
+            )
+        )
+
+    except Exception:
+        logger.exception(
+            "Failed to create Supabase signed chunk upload URL."
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to initialize dataset chunk upload.",
+        ) from None
+
+    return {
+        "storage_id": storage_id,
+        "chunk_index": chunk_index,
+        "path": signed_upload["path"],
+        "token": signed_upload["token"],
+    }
+
 
 @router.post(
     "/upload/finalize",
@@ -178,8 +360,8 @@ def finalize_dataset_upload(
     """
     Finalize a direct browser-to-Supabase dataset upload.
 
-    The uploaded chunks are reconstructed into a temporary local
-    file and passed through the existing dataset analysis workflow.
+    The upload session is validated against the authenticated user
+    before the chunks are reconstructed and analyzed.
     """
 
     if not storage_id.startswith("datasets/uploads/"):
@@ -229,6 +411,42 @@ def finalize_dataset_upload(
             ),
         )
 
+    upload_session = _get_upload_session(
+        db=db,
+        storage_id=storage_id,
+        current_user=current_user,
+    )
+
+    if upload_session.status == "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Upload session has already been completed.",
+        )
+
+    if upload_session.status == "cancelled":
+        raise HTTPException(
+            status_code=409,
+            detail="Upload session has been cancelled.",
+        )
+
+    if file_size != upload_session.file_size:
+        raise HTTPException(
+            status_code=400,
+            detail="File size does not match the upload session.",
+        )
+
+    if total_chunks != upload_session.total_chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Total chunks do not match the upload session.",
+        )
+
+    if safe_filename != upload_session.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Filename does not match the upload session.",
+        )
+
     # Re-check quota before creating the permanent dataset record.
     lock_user_for_quota(
         db,
@@ -255,8 +473,6 @@ def finalize_dataset_upload(
             total_chunks=total_chunks,
             file_size=file_size,
         )
-
-        import tempfile
 
         temporary_directory = Path(
             tempfile.mkdtemp(
@@ -294,11 +510,6 @@ def finalize_dataset_upload(
         # ``upload_dataset`` expects an UploadFile. Wrapping the
         # reconstructed temporary file lets the chunked upload reuse the
         # exact profiling/analysis workflow used by a direct upload.
-        #
-        # The storage identifier is passed through so the resulting record
-        # points at the Supabase copy that the browser already uploaded;
-        # ``upload_dataset`` derives the stored location itself and the
-        # temporary reconstruction is removed in the ``finally`` block.
         from fastapi import UploadFile as FastAPIUploadFile
 
         with temporary_path.open("rb") as dataset_file:
@@ -318,6 +529,9 @@ def finalize_dataset_upload(
                 ),
             )
 
+        upload_session.status = "completed"
+        db.commit()
+
         if not settings.USE_CLOUD_STORAGE:
             supabase_storage.delete_file(storage_id)
 
@@ -329,6 +543,13 @@ def finalize_dataset_upload(
 
     except Exception:
         db.rollback()
+
+        upload_session.status = "failed"
+
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
         logger.exception(
             "Failed to finalize dataset upload."
@@ -350,73 +571,6 @@ def finalize_dataset_upload(
 
             except OSError:
                 pass
-
-@router.post(
-    "/upload/chunk-url",
-)
-def create_dataset_chunk_upload_url(
-    storage_id: str,
-    chunk_index: int,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Create a short-lived signed upload URL for one dataset chunk.
-
-    The browser uploads the chunk directly to Supabase, so the
-    large dataset does not have to pass through the Render server.
-    """
-
-    if not storage_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Storage ID is required.",
-        )
-
-    if not storage_id.startswith("datasets/uploads/"):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid dataset storage ID.",
-        )
-
-    if chunk_index < 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Chunk index must be non-negative.",
-        )
-
-    if not supabase_storage.is_configured():
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Chunked upload storage is unavailable because "
-                "Supabase Storage is not configured."
-            ),
-        )
-
-    try:
-        signed_upload = (
-            supabase_storage.create_signed_chunk_upload_url(
-                storage_id=storage_id,
-                chunk_index=chunk_index,
-            )
-        )
-
-    except Exception:
-        logger.exception(
-            "Failed to create Supabase signed chunk upload URL."
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to initialize dataset chunk upload.",
-        ) from None
-
-    return {
-        "storage_id": storage_id,
-        "chunk_index": chunk_index,
-        "path": signed_upload["path"],
-        "token": signed_upload["token"],
-    }
 
 
 @router.post(
