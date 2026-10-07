@@ -23,27 +23,37 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def get_active_subscription(db: Session, user_id: int) -> Subscription | None:
+    """Return the currently effective paid subscription deterministically."""
+    now = _utcnow_naive()
+    return (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == user_id,
+            Subscription.plan != "free",
+            Subscription.status.in_(PAID_STATUSES),
+            (Subscription.current_period_end.is_(None))
+            | (Subscription.current_period_end > now),
+        )
+        .order_by(
+            Subscription.current_period_end.desc().nullslast(),
+            Subscription.id.desc(),
+        )
+        .first()
+    )
+
+
+
 def _value(value: Any) -> str:
     return str(getattr(value, "value", value))
 
 
 def resolve_plan(db: Session, user_id: int) -> tuple[str, dict[str, Any]]:
-    subscription = (
-        db.query(Subscription)
-        .filter(Subscription.user_id == user_id)
-        .first()
-    )
+    subscription = get_active_subscription(db, user_id)
     plan_key = "free"
     if subscription is not None:
-        status_value = _value(subscription.status)
         candidate = _value(subscription.plan)
-        period_end = subscription.current_period_end
-        if (
-            status_value in PAID_STATUSES
-            and candidate in payment_service.plans
-            and candidate != "free"
-            and (period_end is None or period_end > _utcnow_naive())
-        ):
+        if candidate in payment_service.plans and candidate != "free":
             plan_key = candidate
 
     if plan_key == "free":

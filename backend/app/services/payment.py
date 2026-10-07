@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -591,9 +592,20 @@ class PaymentService:
         subscription = db.query(Subscription).filter(
             Subscription.provider_subscription_id == subscription_id
         ).first()
-        user_subscription = db.query(Subscription).filter(
-            Subscription.user_id == user_id
-        ).first()
+        user_subscription = (
+            db.query(Subscription)
+            .filter(Subscription.user_id == user_id)
+            .order_by(
+                case(
+                    (Subscription.status.in_(["active", "trialing"]), 0),
+                    (Subscription.status == "incomplete", 1),
+                    else_=2,
+                ),
+                Subscription.current_period_end.desc().nullslast(),
+                Subscription.id.desc(),
+            )
+            .first()
+        )
         if subscription is None and user_subscription is not None:
             if (
                 user_subscription.provider_subscription_id is not None

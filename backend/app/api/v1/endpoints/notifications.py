@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -17,11 +17,15 @@ def get_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     unread_only: bool = False,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     """Get notifications for the current user."""
-    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        (Notification.expires_at.is_(None))
+        | (Notification.expires_at > datetime.now(UTC).replace(tzinfo=None)),
+    )
 
     if unread_only:
         query = query.filter(Notification.is_read == False)
