@@ -10,7 +10,7 @@ from app.services.ai_provider import AIProviderError, generate_ai_response
 # deterministic analysis is always available as a fallback.
 # Keep the user-facing analysis request responsive when a provider hangs. The
 # deterministic profile remains available while the provider call is canceled.
-AI_REQUEST_TIMEOUT_SECONDS = 30.0
+AI_REQUEST_TIMEOUT_SECONDS = 60.0
 AI_EXPLANATION_VERSION = "v2"
 
 logger = logging.getLogger(__name__)
