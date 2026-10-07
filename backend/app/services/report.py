@@ -417,8 +417,6 @@ def create_missing_values_chart(
 
     rows = rows[:15]
 
-    rows = rows[:15]
-
     columns = [
         item[0]
         for item in rows
@@ -529,6 +527,8 @@ def create_outlier_chart(
         key=lambda item: item[1],
         reverse=True,
     )
+
+    rows = rows[:15]
 
     columns = [
         item[0]
