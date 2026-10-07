@@ -19,21 +19,52 @@ logger = logging.getLogger(__name__)
 
 
 def ensure_admin_account() -> None:
-    """Create or promote the configured production administrator safely."""
+    """Create or promote the configured production administrator safely.
+
+    Admin bootstrap must never take the whole web service down. If the
+    credentials are not configured, the normal application remains available
+    and the admin login simply remains unavailable until configuration is
+    supplied in the hosting environment.
+    """
     email = settings.ADMIN_EMAIL.strip().lower()
     password = settings.ADMIN_PASSWORD
 
     if not email and not password:
+        logger.warning(
+            "ADMIN_EMAIL/ADMIN_PASSWORD are not configured; "
+            "skipping administrator bootstrap."
+        )
         return
+
     if not email or not password:
-        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together.")
+        logger.error(
+            "Administrator bootstrap skipped: ADMIN_EMAIL and "
+            "ADMIN_PASSWORD must both be configured."
+        )
+        return
+
     if len(password) < 8:
-        raise RuntimeError("ADMIN_PASSWORD must contain at least 8 characters.")
+        logger.error(
+            "Administrator bootstrap skipped: ADMIN_PASSWORD must "
+            "contain at least 8 characters."
+        )
+        return
+
+    # bcrypt has a 72-byte password limit. Keep the existing application's
+    # authentication scheme unchanged and report a useful configuration error.
+    if len(password.encode("utf-8")) > 72:
+        logger.error(
+            "Administrator bootstrap skipped: ADMIN_PASSWORD must be "
+            "72 UTF-8 bytes or fewer."
+        )
+        return
 
     from app.db.session import SessionLocal
+
     db = SessionLocal()
     try:
         user = get_user_by_email(db, email)
+
         if user is None:
             user = User(
                 full_name=settings.ADMIN_NAME[:100],
@@ -50,8 +81,18 @@ def ensure_admin_account() -> None:
             user.is_verified = True
             user.is_active = True
             user.is_superuser = True
+
         db.commit()
-        logger.info("Configured administrator account is ready.")
+        logger.info(
+            "Configured administrator account is ready for %s.",
+            email,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Administrator bootstrap failed. The API will remain available; "
+            "check ADMIN_EMAIL/ADMIN_PASSWORD and database configuration."
+        )
     finally:
         db.close()
 
@@ -72,11 +113,7 @@ async def lifespan(app: FastAPI):
         logger.exception("Database migration failed at startup")
         raise
 
-    try:
-        ensure_admin_account()
-    except Exception:
-        logger.exception("Administrator bootstrap failed at startup")
-        raise
+    ensure_admin_account()
 
     if settings.USE_CLOUD_STORAGE:
         if not supabase_storage.is_configured():
