@@ -356,10 +356,19 @@ async def google_callback(
         claims.get("sub", "")
     ).strip()
 
+    email_verified = claims.get("email_verified")
+    email_is_verified = (
+        email_verified is True
+        or (
+            isinstance(email_verified, str)
+            and email_verified.strip().lower() == "true"
+        )
+    )
+
     if (
         not email
         or not google_id
-        or claims.get("email_verified") is not True
+        or not email_is_verified
     ):
         return clear_oauth_cookies(
             _google_failure("invalid_response")
