@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 
 import {
@@ -10,16 +10,26 @@ import {
 interface DownloadDialogProps {
   datasetId: number;
   cleanedAvailable: boolean;
+  cleanedFilename?: string | null;
+  fileType?: string;
 }
 
 export default function DownloadDialog({
   datasetId,
   cleanedAvailable,
+  cleanedFilename = null,
+  fileType = "xlsx",
 }: DownloadDialogProps) {
   const [format, setFormat] =
     useState<DownloadFormat>("xlsx");
 
   const [downloading, setDownloading] = useState(false);
+  const cleanedExtension = fileType.toLowerCase() === "csv" ? "csv" : "xlsx";
+
+  useEffect(() => {
+    if (format === "csv" && cleanedExtension !== "csv") setFormat("xlsx");
+    if (format === "xlsx" && cleanedExtension === "csv") setFormat("csv");
+  }, [cleanedExtension, format]);
 
   async function handleDownload() {
     try {
@@ -67,6 +77,7 @@ export default function DownloadDialog({
             name="download-format"
             value="xlsx"
             checked={format === "xlsx"}
+            disabled={cleanedExtension !== "xlsx"}
             onChange={() => setFormat("xlsx")}
           />
 
@@ -78,7 +89,7 @@ export default function DownloadDialog({
             </div>
 
             <div className="text-xs text-stone-500">
-              Cleaned dataset
+              {cleanedFilename ?? "Cleaned dataset"}
             </div>
           </div>
         </label>
@@ -96,6 +107,7 @@ export default function DownloadDialog({
             name="download-format"
             value="csv"
             checked={format === "csv"}
+            disabled={cleanedExtension !== "csv"}
             onChange={() => setFormat("csv")}
           />
 
@@ -107,7 +119,7 @@ export default function DownloadDialog({
             </div>
 
             <div className="text-xs text-stone-500">
-              Cleaned dataset
+              {cleanedFilename ?? "Cleaned dataset"}
             </div>
           </div>
         </label>
