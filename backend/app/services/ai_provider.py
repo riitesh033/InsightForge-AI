@@ -35,7 +35,10 @@ async def generate_with_gemini(
         from google.genai import types
 
         client = genai.Client(
-            api_key=settings.GEMINI_API_KEY
+            api_key=settings.GEMINI_API_KEY,
+            http_options=types.HttpOptions(
+                timeout=30000
+            ),
         )
 
         response = await asyncio.to_thread(
