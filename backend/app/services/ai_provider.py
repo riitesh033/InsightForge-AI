@@ -37,7 +37,7 @@ async def generate_with_gemini(
         client = genai.Client(
             api_key=settings.GEMINI_API_KEY,
             http_options=types.HttpOptions(
-                timeout=30000
+                timeout=60000
             ),
         )
 
