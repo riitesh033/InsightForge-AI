@@ -1,5 +1,4 @@
 import logging
-import os
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from app.models.user import User
@@ -48,22 +47,13 @@ class AdminService:
         # Storage is measured from stored dataset records. Cloud-backed
         # datasets live in Supabase Storage and leave no local file, so
         # walking the staging directory understates usage to zero on
-        # production hosts.
-        recorded_size = (
+        # production hosts. The staging directory may also contain stray
+        # leftover files that are not backed by any Dataset record; those
+        # must never inflate (or override) the recorded usage.
+        total_size = int(
             db.query(func.coalesce(func.sum(Dataset.file_size), 0)).scalar()
             or 0
         )
-        staging_size = 0
-        staging_dir = settings.DATASET_STORAGE_DIR
-        if os.path.isdir(staging_dir):
-            for dirpath, _, filenames in os.walk(staging_dir):
-                for filename in filenames:
-                    file_path = os.path.join(dirpath, filename)
-                    try:
-                        staging_size += os.path.getsize(file_path)
-                    except OSError:
-                        continue
-        total_size = max(int(recorded_size), staging_size)
 
         return {
             "backend_status": "Operational",
