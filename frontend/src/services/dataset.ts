@@ -222,6 +222,29 @@ export async function deleteDataset(
 // Upload Dataset
 // =========================
 
+/**
+ * Upload through the regular multipart endpoint when browser-side
+ * Supabase credentials are not available. This keeps local development
+ * and deployments using persistent/local backend storage functional.
+ */
+async function uploadDatasetMultipart(file: File): Promise<Dataset> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await api.post<Dataset>(
+    "/datasets/upload",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+}
+
+
 export async function uploadDataset(
   file: File
 ): Promise<Dataset> {
@@ -234,8 +257,18 @@ export async function uploadDataset(
    */
   const DEFAULT_CHUNK_SIZE =
     40 * 1024 * 1024;
+  const { supabaseUrl, supabaseAnonKey, supabaseBucket } =
+    getSupabaseConfig();
+
+  // Browser-side Supabase credentials are only required for the optimized
+  // direct-to-storage upload. If they are intentionally omitted (for local
+  // development or a backend-local-storage deployment), use the supported
+  // multipart endpoint instead of failing before the request reaches the API.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return uploadDatasetMultipart(file);
+  }
+
   const supabase = getSupabaseClient();
-  const { supabaseBucket } = getSupabaseConfig();
 
   // ---------------------------------
   // Step 1: Initialize upload
