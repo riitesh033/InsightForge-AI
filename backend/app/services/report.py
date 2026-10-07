@@ -30,8 +30,12 @@ from app.models.analysis import Analysis
 from app.models.dataset import Dataset
 from app.services.dataset_storage import (
     cleanup_dataset_local_path,
+    get_cloud_storage_id,
+    is_cloud_dataset,
     get_dataset_local_path,
+    resolve_dataset_path,
 )
+from app.services.cloud_storage import supabase_storage
 
 from app.services.verified_analysis import (
     build_verified_analysis_report,
@@ -295,6 +299,36 @@ def load_dataset(
                 file_path,
                 temporary,
             )
+
+
+# ============================================================
+# Report source validation
+# ============================================================
+
+
+def ensure_report_source_available(
+    dataset: Dataset,
+) -> None:
+    """
+    Verify that the report source exists without downloading a
+    large cloud-backed dataset.
+
+    Report generation uses the already-verified Analysis record,
+    so reconstructing a 100+ MB dataset is unnecessary for the
+    PDF itself. For cloud datasets we only read the tiny manifest.
+    """
+
+    if is_cloud_dataset(dataset.file_path):
+        storage_id = get_cloud_storage_id(dataset.file_path)
+        supabase_storage.get_manifest(storage_id)
+        return
+
+    path = resolve_dataset_path(dataset.file_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(
+            "Dataset file not found on server."
+        )
 
 
 # ============================================================
@@ -1202,9 +1236,9 @@ def generate_analysis_report(
     The original dataset is never modified.
     """
 
-    dataframe = load_dataset(
-        dataset
-    )
+    # Validate the source without reconstructing the full dataset.
+    # The Analysis record is the source of truth for report metrics.
+    ensure_report_source_available(dataset)
 
     # --------------------------------------------------------
     # VERIFIED ANALYSIS SOURCE OF TRUTH
@@ -1373,10 +1407,10 @@ def generate_analysis_report(
                 f"{dataset.id}<br/>"
 
                 f"<b>Rows:</b> "
-                f"{len(dataframe):,}<br/>"
+                f"{verified_analysis.dataset.rows:,}<br/>"
 
                 f"<b>Columns:</b> "
-                f"{len(dataframe.columns):,}<br/>"
+                f"{verified_analysis.dataset.columns:,}<br/>"
 
                 f"<b>File Type:</b> "
                 f"{safe_text(dataset.file_type.upper())}"
@@ -1532,13 +1566,13 @@ def generate_analysis_report(
         [
             "Rows",
             format_number(
-                len(dataframe)
+                verified_analysis.dataset.rows
             ),
         ],
         [
             "Columns",
             format_number(
-                len(dataframe.columns)
+                verified_analysis.dataset.columns
             ),
         ],
         [
@@ -1550,29 +1584,29 @@ def generate_analysis_report(
        [
         
            "Memory Usage",
-           f"{dataframe.memory_usage(deep=True).sum() / 1024:.2f} KB",
+           "Available from dataset profiling; full file is not loaded during report generation.",
        ],
         [
             "Numeric Columns",
             format_number(
-                len(
-                    dataframe.select_dtypes(
-                        include="number"
-                    ).columns
+                sum(
+                    1
+                    for item in verified_analysis.column_info
+                    if item.dtype.lower().startswith(
+                        ("int", "float", "number", "decimal")
+                    )
                 )
             ),
         ],
         [
             "Categorical Columns",
             format_number(
-                len(
-                    dataframe.select_dtypes(
-                        include=[
-                            "object",
-                            "category",
-                            "string",
-                        ]
-                    ).columns
+                sum(
+                    1
+                    for item in verified_analysis.column_info
+                    if not item.dtype.lower().startswith(
+                        ("int", "float", "number", "decimal")
+                    )
                 )
             ),
         ],
@@ -1679,9 +1713,9 @@ def generate_analysis_report(
         Paragraph(
             (
                 f"The dataset contains "
-                f"<b>{format_number(len(dataframe))}</b> "
+                f"<b>{format_number(verified_analysis.dataset.rows)}</b> "
                 f"rows and "
-                f"<b>{format_number(len(dataframe.columns))}</b> "
+                f"<b>{format_number(verified_analysis.dataset.columns)}</b> "
                 "columns. "
                 f"The verified data quality score is "
                 f"<b>{format_number(quality_score)}/100</b>."
@@ -2011,30 +2045,26 @@ def generate_analysis_report(
     # DISTRIBUTIONS
     # ========================================================
 
-    distribution_charts = (
-        create_distribution_charts(
-            dataframe
+    # Distribution charts require loading the original dataset.
+    # Skip them during report generation so preview/download stays fast
+    # for large cloud-backed datasets. The dashboard already exposes
+    # the verified statistical analysis without reconstructing the file.
+    story.append(
+        Paragraph(
+            "Numeric Distributions",
+            section_style,
         )
     )
-
-    if distribution_charts:
-
-        story.append(
-            Paragraph(
-                "Numeric Distributions",
-                section_style,
-            )
+    story.append(
+        Paragraph(
+            (
+                "Distribution charts are available in the dashboard. "
+                "They are omitted from PDF generation so large cloud-backed "
+                "datasets do not need to be downloaded and loaded into memory."
+            ),
+            small_style,
         )
-
-        for chart in distribution_charts:
-
-            story.append(
-                chart
-            )
-
-            story.append(
-                Spacer(1, 8)
-            )
+    )
 
     # ========================================================
     # 6. CORRELATION
