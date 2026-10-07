@@ -1,12 +1,17 @@
 import axios from "axios";
+
 import api from "@/lib/api";
 
 function getSupabaseConfig() {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const supabaseUrl =
+    import.meta.env.VITE_SUPABASE_URL?.trim();
+
   const supabaseAnonKey =
     import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
   const supabaseBucket = (
-    import.meta.env.VITE_SUPABASE_BUCKET ?? "insightforge-files"
+    import.meta.env.VITE_SUPABASE_BUCKET ??
+    "insightforge-files"
   )
     .trim()
     .replace(/\/+$/, "");
@@ -14,7 +19,8 @@ function getSupabaseConfig() {
   return {
     supabaseUrl,
     supabaseAnonKey,
-    supabaseBucket: supabaseBucket || "insightforge-files",
+    supabaseBucket:
+      supabaseBucket || "insightforge-files",
   };
 }
 
@@ -210,95 +216,142 @@ export async function deleteDataset(
 // Upload Dataset
 // =========================
 
+export type DatasetUploadProgress =
+  (progress: number) => void;
+
 /**
- * Upload through the regular multipart endpoint when browser-side
- * Supabase credentials are not available. This keeps local development
- * and deployments using persistent/local backend storage functional.
+ * Fallback upload through the regular backend
+ * multipart endpoint.
  */
-async function uploadDatasetMultipart(file: File): Promise<Dataset> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await api.post<Dataset>(
-    "/datasets/upload",
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
-
-  return response.data;
-}
-
-
-export type DatasetUploadProgress = (progress: number) => void;
-
 async function uploadDatasetMultipart(
   file: File,
   onProgress?: DatasetUploadProgress
 ): Promise<Dataset> {
   const formData = new FormData();
+
   formData.append("file", file);
 
-  const response = await api.post<Dataset>(
-    "/datasets/upload",
-    formData,
-    {
-      onUploadProgress: (event) => {
-        if (event.total) {
-          onProgress?.(
-            Math.min(
-              95,
-              Math.round((event.loaded / event.total) * 95)
+  const response =
+    await api.post<Dataset>(
+      "/datasets/upload",
+      formData,
+      {
+        onUploadProgress: (event) => {
+          if (!event.total) {
+            return;
+          }
+
+          const progress = Math.min(
+            95,
+            Math.round(
+              (event.loaded / event.total) *
+                95
             )
           );
-        }
-      },
-    }
-  );
+
+          onProgress?.(progress);
+        },
+      }
+    );
 
   return response.data;
 }
 
+/**
+ * Upload one chunk directly to Supabase
+ * using the signed URL returned by the backend.
+ *
+ * Axios provides browser upload progress events,
+ * allowing the UI to display real upload progress.
+ */
 async function uploadSignedChunk(
   signedUrl: string,
   chunk: Blob,
   onProgress: (loaded: number) => void
 ): Promise<void> {
   const formData = new FormData();
-  formData.append("cacheControl", "3600");
-  formData.append("", chunk);
 
-  await axios.put(signedUrl, formData, {
-    headers: {
-      "x-upsert": "false",
-    },
-    onUploadProgress: (event) => {
-      onProgress(
-        Math.min(
-          chunk.size,
+  formData.append(
+    "cacheControl",
+    "3600"
+  );
+
+  formData.append(
+    "",
+    chunk
+  );
+
+  await axios.put(
+    signedUrl,
+    formData,
+    {
+      headers: {
+        "x-upsert": "false",
+      },
+
+      onUploadProgress: (event) => {
+        const loaded =
           event.total
-            ? Math.round((event.loaded / event.total) * chunk.size)
-            : event.loaded
-        )
-      );
-    },
-  });
+            ? Math.round(
+                (event.loaded /
+                  event.total) *
+                  chunk.size
+              )
+            : event.loaded;
+
+        onProgress(
+          Math.min(
+            chunk.size,
+            loaded
+          )
+        );
+      },
+    }
+  );
 }
 
+/**
+ * Upload dataset using chunked Supabase storage.
+ *
+ * Large files are divided into chunks and two
+ * chunks are uploaded concurrently.
+ *
+ * Progress:
+ *
+ * 0-95%   = actual browser upload progress
+ * 95-100% = backend finalization/processing
+ */
 export async function uploadDataset(
   file: File,
   onProgress?: DatasetUploadProgress
 ): Promise<Dataset> {
-  const DEFAULT_CHUNK_SIZE = 40 * 1024 * 1024;
-  const UPLOAD_CONCURRENCY = 2;
-  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
+  const DEFAULT_CHUNK_SIZE =
+    40 * 1024 * 1024;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return uploadDatasetMultipart(file, onProgress);
+  const UPLOAD_CONCURRENCY = 2;
+
+  const {
+    supabaseUrl,
+    supabaseAnonKey,
+  } = getSupabaseConfig();
+
+  // -------------------------------------------------
+  // Fallback to normal backend multipart upload
+  // -------------------------------------------------
+
+  if (
+    !supabaseUrl ||
+    !supabaseAnonKey
+  ) {
+    return uploadDatasetMultipart(
+      file,
+      onProgress
+    );
   }
+
+  // -------------------------------------------------
+  // Step 1: Initialize upload
+  // -------------------------------------------------
 
   const initResponse =
     await api.post<{
@@ -307,10 +360,13 @@ export async function uploadDataset(
       file_type: string;
       file_size: number;
       chunk_size: number;
-    }>("/datasets/upload/init", {
-      filename: file.name,
-      file_size: file.size,
-    });
+    }>(
+      "/datasets/upload/init",
+      {
+        filename: file.name,
+        file_size: file.size,
+      }
+    );
 
   const {
     storage_id,
@@ -323,38 +379,67 @@ export async function uploadDataset(
       : DEFAULT_CHUNK_SIZE;
 
   const totalChunks =
-    Math.ceil(file.size / chunkSize);
+    Math.ceil(
+      file.size / chunkSize
+    );
 
-  const uploadedBytes = new Array<number>(
-    totalChunks
-  ).fill(0);
+  // Track uploaded bytes for every chunk.
+  const uploadedBytes =
+    new Array<number>(
+      totalChunks
+    ).fill(0);
+
+  // -------------------------------------------------
+  // Calculate combined upload progress
+  // -------------------------------------------------
 
   const updateProgress = () => {
-    const totalUploaded = uploadedBytes.reduce(
-      (sum, bytes) => sum + bytes,
-      0
-    );
+    const totalUploaded =
+      uploadedBytes.reduce(
+        (sum, bytes) =>
+          sum + bytes,
+        0
+      );
+
+    const progress =
+      Math.floor(
+        (totalUploaded /
+          file.size) *
+          95
+      );
 
     onProgress?.(
       Math.min(
         95,
-        Math.floor(
-          (totalUploaded / file.size) * 95
-        )
+        progress
       )
     );
   };
 
+  // -------------------------------------------------
+  // Upload one chunk
+  // -------------------------------------------------
+
   const uploadChunk = async (
     chunkIndex: number
   ): Promise<void> => {
-    const start = chunkIndex * chunkSize;
-    const end = Math.min(
-      start + chunkSize,
-      file.size
-    );
-    const chunk = file.slice(start, end);
+    const start =
+      chunkIndex *
+      chunkSize;
 
+    const end =
+      Math.min(
+        start + chunkSize,
+        file.size
+      );
+
+    const chunk =
+      file.slice(
+        start,
+        end
+      );
+
+    // Request a signed URL for this chunk.
     const urlResponse =
       await api.post<{
         storage_id: string;
@@ -368,46 +453,88 @@ export async function uploadDataset(
         {
           params: {
             storage_id,
-            chunk_index: chunkIndex,
+            chunk_index:
+              chunkIndex,
           },
         }
       );
 
+    const {
+      signed_url,
+    } = urlResponse.data;
+
+    if (!signed_url) {
+      throw new Error(
+        `Server did not return a signed upload URL for chunk ${
+          chunkIndex + 1
+        } of ${totalChunks}.`
+      );
+    }
+
+    // Upload directly to Supabase
+    // and update global progress.
     await uploadSignedChunk(
-      urlResponse.data.signed_url,
+      signed_url,
       chunk,
       (loaded) => {
-        uploadedBytes[chunkIndex] = loaded;
+        uploadedBytes[
+          chunkIndex
+        ] = loaded;
+
         updateProgress();
       }
     );
 
-    uploadedBytes[chunkIndex] = chunk.size;
+    // Ensure this chunk is marked complete.
+    uploadedBytes[
+      chunkIndex
+    ] = chunk.size;
+
     updateProgress();
   };
 
-  // Upload two different chunks at once. Each chunk has its own signed
-  // URL, so this reduces total upload time without risking object conflicts.
+  // -------------------------------------------------
+  // Step 2: Upload chunks concurrently
+  // -------------------------------------------------
+
   for (
     let batchStart = 0;
     batchStart < totalChunks;
-    batchStart += UPLOAD_CONCURRENCY
+    batchStart +=
+      UPLOAD_CONCURRENCY
   ) {
-    const batchEnd = Math.min(
-      batchStart + UPLOAD_CONCURRENCY,
-      totalChunks
-    );
+    const batchEnd =
+      Math.min(
+        batchStart +
+          UPLOAD_CONCURRENCY,
+        totalChunks
+      );
 
     await Promise.all(
       Array.from(
-        { length: batchEnd - batchStart },
+        {
+          length:
+            batchEnd -
+            batchStart,
+        },
         (_, offset) =>
-          uploadChunk(batchStart + offset)
+          uploadChunk(
+            batchStart +
+              offset
+          )
       )
     );
   }
 
+  // -------------------------------------------------
+  // Step 3: Upload finished
+  // -------------------------------------------------
+
   onProgress?.(95);
+
+  // -------------------------------------------------
+  // Step 4: Finalize upload
+  // -------------------------------------------------
 
   const finalizeResponse =
     await api.post<Dataset>(
@@ -416,19 +543,24 @@ export async function uploadDataset(
       {
         params: {
           storage_id,
-          original_filename: file.name,
-          file_size: file.size,
-          total_chunks: totalChunks,
+          original_filename:
+            file.name,
+          file_size:
+            file.size,
+          total_chunks:
+            totalChunks,
         },
       }
     );
 
+  // Everything has completed.
   onProgress?.(100);
+
   return finalizeResponse.data;
 }
 
 // =========================
-// Download Original Dataset
+// Download Dataset
 // =========================
 
 export async function downloadDataset(
@@ -552,15 +684,18 @@ export async function downloadAnalysisReport(
       }
     );
 
-  const blob = new Blob(
-    [response.data],
-    {
-      type: "application/pdf",
-    }
-  );
+  const blob =
+    new Blob(
+      [response.data],
+      {
+        type: "application/pdf",
+      }
+    );
 
   const objectUrl =
-    window.URL.createObjectURL(blob);
+    window.URL.createObjectURL(
+      blob
+    );
 
   const link =
     document.createElement("a");
@@ -570,7 +705,9 @@ export async function downloadAnalysisReport(
   link.download =
     `dataset_${datasetId}_analysis_report.pdf`;
 
-  document.body.appendChild(link);
+  document.body.appendChild(
+    link
+  );
 
   link.click();
 
