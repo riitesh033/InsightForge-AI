@@ -26,7 +26,10 @@ from app.services.entitlements import require_feature
 from app.services.verified_analysis import (
     build_verified_analysis_report,
 )
-from app.services.insights import generate_dataset_explanation
+from app.services.insights import (
+    AI_EXPLANATION_VERSION,
+    generate_dataset_explanation,
+)
 
 
 router = APIRouter()
@@ -108,12 +111,14 @@ async def get_dataset_explanation(
             detail="Analysis not found.",
         )
 
-    cached_explanation = (
-        analysis.summary.get("ai_explanation")
-        if isinstance(analysis.summary, dict)
-        else None
-    )
-    if isinstance(cached_explanation, str) and cached_explanation.strip():
+    cached_summary = analysis.summary if isinstance(analysis.summary, dict) else {}
+    cached_explanation = cached_summary.get("ai_explanation")
+    cached_version = cached_summary.get("ai_explanation_version")
+    if (
+        cached_version == AI_EXPLANATION_VERSION
+        and isinstance(cached_explanation, str)
+        and cached_explanation.strip()
+    ):
         return DatasetExplanationResponse(
             available=True,
             explanation=cached_explanation,
@@ -140,9 +145,34 @@ async def get_dataset_explanation(
     insights = generate_professional_insights(
         report=verified_analysis,
     )
+    missing_values = verified_analysis.data_quality.missing_values
+    missing_values_sorted = sorted(
+        [item for item in missing_values if item.count > 0],
+        key=lambda item: item.count,
+        reverse=True,
+    )
+    total_missing_cells = sum(item.count for item in missing_values)
+    total_potential_outliers = sum(
+        item.count for item in verified_analysis.outliers
+    )
+
     facts = {
         "dataset": verified_analysis.dataset.model_dump(mode="json"),
+        "verified_totals": {
+            "total_missing_cells": total_missing_cells,
+            "duplicate_rows": (
+                verified_analysis.data_quality.duplicates.count
+                if verified_analysis.data_quality.duplicates is not None
+                else 0
+            ),
+            "potential_outlier_values": total_potential_outliers,
+            "quality_score": verified_analysis.data_quality.quality_score,
+        },
         "data_quality": verified_analysis.data_quality.model_dump(mode="json"),
+        "top_missing_columns": [
+            item.model_dump(mode="json")
+            for item in missing_values_sorted[:15]
+        ],
         "column_info": [
             item.model_dump(mode="json")
             for item in verified_analysis.column_info[:30]
@@ -185,6 +215,7 @@ async def get_dataset_explanation(
     analysis.summary = {
         **(analysis.summary if isinstance(analysis.summary, dict) else {}),
         "ai_explanation": explanation,
+        "ai_explanation_version": AI_EXPLANATION_VERSION,
     }
     try:
         db.commit()
