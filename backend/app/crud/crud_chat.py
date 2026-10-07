@@ -4,6 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
+import re
+
+
+def _is_legacy_safety_message(content: str) -> bool:
+    return bool(
+        re.fullmatch(
+            r"user\s+safety\s*:\s*safe\.?\s*",
+            (content or "").strip(),
+            re.IGNORECASE,
+        )
+    )
 
 
 # ============================================================
@@ -36,7 +47,10 @@ def get_chat_sessions_for_dataset(
 ):
     last_message = (
         db.query(ChatMessage.content)
-        .filter(ChatMessage.session_id == ChatSession.id)
+        .filter(
+            ChatMessage.session_id == ChatSession.id,
+            ~ChatMessage.content.op("~*")(r"^user\\s+safety\\s*:\\s*safe\\.?\\s*$"),
+        )
         .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(1)
         .correlate(ChatSession)
@@ -127,11 +141,18 @@ def get_chat_messages(
     db: Session,
     session_id: int,
 ):
-    return (
-        db.query(ChatMessage)
-        .filter(
-            ChatMessage.session_id == session_id,
+    return [
+        message
+        for message in (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.session_id == session_id,
+            )
+            .order_by(ChatMessage.created_at.asc())
+            .all()
         )
-        .order_by(ChatMessage.created_at.asc())
-        .all()
-    )
+        if not (
+            message.role == "assistant"
+            and _is_legacy_safety_message(message.content)
+        )
+    ]
