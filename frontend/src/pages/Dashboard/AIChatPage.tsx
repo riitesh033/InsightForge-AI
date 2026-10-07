@@ -258,6 +258,7 @@ export default function AIChatPage() {
   const [failedSession, setFailedSession] = useState<ChatSession | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -513,16 +514,20 @@ export default function AIChatPage() {
     }
   }
 
-  async function handleDeleteChat(session: ChatSession) {
+  function handleDeleteChat(session: ChatSession) {
     if (
       deletingSessionId !== null ||
       sendingRef.current ||
       loadingSessionId !== null
     ) return;
-    if (!window.confirm(`Delete "${session.title}" and its messages? This cannot be undone.`)) {
-      return;
-    }
+    setDeleteConfirmSession(session);
+  }
 
+  async function confirmDeleteChat() {
+    const session = deleteConfirmSession;
+    if (!session) return;
+
+    setDeleteConfirmSession(null);
     setDeletingSessionId(session.id);
     setError("");
     try {
@@ -967,6 +972,51 @@ export default function AIChatPage() {
           </footer>
         </div>
       </div>
+
+      {deleteConfirmSession && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && deletingSessionId === null) {
+              setDeleteConfirmSession(null);
+            }
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-chat-confirm-title"
+            aria-describedby="delete-chat-confirm-description"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-foreground shadow-2xl"
+          >
+            <h2 id="delete-chat-confirm-title" className="text-lg font-semibold">
+              Delete conversation?
+            </h2>
+            <p id="delete-chat-confirm-description" className="mt-2 text-sm leading-6 text-muted-foreground">
+              Delete "{deleteConfirmSession.title}" and its messages? This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingSessionId !== null}
+                onClick={() => setDeleteConfirmSession(null)}
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingSessionId !== null}
+                onClick={() => void confirmDeleteChat()}
+                className="rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingSessionId !== null ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mobileHistoryOpen && (
         <div className="fixed inset-x-0 bottom-0 top-20 z-50 lg:hidden" role="presentation">
