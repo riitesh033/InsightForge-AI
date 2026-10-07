@@ -28,6 +28,7 @@ export default function AdminStudentVerificationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
 
   const loadApplications = useCallback(async () => {
     setLoading(true);
@@ -56,47 +57,52 @@ export default function AdminStudentVerificationPage() {
     void loadApplications();
   }, [loadApplications]);
 
-  async function handleApprove() {
-    if (!selected || !window.confirm("Approve this application and grant one year of Student Pro?")) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const approved = await approveStudentApplication(selected.id);
-      setSelected(approved);
-      setMessage("Application approved. Student Pro access is active for 365 days.");
-      await loadApplications();
-    } catch (requestError) {
-      setError(getApiErrorMessage(requestError, "Unable to approve this application."));
-    } finally {
-      setBusy(false);
-    }
+  function handleApprove() {
+    if (!selected) return;
+    setConfirmAction("approve");
   }
 
-  async function handleReject() {
+  function handleReject() {
     if (!selected || !rejectionReason.trim()) {
       setError("Enter a rejection reason before rejecting the application.");
       return;
     }
-    if (!window.confirm("Reject this student verification application?")) {
-      return;
-    }
+    setConfirmAction("reject");
+  }
+
+  async function handleConfirmAction() {
+    if (!selected || !confirmAction) return;
+
+    const action = confirmAction;
+    setConfirmAction(null);
     setBusy(true);
     setError(null);
     setMessage(null);
+
     try {
-      const rejected = await rejectStudentApplication(
-        selected.id,
-        rejectionReason.trim()
-      );
-      setSelected(rejected);
-      setRejectionReason("");
-      setMessage("Application rejected and the student was notified.");
+      if (action === "approve") {
+        const approved = await approveStudentApplication(selected.id);
+        setSelected(approved);
+        setMessage("Application approved. Student Pro access is active for 365 days.");
+      } else {
+        const rejected = await rejectStudentApplication(
+          selected.id,
+          rejectionReason.trim()
+        );
+        setSelected(rejected);
+        setRejectionReason("");
+        setMessage("Application rejected and the student was notified.");
+      }
       await loadApplications();
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, "Unable to reject this application."));
+      setError(
+        getApiErrorMessage(
+          requestError,
+          action === "approve"
+            ? "Unable to approve this application."
+            : "Unable to reject this application."
+        )
+      );
     } finally {
       setBusy(false);
     }
@@ -311,6 +317,54 @@ export default function AdminStudentVerificationPage() {
           )}
         </section>
       </div>
+
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) {
+              setConfirmAction(null);
+            }
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="student-verification-confirm-title"
+            aria-describedby="student-verification-confirm-description"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-foreground shadow-2xl"
+          >
+            <h2 id="student-verification-confirm-title" className="text-lg font-semibold">
+              {confirmAction === "approve" ? "Approve application?" : "Reject application?"}
+            </h2>
+            <p id="student-verification-confirm-description" className="mt-2 text-sm text-muted-foreground">
+              {confirmAction === "approve"
+                ? "Approve this application and grant one year of Student Pro?"
+                : "Reject this student verification application?"}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmAction(null)}
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleConfirmAction()}
+                className={`rounded-lg px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 ${confirmAction === "approve" ? "bg-primary" : "bg-destructive"}`}
+              >
+                {busy ? "Saving..." : confirmAction === "approve" ? "Approve" : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
