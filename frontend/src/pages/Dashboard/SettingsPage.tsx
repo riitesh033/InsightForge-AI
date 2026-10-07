@@ -60,6 +60,7 @@ export default function SettingsPage() {
 
   // Delete account state
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
   // Load user data on mount
   useEffect(() => {
@@ -221,17 +222,19 @@ export default function SettingsPage() {
     }
   }
 
-  // Handle account deletion
-  async function handleDeleteAccount() {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete your account? This action cannot be undone."
-    );
+  // Open the themed account-deletion confirmation dialog.
+  function handleDeleteAccount() {
+    if (isDeletingAccount) return;
+    setShowDeleteConfirmation(true);
+  }
 
-    if (!confirmed) return;
+  async function confirmDeleteAccount() {
+    if (isDeletingAccount) return;
 
     try {
       setIsDeletingAccount(true);
       await deleteAccount();
+      setShowDeleteConfirmation(false);
       logout();
       showSuccess("Account deleted successfully.");
     } catch (error) {
@@ -512,6 +515,68 @@ export default function SettingsPage() {
           Use the theme toggle in the top-right corner to switch between Light and Dark mode.
         </p>
       </div>
+
+      {/* Account deletion confirmation */}
+      {showDeleteConfirmation && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isDeletingAccount) {
+              setShowDeleteConfirmation(false);
+            }
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            aria-describedby="delete-account-description"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="min-w-0">
+                <h2
+                  id="delete-account-title"
+                  className="text-lg font-semibold text-foreground"
+                >
+                  Delete account?
+                </h2>
+                <p
+                  id="delete-account-description"
+                  className="mt-2 text-sm leading-6 text-muted-foreground"
+                >
+                  This will permanently remove your account, datasets, reports,
+                  chats, and settings. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirmation(false)}
+                disabled={isDeletingAccount}
+                className="rounded-lg border border-border bg-background px-5 py-2.5 font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAccount}
+                disabled={isDeletingAccount}
+                className="rounded-lg bg-destructive px-5 py-2.5 font-medium text-destructive-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeletingAccount ? "Deleting..." : "Delete Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Danger Zone */}
       <div className="rounded-xl border border-red-500 bg-card p-6">
