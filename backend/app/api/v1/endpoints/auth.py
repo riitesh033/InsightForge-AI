@@ -138,10 +138,25 @@ async def register(
 # Google OAuth
 # ==========================
 
-def _google_configuration() -> tuple[str, str, str]:
+def _google_configuration(
+    request: Request | None = None,
+) -> tuple[str, str, str]:
     client_id = settings.GOOGLE_CLIENT_ID.strip()
     client_secret = settings.GOOGLE_CLIENT_SECRET.strip()
     callback_url = settings.GOOGLE_CALLBACK_URL.strip()
+
+    if not callback_url and request is not None:
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        scheme = (
+            forwarded_proto.split(",")[0].strip()
+            if forwarded_proto
+            else request.url.scheme
+        )
+        scheme = scheme or "https"
+        callback_url = (
+            f"{scheme}://{request.url.netloc}"
+            f"{settings.API_V1_STR}/auth/google/callback"
+        )
 
     if not client_id or not client_secret or not callback_url:
         raise HTTPException(
@@ -156,8 +171,10 @@ def _google_configuration() -> tuple[str, str, str]:
 
 
 @router.get("/google/login")
-def begin_google_login() -> RedirectResponse:
-    client_id, _, callback_url = _google_configuration()
+def begin_google_login(
+    request: Request,
+) -> RedirectResponse:
+    client_id, _, callback_url = _google_configuration(request)
 
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
@@ -275,7 +292,7 @@ async def google_callback(
 
     try:
         client_id, client_secret, callback_url = (
-            _google_configuration()
+            _google_configuration(request)
         )
 
         async with httpx.AsyncClient(timeout=10) as client:
