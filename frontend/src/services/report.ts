@@ -20,6 +20,7 @@ export async function downloadReport(
     `/reports/${datasetId}/pdf`,
     {
       responseType: "blob",
+      timeout: 600000,
     }
   );
 
