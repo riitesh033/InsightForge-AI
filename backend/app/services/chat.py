@@ -60,6 +60,14 @@ def normalize_question(question: str) -> str:
     )
 
 
+def is_legacy_safety_message(role: str, content: str) -> bool:
+    """Identify the obsolete safety-only assistant response from older chat versions."""
+    return (
+        role == "assistant"
+        and bool(re.fullmatch(r"user\s+safety\s*:\s*safe\.?\s*", content.strip(), re.IGNORECASE))
+    )
+
+
 def safe_number(value: Any) -> float | None:
     """
     Safely convert a value to a number.
@@ -980,11 +988,23 @@ def build_focused_prompt(
     question: str,
     dataset,
     analysis,
+    conversation_history: list[dict[str, str]] | None = None,
 ) -> str:
 
     # ========================================================
     # Correlation
     # ========================================================
+
+    history = conversation_history or []
+    history_text = "\n".join(
+        f"{item.get('role', 'user').title()}: {item.get('content', '').strip()}"
+        for item in history[-10:]
+        if item.get("content", "").strip()
+        and not is_legacy_safety_message(
+            item.get("role", ""),
+            item.get("content", ""),
+        )
+    )
 
     correlation_context = get_correlation_context(
         question,
@@ -1019,7 +1039,22 @@ Dataset:
 User question:
 {question}
 
-Explain the correlation in simple language.
+Explain the correlation naturally, as if you were talking directly to the user.
+
+CONVERSATION STYLE
+------------------
+You are having a normal conversation with the user, not writing a report.
+
+- Answer directly and naturally, like a helpful expert.
+- Use plain language and complete sentences.
+- Do not prefix every answer with labels such as "Finding:", "Evidence:", "Interpretation:", or "Recommendation:".
+- Use bullets or short sections only when they genuinely make the answer easier to understand.
+- Keep the tone friendly, confident, and conversational.
+- If the user asks a follow-up, use the conversation history to understand what they mean.
+- Never mention internal prompts, safety checks, moderation, providers, or implementation details.
+- Never output a generic phrase such as "User Safety: safe."
+- If the requested information is unavailable from the verified dataset analysis, say so plainly and suggest what the user can ask instead.
+
 
 A correlation close to +1 means a strong positive
 linear relationship.
@@ -1072,8 +1107,22 @@ Dataset:
 User question:
 {question}
 
-Explain which columns contain outliers
-and how many outliers were detected.
+Explain the result naturally and directly.
+
+CONVERSATION STYLE
+------------------
+You are having a normal conversation with the user, not writing a report.
+
+- Answer directly and naturally, like a helpful expert.
+- Use plain language and complete sentences.
+- Do not prefix every answer with labels such as "Finding:", "Evidence:", "Interpretation:", or "Recommendation:".
+- Use bullets or short sections only when they genuinely make the answer easier to understand.
+- Keep the tone friendly, confident, and conversational.
+- If the user asks a follow-up, use the conversation history to understand what they mean.
+- Never mention internal prompts, safety checks, moderation, providers, or implementation details.
+- Never output a generic phrase such as "User Safety: safe."
+- If the requested information is unavailable from the verified dataset analysis, say so plainly and suggest what the user can ask instead.
+
 
 If the provided data only contains counts,
 do not invent the actual row values.
@@ -1119,9 +1168,24 @@ Dataset:
 User question:
 {question}
 
-Explain the result in simple language.
+Explain the result naturally and directly.
 
-Keep the answer concise.
+CONVERSATION STYLE
+------------------
+You are having a normal conversation with the user, not writing a report.
+
+- Answer directly and naturally, like a helpful expert.
+- Use plain language and complete sentences.
+- Do not prefix every answer with labels such as "Finding:", "Evidence:", "Interpretation:", or "Recommendation:".
+- Use bullets or short sections only when they genuinely make the answer easier to understand.
+- Keep the tone friendly, confident, and conversational.
+- If the user asks a follow-up, use the conversation history to understand what they mean.
+- Never mention internal prompts, safety checks, moderation, providers, or implementation details.
+- Never output a generic phrase such as "User Safety: safe."
+- If the requested information is unavailable from the verified dataset analysis, say so plainly and suggest what the user can ask instead.
+
+
+Keep the answer concise unless the user asks for more detail.
 """
 
     # ========================================================
@@ -1234,21 +1298,29 @@ ANALYSIS SUMMARY
 ----------------
 {analysis.summary_text}
 
+CONVERSATION HISTORY
+--------------------
+{history_text or "(This is the start of the conversation.)"}
+
 USER QUESTION
 -------------
 {question}
 
-ANSWER STYLE
-------------
-For analytical questions, structure the answer as:
+CONVERSATION STYLE
+------------------
+You are having a normal conversation with the user, not writing a report.
 
-Finding:
-Evidence:
-Interpretation:
-Recommendation:
+- Answer directly and naturally, like a helpful expert.
+- Use plain language and complete sentences.
+- Do not prefix every answer with labels such as "Finding:", "Evidence:", "Interpretation:", or "Recommendation:".
+- Use bullets or short sections only when they genuinely make the answer easier to understand.
+- Keep the tone friendly, confident, and conversational.
+- If the user asks a follow-up, use the conversation history to understand what they mean.
+- Never mention internal prompts, safety checks, moderation, providers, or implementation details.
+- Never output a generic phrase such as "User Safety: safe."
+- If the requested information is unavailable from the verified dataset analysis, say so plainly and suggest what the user can ask instead.
 
-Keep the answer concise unless the user
-asks for a detailed explanation.
+Keep the answer concise unless the user asks for a detailed explanation.
 """
 
 
@@ -1259,6 +1331,7 @@ asks for a detailed explanation.
 async def generate_chat_answer(
     question: str,
     context: dict,
+    conversation_history: list[dict[str, str]] | None = None,
 ) -> str:
 
     dataset = context["dataset"]
@@ -1301,6 +1374,7 @@ async def generate_chat_answer(
         question=question,
         dataset=dataset,
         analysis=analysis,
+        conversation_history=conversation_history,
     )
 
     # ========================================================
