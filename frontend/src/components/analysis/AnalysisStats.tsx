@@ -96,7 +96,7 @@ export default function AnalysisStats({
   ];
 
   return (
-    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid min-w-0 gap-5 sm:grid-cols-2 xl:grid-cols-5">
 
       {cards.map((card) => {
         const Icon = card.icon;
@@ -104,18 +104,18 @@ export default function AnalysisStats({
         return (
           <div
             key={card.title}
-            className="rounded-2xl border bg-card p-6 shadow-sm transition-shadow hover:shadow-md"
+            className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
           >
 
-            <div className="flex items-start justify-between">
+            <div className="flex min-w-0 items-start justify-between gap-3">
 
-              <div>
+              <div className="min-w-0">
 
                 <p className="text-sm font-medium text-muted-foreground">
                   {card.title}
                 </p>
 
-                <h2 className="mt-2 text-3xl font-bold tracking-tight">
+                <h2 className="mt-2 break-words text-2xl font-bold tracking-tight 2xl:text-3xl">
                   {card.value}
                 </h2>
 
@@ -125,7 +125,7 @@ export default function AnalysisStats({
 
               </div>
 
-              <div className="rounded-xl bg-primary/10 p-3">
+              <div className="shrink-0 rounded-xl bg-primary/10 p-3">
                 <Icon className="h-6 w-6 text-primary" />
               </div>
 
