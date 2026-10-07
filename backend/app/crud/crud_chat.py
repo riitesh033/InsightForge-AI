@@ -49,7 +49,7 @@ def get_chat_sessions_for_dataset(
         db.query(ChatMessage.content)
         .filter(
             ChatMessage.session_id == ChatSession.id,
-            ~ChatMessage.content.op("~*")(r"^user\\s+safety\\s*:\\s*safe\\.?\\s*$"),
+            ~ChatMessage.content.op("~*")(r"^user\s+safety\s*:\s*safe\.?\s*$"),
         )
         .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(1)
