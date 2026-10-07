@@ -25,12 +25,12 @@ export default function AIInsights({
     : "AI explanation is temporarily unavailable. Your deterministic dataset analysis is still available.";
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="rounded-2xl border border-primary/20 bg-card p-6 shadow-sm">
 
       {/* Header */}
       <div className="flex items-start gap-4">
 
-        <div className="rounded-xl bg-primary/10 p-3">
+        <div className="rounded-xl border border-primary/20 bg-primary/10 p-3">
           <Sparkles className="h-6 w-6 text-primary" />
         </div>
 
@@ -59,7 +59,7 @@ export default function AIInsights({
       </div>
 
       {/* Content */}
-      <div className="mt-6 rounded-xl border bg-muted/30 p-5">
+      <div className="mt-6 rounded-xl border border-border/70 bg-background/60 p-5">
 
         <div className="flex gap-4">
 
@@ -82,11 +82,11 @@ export default function AIInsights({
                 Preparing an explanation from the verified profile...
               </p>
             ) : hasInsights && available ? (
-              <div className="whitespace-pre-line text-sm leading-7">
+              <div className="whitespace-pre-line text-sm leading-7 text-foreground">
                 {formattedSummary}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm leading-7 text-muted-foreground">
                 {formattedSummary}
               </p>
             )}
