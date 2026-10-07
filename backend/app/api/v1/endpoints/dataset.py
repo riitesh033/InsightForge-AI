@@ -2,6 +2,7 @@ import logging
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import (
@@ -337,11 +338,19 @@ def create_dataset_chunk_upload_url(
             detail="Unable to initialize dataset chunk upload.",
         ) from None
 
+    signed_url = (
+        f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
+        f"{quote(supabase_storage.bucket, safe='')}/"
+        f"{quote(signed_upload['path'], safe='/')}"
+        f"?token={quote(signed_upload['token'], safe='')}"
+    )
+
     return {
         "storage_id": storage_id,
         "chunk_index": chunk_index,
         "path": signed_upload["path"],
         "token": signed_upload["token"],
+        "signed_url": signed_url,
     }
 
 
