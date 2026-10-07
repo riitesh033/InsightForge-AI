@@ -198,3 +198,52 @@ def test_subscription_response_returns_effective_plan_and_usage(
     assert body["feature_access"]["professional_reports"] is False
     assert body["usage"] == {"datasets": 0, "ai_queries_this_month": 0}
     assert body["limits"]["max_datasets"] == 3
+
+
+
+def test_effective_subscription_ignores_historical_canceled_rows(db, user_dict):
+    from app.services.entitlements import resolve_plan
+
+    user = get_user(db, user_dict)
+    db.add_all([
+        Subscription(
+            user_id=user.id,
+            plan=PlanType.PRO,
+            status=SubscriptionStatus.CANCELED,
+            current_period_end=datetime.now(UTC) - timedelta(days=30),
+        ),
+        Subscription(
+            user_id=user.id,
+            plan=PlanType.PRO,
+            status=SubscriptionStatus.ACTIVE,
+            current_period_end=datetime.now(UTC) + timedelta(days=10),
+        ),
+    ])
+    db.commit()
+
+    assert resolve_plan(db, user.id)[0] == "pro"
+
+
+def test_expired_paid_subscription_does_not_block_checkout_before_stripe_call(
+    client, auth_headers, user_dict, db
+):
+    user = get_user(db, user_dict)
+    db.add(
+        Subscription(
+            user_id=user.id,
+            plan=PlanType.PRO,
+            status=SubscriptionStatus.ACTIVE,
+            current_period_end=datetime.now(UTC) - timedelta(days=1),
+            provider_subscription_id="sub_expired",
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        f"{API}/payments/create-checkout",
+        headers=auth_headers,
+        params={"plan_type": "pro"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Payment processing is not available."
