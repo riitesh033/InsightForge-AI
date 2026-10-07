@@ -380,7 +380,7 @@ def create_missing_values_chart(
 
     rows = []
 
-    for column, info in missing_values.items():
+    for column, info in list(missing_values.items())[:30]:
 
         if not isinstance(info, dict):
             continue
@@ -414,6 +414,10 @@ def create_missing_values_chart(
         key=lambda item: item[1],
         reverse=True,
     )
+
+    rows = rows[:15]
+
+    rows = rows[:15]
 
     columns = [
         item[0]
@@ -2282,7 +2286,7 @@ def generate_analysis_report(
     if professional_insights.insights:
 
         for insight in (
-            professional_insights.insights
+            professional_insights.insights[:20]
         ):
 
             story.extend(
