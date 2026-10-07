@@ -227,6 +227,7 @@ async function uploadDatasetMultipart(
       "/datasets/upload",
       formData,
       {
+        timeout: 600000,
         onUploadProgress: (event) => {
           if (!event.total) {
             return;
@@ -528,6 +529,7 @@ export async function uploadDataset(
       "/datasets/upload/finalize",
       null,
       {
+        timeout: 600000,
         params: {
           storage_id,
           original_filename:
@@ -608,7 +610,11 @@ export async function previewCleaning(
 ): Promise<CleaningResponse> {
   const response =
     await api.post<CleaningResponse>(
-      `/cleaning/${datasetId}/preview`
+      `/cleaning/${datasetId}/preview`,
+      null,
+      {
+        timeout: 600000,
+      }
     );
 
   return response.data;
@@ -623,7 +629,11 @@ export async function applyCleaning(
 ): Promise<CleaningResponse> {
   const response =
     await api.post<CleaningResponse>(
-      `/cleaning/${datasetId}/apply`
+      `/cleaning/${datasetId}/apply`,
+      null,
+      {
+        timeout: 600000,
+      }
     );
 
   return response.data;
