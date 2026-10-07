@@ -640,6 +640,15 @@ def create_correlation_heatmap(
     if correlation_df.empty:
         return None
 
+    # Large correlation matrices make PDFs slow and unreadable.
+    # Keep the 12 most connected variables from the stored matrix.
+    if len(correlation_df.columns) > 12:
+        strength = correlation_df.abs().sum(axis=0).sort_values(
+            ascending=False
+        )
+        selected = list(strength.head(12).index)
+        correlation_df = correlation_df.loc[selected, selected]
+
     figure_size = max(
         6,
         min(
@@ -712,66 +721,84 @@ def create_correlation_heatmap(
     )
 
 
-def create_distribution_charts(
-    dataframe: pd.DataFrame,
+def create_distribution_profile_charts(
+    analysis: Analysis,
 ) -> list[Image]:
     """
-    Generate distribution charts for numeric columns.
+    Render compact distribution profiles from the stored analysis.
 
-    Maximum of 4 columns are shown to keep the PDF readable.
+    This uses the already-computed distribution metadata, so report
+    preview/download never needs to download or reload the original
+    dataset. It is not a raw histogram; it visualizes the verified
+    distribution characteristics calculated during analysis.
     """
 
-    numeric_columns = list(
-        dataframe.select_dtypes(
-            include="number"
-        ).columns
-    )
+    distributions = analysis.distributions or {}
 
-    if not numeric_columns:
+    if not isinstance(distributions, dict):
         return []
+
+    rows = []
+
+    for column, info in distributions.items():
+        if not isinstance(info, dict):
+            continue
+
+        try:
+            skewness = float(info.get("skewness", 0))
+            mean = float(info.get("mean", 0))
+            median = float(info.get("median", 0))
+        except (TypeError, ValueError):
+            continue
+
+        rows.append(
+            (
+                str(column),
+                skewness,
+                mean,
+                median,
+                str(info.get("shape", "unknown")),
+            )
+        )
+
+    if not rows:
+        return []
+
+    rows.sort(key=lambda item: abs(item[1]), reverse=True)
+    rows = rows[:8]
 
     charts = []
 
-    for column in numeric_columns[:4]:
+    for chunk_start in range(0, len(rows), 4):
+        chunk = rows[chunk_start:chunk_start + 4]
+        labels = [item[0] for item in chunk]
+        skewness = [item[1] for item in chunk]
 
-        series = (
-            dataframe[column]
-            .dropna()
-        )
-
-        if series.empty:
-            continue
-
-        figure, axis = plt.subplots(
-            figsize=(9, 4.5)
-        )
-
-        axis.hist(
-            series,
-            bins=20,
-        )
-
+        figure, axis = plt.subplots(figsize=(9, 4.2))
+        axis.barh(labels, skewness)
+        axis.axvline(0, linewidth=0.8)
         axis.set_title(
-            f"Distribution: {column}",
+            "Distribution Profile — Skewness",
             fontsize=13,
             fontweight="bold",
         )
-
         axis.set_xlabel(
-            str(column)
+            "Skewness (negative = left, positive = right)"
         )
+        axis.invert_yaxis()
 
-        axis.set_ylabel(
-            "Frequency"
-        )
+        for label, value in zip(labels, skewness):
+            axis.text(
+                value,
+                label,
+                f" {value:.3f}",
+                va="center",
+                ha="left" if value >= 0 else "right",
+                fontsize=8,
+            )
 
         figure.tight_layout()
-
-        charts.append(
-            figure_to_image(
-                figure
-            )
-        )
+        charts.append(figure_to_image(figure))
 
     return charts
 
@@ -821,7 +848,7 @@ def build_statistics_table(
         ]
     ]
 
-    for column, values in statistics.items():
+    for column, values in list(statistics.items())[:30]:
 
         if not isinstance(
             values,
@@ -2049,26 +2076,39 @@ def generate_analysis_report(
     # DISTRIBUTIONS
     # ========================================================
 
-    # Distribution charts require loading the original dataset.
-    # Skip them during report generation so preview/download stays fast
-    # for large cloud-backed datasets. The dashboard already exposes
-    # the verified statistical analysis without reconstructing the file.
+    distribution_charts = create_distribution_profile_charts(
+        analysis
+    )
+
     story.append(
         Paragraph(
             "Numeric Distributions",
             section_style,
         )
     )
-    story.append(
-        Paragraph(
-            (
-                "Distribution charts are available in the dashboard. "
-                "They are omitted from PDF generation so large cloud-backed "
-                "datasets do not need to be downloaded and loaded into memory."
-            ),
-            small_style,
+
+    if distribution_charts:
+        story.append(
+            Paragraph(
+                (
+                    "These charts use the verified distribution metrics "
+                    "already calculated during dataset analysis, so the "
+                    "original large dataset does not need to be reloaded."
+                ),
+                small_style,
+            )
         )
-    )
+
+        for chart in distribution_charts:
+            story.append(chart)
+            story.append(Spacer(1, 8))
+    else:
+        story.append(
+            Paragraph(
+                "No stored numeric distribution profiles are available.",
+                body_style,
+            )
+        )
 
     # ========================================================
     # 6. CORRELATION
@@ -2158,7 +2198,7 @@ def generate_analysis_report(
             ]
         ]
 
-        for column in column_info:
+        for column in column_info[:50]:
 
             column_rows.append(
                 [
