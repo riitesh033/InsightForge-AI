@@ -144,26 +144,44 @@ export default function AnalysisPage() {
     }
 
     setExplanationLoading(true);
-    getDatasetExplanation(Number(datasetId))
-      .then((explanation) => {
-        if (!cancelled) {
-          setDatasetExplanation(explanation);
+
+    async function loadExplanation() {
+      const maxAttempts = 2;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const explanation = await getDatasetExplanation(
+            Number(datasetId)
+          );
+
+          if (!cancelled) {
+            setDatasetExplanation(explanation);
+          }
+
+          return;
+        } catch {
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, 2000)
+            );
+          }
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDatasetExplanation({
-            available: false,
-            explanation:
-              "AI explanation is temporarily unavailable. Your deterministic dataset analysis is still available.",
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setExplanationLoading(false);
-        }
-      });
+      }
+
+      if (!cancelled) {
+        setDatasetExplanation({
+          available: false,
+          explanation:
+            "AI explanation is temporarily unavailable. Your deterministic dataset analysis is still available. Please refresh to try again.",
+        });
+      }
+    }
+
+    loadExplanation().finally(() => {
+      if (!cancelled) {
+        setExplanationLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
