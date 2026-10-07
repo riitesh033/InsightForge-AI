@@ -161,7 +161,6 @@ class PaymentService:
         try:
             session = stripe.checkout.Session.create(
                 customer_email=user_email,
-                payment_method_types=["card"],
                 line_items=[{"price": price_id, "quantity": 1}],
                 mode="subscription",
                 success_url=(

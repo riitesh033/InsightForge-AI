@@ -1,20 +1,34 @@
 import { createClient } from "@supabase/supabase-js";
 import api from "@/lib/api";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
+function getSupabaseConfig() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const supabaseAnonKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+  const supabaseBucket = (
+    import.meta.env.VITE_SUPABASE_BUCKET ?? "insightforge-files"
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Supabase frontend configuration is missing."
-  );
+  return {
+    supabaseUrl,
+    supabaseAnonKey,
+    supabaseBucket: supabaseBucket || "insightforge-files",
+  };
 }
 
-const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey
-);
+function getSupabaseClient() {
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Supabase upload is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment."
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey);
+}
 
 // =========================
 // Dataset
@@ -220,6 +234,8 @@ export async function uploadDataset(
    */
   const DEFAULT_CHUNK_SIZE =
     40 * 1024 * 1024;
+  const supabase = getSupabaseClient();
+  const { supabaseBucket } = getSupabaseConfig();
 
   // ---------------------------------
   // Step 1: Initialize upload
@@ -312,7 +328,7 @@ export async function uploadDataset(
     } =
       await supabase.storage
         .from(
-          "insightforge-files"
+          supabaseBucket
         )
         .uploadToSignedUrl(
           path,

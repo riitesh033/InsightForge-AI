@@ -4,11 +4,13 @@ import { clearAuthStorage, getToken } from "@/utils/storage";
 const configuredApiBaseUrl = import.meta.env.VITE_API_URL
   ?.trim()
   .replace(/^VITE_API_URL\s*=\s*/i, "");
+const defaultProductionApiBaseUrl =
+  "https://insightforge-ai-backend-85vm.onrender.com/api/v1";
 const configuredBaseUrl =
   configuredApiBaseUrl ||
   (import.meta.env.DEV
     ? "http://localhost:8000/api/v1"
-    : "/api/v1");
+    : defaultProductionApiBaseUrl);
 
 function withApiVersion(baseUrl: string): string {
   if (/^https?:\/\//i.test(baseUrl)) {
