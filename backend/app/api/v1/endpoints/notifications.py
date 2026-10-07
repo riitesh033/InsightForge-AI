@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.notification import Notification, NotificationType
 from app.models.user import User
-from app.crud.deps import get_current_user
+from app.api.dependencies import get_current_user
 
 router = APIRouter()
 
