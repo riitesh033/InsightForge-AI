@@ -88,3 +88,41 @@ def test_login_token_does_not_override_database_admin_status(
         f"{API}/admin/dashboard",
         headers=auth_headers,
     ).status_code == 200
+
+
+def test_admin_system_health_reports_live_storage_and_db_status(
+    client, auth_headers, user_dict, db
+):
+    from app.models.dataset import Dataset
+    from app.models.user import User
+
+    user = db.query(User).filter_by(email=user_dict["email"]).one()
+    user.is_superuser = True
+    db.commit()
+
+    db.add(
+        Dataset(
+            owner_id=user.id,
+            filename="stored.csv",
+            original_filename="stored.csv",
+            file_type="csv",
+            file_size=2048,
+            file_path="stored.csv",
+            rows=10,
+            columns=2,
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        f"{API}/admin/system-health",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["backend_status"] == "Operational"
+    assert body["database_status"] == "Healthy"
+    # Storage usage is derived from stored dataset records, so it must
+    # reflect cloud-backed datasets and not only local staging files.
+    assert body["storage_usage_mb"] == round(2048 / (1024 * 1024), 2)
