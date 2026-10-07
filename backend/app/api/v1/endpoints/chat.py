@@ -33,6 +33,7 @@ from app.schemas.chat import (
 from app.services.chat import (
     generate_chat_answer,
     get_dataset_context,
+    is_legacy_safety_message,
 )
 from app.services.entitlements import (
     enforce_ai_query_limit,
@@ -146,18 +147,23 @@ def get_session_messages(
             detail="Chat session not found.",
         )
 
-    messages = get_chat_messages(
-        db=db,
-        session_id=session.id,
-    )
+    messages = [
+        message
+        for message in get_chat_messages(
+            db=db,
+            session_id=session.id,
+        )
+        if not is_legacy_safety_message(
+            message.role,
+            message.content,
+        )
+    ]
 
     return ChatSessionMessagesResponse(
         session_id=session.id,
         dataset_id=session.dataset_id,
         messages=[
-            ChatMessageResponse.model_validate(
-                message
-            )
+            ChatMessageResponse.model_validate(message)
             for message in messages
         ],
     )
@@ -288,6 +294,25 @@ async def chat_with_dataset(
         session.title = question[:50]
 
     # --------------------------------------------------------
+    # Capture clean conversation history before adding the new turn.
+    # --------------------------------------------------------
+
+    previous_messages = [
+        {
+            "role": message.role,
+            "content": message.content,
+        }
+        for message in get_chat_messages(
+            db=db,
+            session_id=session.id,
+        )
+        if not is_legacy_safety_message(
+            message.role,
+            message.content,
+        )
+    ]
+
+    # --------------------------------------------------------
     # Save User Message
     # --------------------------------------------------------
 
@@ -305,6 +330,7 @@ async def chat_with_dataset(
     answer = await generate_chat_answer(
         question=question,
         context=context,
+        conversation_history=previous_messages,
     )
 
     # --------------------------------------------------------
@@ -322,19 +348,24 @@ async def chat_with_dataset(
     # Get Complete Conversation
     # --------------------------------------------------------
 
-    messages = get_chat_messages(
-        db=db,
-        session_id=session.id,
-    )
+    messages = [
+        message
+        for message in get_chat_messages(
+            db=db,
+            session_id=session.id,
+        )
+        if not is_legacy_safety_message(
+            message.role,
+            message.content,
+        )
+    ]
 
     return ChatResponse(
         session_id=session.id,
         dataset_id=dataset_id,
         answer=answer,
         messages=[
-            ChatMessageResponse.model_validate(
-                message
-            )
+            ChatMessageResponse.model_validate(message)
             for message in messages
         ],
     )
