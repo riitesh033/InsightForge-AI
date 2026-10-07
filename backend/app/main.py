@@ -9,8 +9,51 @@ from app.api.api import api_router
 from app.core.config import settings
 from app.db.database import ensure_migrations
 from app.services.cloud_storage import supabase_storage
+from app.core.security import hash_password
+from app.crud.crud_user import get_user_by_email
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+
+
+def ensure_admin_account() -> None:
+    """Create or promote the configured production administrator safely."""
+    email = settings.ADMIN_EMAIL.strip().lower()
+    password = settings.ADMIN_PASSWORD
+
+    if not email and not password:
+        return
+    if not email or not password:
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together.")
+    if len(password) < 8:
+        raise RuntimeError("ADMIN_PASSWORD must contain at least 8 characters.")
+
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        user = get_user_by_email(db, email)
+        if user is None:
+            user = User(
+                full_name=settings.ADMIN_NAME[:100],
+                email=email,
+                hashed_password=hash_password(password),
+                is_verified=True,
+                is_active=True,
+                is_superuser=True,
+            )
+            db.add(user)
+        else:
+            user.full_name = settings.ADMIN_NAME[:100]
+            user.hashed_password = hash_password(password)
+            user.is_verified = True
+            user.is_active = True
+            user.is_superuser = True
+        db.commit()
+        logger.info("Configured administrator account is ready.")
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -27,6 +70,12 @@ async def lifespan(app: FastAPI):
         ensure_migrations()
     except Exception:
         logger.exception("Database migration failed at startup")
+        raise
+
+    try:
+        ensure_admin_account()
+    except Exception:
+        logger.exception("Administrator bootstrap failed at startup")
         raise
 
     if settings.USE_CLOUD_STORAGE:
