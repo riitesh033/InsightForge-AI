@@ -42,8 +42,6 @@ def get_active_subscription(db: Session, user_id: int) -> Subscription | None:
         .first()
     )
 
- -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _value(value: Any) -> str:
