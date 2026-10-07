@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
 from app.api.dependencies import get_current_admin_user
+from app.crud.crud_dataset import delete_dataset
 from app.models.user import User
 from app.models.dataset import Dataset
 from app.schemas.admin import AdminDashboardStats, AdminUserResponse, AdminDatasetResponse, SystemHealthSchema
@@ -91,6 +92,9 @@ def admin_delete_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    db.delete(dataset)
-    db.commit()
+    # Reuse the standard deletion path so the analysis, chat sessions,
+    # stored file (local or Supabase) and database record are all removed.
+    # A bare ``db.delete`` leaked the stored object and left the
+    # analysis/chat rows behind.
+    delete_dataset(db=db, dataset=dataset)
     return {"message": "Dataset purged successfully by admin"}

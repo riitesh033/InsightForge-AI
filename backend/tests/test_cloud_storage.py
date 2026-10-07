@@ -667,13 +667,6 @@ def test_finalize_rejects_invalid_chunk_count_without_persisting_dataset(
     assert db.query(Dataset).count() == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "TODO (Step 2): upload prefixes are not persisted or bound to an owner, "
-        "so the current endpoint cannot reject another authenticated user."
-    ),
-)
 def test_chunk_url_rejects_another_users_upload_prefix(
     client,
     auth_headers,
@@ -723,7 +716,30 @@ def test_chunk_url_rejects_another_users_upload_prefix(
         },
     )
 
-    assert response.status_code == 403
+    # Upload sessions are owner-bound. Another authenticated user gets a
+    # not-found response (the same shape as an unknown session) so the
+    # existence of another user's upload is never disclosed.
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Upload session not found."
+
+    # The same owner-bound check protects finalization.
+    finalize = client.post(
+        "/api/v1/datasets/upload/finalize",
+        headers={
+            "Authorization": (
+                f"Bearer {second_login.json()['access_token']}"
+            )
+        },
+        params={
+            "storage_id": storage_id,
+            "original_filename": "dataset.csv",
+            "file_size": 1024,
+            "total_chunks": max(1, (1024 + cloud_storage.chunk_size - 1) // cloud_storage.chunk_size),
+        },
+    )
+
+    assert finalize.status_code == 404
+    assert finalize.json()["detail"] == "Upload session not found."
 
 
 def upload_chunked_dataset(

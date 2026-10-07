@@ -45,14 +45,25 @@ class AdminService:
             )
             db_ok = False
 
-        # Storage Calculation
-        upload_dir = settings.UPLOAD_FOLDER if hasattr(settings, 'UPLOAD_FOLDER') else "app/uploads"
-        total_size = 0
-        if os.path.exists(upload_dir):
-            for dirpath, _, filenames in os.walk(upload_dir):
-                for f in filenames:
-                    fp = os.path.join(dirpath, f)
-                    total_size += os.path.getsize(fp)
+        # Storage is measured from stored dataset records. Cloud-backed
+        # datasets live in Supabase Storage and leave no local file, so
+        # walking the staging directory understates usage to zero on
+        # production hosts.
+        recorded_size = (
+            db.query(func.coalesce(func.sum(Dataset.file_size), 0)).scalar()
+            or 0
+        )
+        staging_size = 0
+        staging_dir = settings.DATASET_STORAGE_DIR
+        if os.path.isdir(staging_dir):
+            for dirpath, _, filenames in os.walk(staging_dir):
+                for filename in filenames:
+                    file_path = os.path.join(dirpath, filename)
+                    try:
+                        staging_size += os.path.getsize(file_path)
+                    except OSError:
+                        continue
+        total_size = max(int(recorded_size), staging_size)
 
         return {
             "backend_status": "Operational",

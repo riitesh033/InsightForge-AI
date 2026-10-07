@@ -862,3 +862,78 @@ def test_report_rejects_unauthorized_dataset(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Dataset not found."
+
+
+def test_single_dataset_get_reports_cleaned_state(
+    client, auth_headers, user_dict, db, monkeypatch, tmp_path, workflow_files
+):
+    grant_pro_plan(db, user_dict)
+    upload = upload_file(
+        client,
+        auth_headers,
+        monkeypatch,
+        tmp_path,
+        "missing.csv",
+        workflow_files["missing.csv"],
+    )
+    dataset_id = upload.json()["id"]
+
+    before = client.get(
+        f"/api/v1/datasets/{dataset_id}",
+        headers=auth_headers,
+    )
+    assert before.status_code == 200, before.text
+    assert before.json()["cleaned_available"] is False
+
+    applied = client.post(
+        f"/api/v1/cleaning/{dataset_id}/apply",
+        headers=auth_headers,
+    )
+    assert applied.status_code == 200, applied.text
+
+    after = client.get(
+        f"/api/v1/datasets/{dataset_id}",
+        headers=auth_headers,
+    )
+    assert after.status_code == 200, after.text
+    assert after.json()["cleaned_available"] is True
+    assert after.json()["cleaned_filename"]
+
+
+def test_delete_dataset_removes_chat_sessions_and_messages(
+    client, auth_headers, db, monkeypatch, tmp_path, workflow_files
+):
+    from app.models.chat_session import ChatSession
+    from app.models.chat_message import ChatMessage
+
+    upload = upload_file(
+        client,
+        auth_headers,
+        monkeypatch,
+        tmp_path,
+        "normal.csv",
+        workflow_files["normal.csv"],
+    )
+    dataset_id = upload.json()["id"]
+
+    chat = client.post(
+        f"/api/v1/chat/{dataset_id}",
+        headers=auth_headers,
+        json={"message": "How many rows are in this dataset?"},
+    )
+    assert chat.status_code == 200, chat.text
+    assert db.query(ChatSession).filter(
+        ChatSession.dataset_id == dataset_id
+    ).count() == 1
+
+    deleted = client.delete(
+        f"/api/v1/datasets/{dataset_id}",
+        headers=auth_headers,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    assert db.query(ChatSession).filter(
+        ChatSession.dataset_id == dataset_id
+    ).count() == 0
+    assert db.query(ChatMessage).count() == 0
+

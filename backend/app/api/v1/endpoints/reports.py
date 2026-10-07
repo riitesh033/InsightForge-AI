@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # GET ALL REPORTS
 # ============================================================
 
-@router.get("/")
+@router.get("")
 def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
