@@ -5,7 +5,7 @@ const configuredApiBaseUrl = import.meta.env.VITE_API_URL
   ?.trim()
   .replace(/^VITE_API_URL\s*=\s*/i, "");
 const defaultProductionApiBaseUrl =
-  "https://insightforge-ai-backend-85vm.onrender.com/api/v1";
+  "https://insightforge-backend-5f1o.onrender.com/api/v1";
 const configuredBaseUrl =
   configuredApiBaseUrl ||
   (import.meta.env.DEV
