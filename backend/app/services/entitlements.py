@@ -187,7 +187,7 @@ def enforce_upload_size(db: Session, owner_id: int, file_size: int) -> None:
             for item in payment_service.plans.values()
         )
         raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"The maximum supported upload size is {max_supported_mb} MB.",
         )
 
