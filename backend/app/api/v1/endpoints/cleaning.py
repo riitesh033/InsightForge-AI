@@ -90,12 +90,8 @@ def preview_cleaning_route(
         current_user,
     )
 
-    # A cloud-backed dataset must be resolved before entitlement checks so a
-    # missing remote manifest is reported as a not-found resource. Local
-    # placeholders remain entitlement-gated before touching the filesystem.
-    if is_cloud_dataset(dataset.file_path):
-        ensure_dataset_source_exists(dataset)
-
+    # Cloud-backed datasets are resolved by the preview service itself.
+    # Avoid downloading the full remote dataset twice just to check existence.
     require_feature(
         db,
         current_user.id,
@@ -120,9 +116,8 @@ def apply_cleaning_route(
         current_user,
     )
 
-    if is_cloud_dataset(dataset.file_path):
-        ensure_dataset_source_exists(dataset)
-
+    # Cloud-backed datasets are resolved by the cleaning service itself.
+    # Avoid a second full Supabase download before applying cleaning.
     require_feature(
         db,
         current_user.id,
