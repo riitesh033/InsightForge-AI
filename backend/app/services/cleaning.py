@@ -104,6 +104,7 @@ def _clean_dataframe(
     df: pd.DataFrame,
     *,
     copy: bool = True,
+    preview_only: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """
     Apply safe automatic cleaning operations.
@@ -260,9 +261,10 @@ def _clean_dataframe(
             )
             continue
 
-        cleaned[column] = (
-            cleaned[column].fillna(median)
-        )
+        if not preview_only:
+            cleaned[column] = (
+                cleaned[column].fillna(median)
+            )
 
         summary[
             "missing_values_filled"
@@ -310,11 +312,12 @@ def _clean_dataframe(
 
         replacement = mode.iloc[0]
 
-        cleaned[column] = (
-            cleaned[column].fillna(
-                replacement
+        if not preview_only:
+            cleaned[column] = (
+                cleaned[column].fillna(
+                    replacement
+                )
             )
-        )
 
         summary[
             "missing_values_filled"
@@ -373,18 +376,28 @@ def _clean_dataframe(
 
     summary["rows_after"] = len(cleaned)
 
-    summary[
-        "missing_values_after"
-    ] = int(
-        cleaned.isna().sum().sum()
-    )
+    if preview_only:
+        # Preview mode does not need to materialize filled columns.
+        # Derive the final missing count from the values that can be
+        # safely filled instead of allocating another full-frame scan.
+        summary["missing_values_after"] = max(
+            0,
+            summary["missing_values_before"]
+            - summary["missing_values_filled"],
+        )
+    else:
+        summary[
+            "missing_values_after"
+        ] = int(
+            cleaned.isna().sum().sum()
+        )
 
-    summary[
-        "missing_values_filled"
-    ] = (
-        summary["missing_values_before"]
-        - summary["missing_values_after"]
-    )
+        summary[
+            "missing_values_filled"
+        ] = (
+            summary["missing_values_before"]
+            - summary["missing_values_after"]
+        )
 
     return cleaned, summary
 
@@ -405,6 +418,7 @@ def preview_cleaning(
         _, summary = _clean_dataframe(
             df,
             copy=False,
+            preview_only=True,
         )
 
         return {
