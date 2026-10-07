@@ -21,10 +21,10 @@ def get_notifications(
     offset: int = Query(default=0, ge=0),
 ):
     """Get notifications for the current user."""
-    query = db.query(Notification).filter(\
-        Notification.user_id == current_user.id,\
-        (Notification.expires_at.is_(None))\
-        | (Notification.expires_at > datetime.now(UTC).replace(tzinfo=None)),\
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        (Notification.expires_at.is_(None))
+        | (Notification.expires_at > datetime.now(UTC).replace(tzinfo=None)),
     )
 
     if unread_only:
