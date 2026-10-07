@@ -226,11 +226,11 @@ export async function uploadDataset(
   file: File
 ): Promise<Dataset> {
   /*
-   * Supabase Storage uses separate objects
-   * for each dataset chunk.
-   *
-   * 40 MB keeps every individual object below
-   * the configured Supabase Storage chunk limit.
+   * The backend is the source of truth for the chunk size: it already
+   * clamps the configured value below Supabase's per-object limit and
+   * computes the upload session's expected chunk count from it. Using the
+   * server value verbatim keeps the chunk indices and total count in
+   * agreement with the session, so finalization cannot reject the upload.
    */
   const DEFAULT_CHUNK_SIZE =
     40 * 1024 * 1024;
@@ -263,10 +263,7 @@ export async function uploadDataset(
 
   const chunkSize =
     chunk_size > 0
-      ? Math.min(
-          chunk_size,
-          DEFAULT_CHUNK_SIZE
-        )
+      ? chunk_size
       : DEFAULT_CHUNK_SIZE;
 
   const totalChunks =

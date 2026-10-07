@@ -1,20 +1,23 @@
 from math import ceil
 from pathlib import Path
+import logging
 
 from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
+from app.models.chat_message import ChatMessage
+from app.models.chat_session import ChatSession
 from app.models.dataset import Dataset
 from app.services.dataset_storage import (
     build_cloud_storage_id,
-    cleanup_dataset_local_path,
     delete_dataset_storage,
-    get_dataset_local_path,
     is_cloud_dataset,
     resolve_dataset_path,
 )
 from app.services.cloud_storage import supabase_storage
+
+logger = logging.getLogger(__name__)
 
 
 def create_dataset(
@@ -383,13 +386,29 @@ def delete_dataset(
         Analysis.dataset_id == dataset.id
     ).delete()
 
+    # Delete chat sessions (and their messages) before removing the
+    # dataset so no chat session is left pointing at a dataset that no
+    # longer exists. Messages are removed explicitly rather than relying
+    # on the database-level ON DELETE CASCADE, which a bulk query delete
+    # bypasses at the ORM level.
+    session_ids = [
+        session_id
+        for (session_id,) in db.query(ChatSession.id)
+        .filter(ChatSession.dataset_id == dataset.id)
+        .all()
+    ]
+
+    if session_ids:
+        db.query(ChatMessage).filter(
+            ChatMessage.session_id.in_(session_ids)
+        ).delete(synchronize_session=False)
+
+        db.query(ChatSession).filter(
+            ChatSession.id.in_(session_ids)
+        ).delete(synchronize_session=False)
+
     # Cloud dataset
     if is_cloud_dataset(dataset.file_path):
-        original_storage_id = (
-            dataset.file_path
-            .removeprefix("supabase:")
-        )
-
         cleaned_storage_id = (
             _build_cleaned_storage_id(
                 dataset.id
@@ -408,7 +427,11 @@ def delete_dataset(
                 cleaned_storage_id
             )
         except Exception:
-            pass
+            logger.exception(
+                "Failed to delete cleaned Supabase object "
+                "for dataset_id=%s",
+                dataset.id,
+            )
 
         # Delete database record
         db.delete(dataset)

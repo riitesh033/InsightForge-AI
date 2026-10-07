@@ -21,6 +21,7 @@ from app.api.dependencies import get_current_user
 from app.core.config import settings
 from app.crud.crud_dataset import (
     delete_dataset,
+    get_cleaned_file_info,
     get_dataset,
     get_datasets,
     rename_dataset,
@@ -708,7 +709,13 @@ def get_dataset_by_id(
             detail="Dataset not found.",
         )
 
-    return dataset
+    # Mirror the list response: report whether a cleaned version exists so a
+    # reloaded dataset page keeps the same cleaned-file state as the list.
+    cleaning_info = get_cleaned_file_info(dataset)
+    response = DatasetResponse.model_validate(dataset)
+    response.cleaned_available = cleaning_info["cleaned_available"]
+    response.cleaned_filename = cleaning_info["cleaned_filename"]
+    return response
 
 
 @router.patch(
