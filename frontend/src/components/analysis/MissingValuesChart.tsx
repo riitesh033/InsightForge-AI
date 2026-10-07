@@ -79,7 +79,7 @@ export default function MissingValuesChart({
               <CartesianGrid
                 strokeDasharray="3 3"
                 horizontal={false}
-                stroke="hsl(var(--border))"
+                stroke="rgb(var(--border))"
               />
 
               <XAxis
@@ -87,14 +87,14 @@ export default function MissingValuesChart({
                 domain={[0, 100]}
                 tickFormatter={(value) => `${value}%`}
                 tick={{
-                  fill: "hsl(var(--muted-foreground))",
+                  fill: "rgb(var(--muted-foreground))",
                   fontSize: 12,
                 }}
                 axisLine={{
-                  stroke: "hsl(var(--border))",
+                  stroke: "rgb(var(--border))",
                 }}
                 tickLine={{
-                  stroke: "hsl(var(--border))",
+                  stroke: "rgb(var(--border))",
                 }}
               />
 
@@ -103,31 +103,31 @@ export default function MissingValuesChart({
                 dataKey="name"
                 width={155}
                 tick={{
-                  fill: "hsl(var(--muted-foreground))",
+                  fill: "rgb(var(--muted-foreground))",
                   fontSize: 11,
                 }}
                 axisLine={{
-                  stroke: "hsl(var(--border))",
+                  stroke: "rgb(var(--border))",
                 }}
                 tickLine={false}
               />
 
               <Tooltip
                 cursor={{
-                  fill: "hsl(var(--primary) / 0.08)",
+                  fill: "rgb(var(--primary) / 0.08)",
                 }}
                 contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
+                  backgroundColor: "rgb(var(--card))",
+                  border: "1px solid rgb(var(--border))",
                   borderRadius: "12px",
-                  color: "hsl(var(--foreground))",
+                  color: "rgb(var(--foreground))",
                 }}
                 labelStyle={{
-                  color: "hsl(var(--foreground))",
+                  color: "rgb(var(--foreground))",
                   fontWeight: 600,
                 }}
                 itemStyle={{
-                  color: "hsl(var(--primary))",
+                  color: "rgb(var(--primary))",
                 }}
                 formatter={(value, name, props) => {
                   if (name === "Missing") {
@@ -144,7 +144,7 @@ export default function MissingValuesChart({
               <Bar
                 dataKey="missing"
                 name="Missing"
-                fill="hsl(var(--primary))"
+                fill="rgb(var(--primary))"
                 radius={[0, 6, 6, 0]}
                 barSize={18}
               />
