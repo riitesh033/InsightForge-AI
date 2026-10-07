@@ -272,7 +272,10 @@ export async function getDatasetExplanation(
   datasetId: number
 ): Promise<DatasetExplanation> {
   const response = await api.get<DatasetExplanation>(
-    `/analysis/${datasetId}/explanation`
+    `/analysis/${datasetId}/explanation`,
+    {
+      timeout: 60000,
+    }
   );
   return response.data;
 }
