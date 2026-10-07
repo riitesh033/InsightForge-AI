@@ -14,7 +14,7 @@ from app.models.subscription import (
     Subscription,
     SubscriptionStatus,
 )
-from app.services.entitlements import get_usage, resolve_plan
+from app.services.entitlements import get_active_subscription, get_usage, resolve_plan
 from app.models.user import User
 from app.models.subscription import Invoice
 from app.services.payment import payment_service
@@ -60,9 +60,7 @@ async def create_checkout(
     if plan_type not in {"pro", "business"}:
         raise HTTPException(status_code=400, detail="Invalid plan type")
 
-    current_subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id
-    ).first()
+    current_subscription = get_active_subscription(db, current_user.id)
     if (
         current_subscription is not None
         and current_subscription.plan != PlanType.FREE
@@ -116,9 +114,14 @@ def get_subscription(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id
-    ).first()
+    subscription = get_active_subscription(db, current_user.id)
+    if subscription is None:
+        subscription = (
+            db.query(Subscription)
+            .filter(Subscription.user_id == current_user.id)
+            .order_by(Subscription.id.desc())
+            .first()
+        )
     plan_key, plan_info = resolve_plan(db, current_user.id)
 
     if subscription is None:
@@ -174,10 +177,8 @@ def cancel_subscription(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id
-    ).first()
-    if subscription is None or subscription.plan == PlanType.FREE:
+    subscription = get_active_subscription(db, current_user.id)
+    if subscription is None:
         raise HTTPException(
             status_code=400,
             detail="No active subscription to cancel",
