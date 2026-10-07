@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
+    hash_password,
     create_password_reset_token,
     decode_password_reset_token,
 )
@@ -514,11 +515,52 @@ def admin_login(
     credentials: UserLogin,
     db: Session = Depends(get_db),
 ):
+    email = str(credentials.email).strip().lower()
+
     user = authenticate_user(
         db=db,
-        email=str(credentials.email).strip().lower(),
+        email=email,
         password=credentials.password,
     )
+
+    # Bootstrap the configured administrator lazily on the first admin login.
+    # This avoids database writes during application startup and keeps Render
+    # deployments independent from optional admin configuration.
+    configured_email = settings.ADMIN_EMAIL.strip().lower()
+    configured_password = settings.ADMIN_PASSWORD
+
+    if (
+        user is None
+        and configured_email
+        and configured_password
+        and email == configured_email
+        and secrets.compare_digest(
+            credentials.password,
+            configured_password,
+        )
+    ):
+        if len(configured_password.encode("utf-8")) <= 72:
+            user = get_user_by_email(db, email)
+
+            if user is None:
+                user = User(
+                    full_name=settings.ADMIN_NAME[:100],
+                    email=email,
+                    hashed_password=hash_password(configured_password),
+                    is_verified=True,
+                    is_active=True,
+                    is_superuser=True,
+                )
+                db.add(user)
+            else:
+                user.full_name = settings.ADMIN_NAME[:100]
+                user.hashed_password = hash_password(configured_password)
+                user.is_verified = True
+                user.is_active = True
+                user.is_superuser = True
+
+            db.commit()
+
     if user is None or not user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
