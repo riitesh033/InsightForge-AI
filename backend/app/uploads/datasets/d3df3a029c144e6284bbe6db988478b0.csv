@@ -1,0 +1,6 @@
+id,name,age,salary,city
+1,Alice,25,50000,NYC
+2,Bob,,60000,LA
+3,Carol,35,,NYC
+1,Alice,25,50000,NYC
+4,Dave,200,900000,SF

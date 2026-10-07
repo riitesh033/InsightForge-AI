@@ -191,7 +191,7 @@ async def persist_proof(upload: UploadFile) -> tuple[str, str, int, str]:
         raise HTTPException(status_code=400, detail="The proof document is empty.")
     if len(data) > MAX_PROOF_SIZE:
         raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Proof documents must be 10 MB or smaller.",
         )
     extension = _validate_proof(original_name, content_type, data)
