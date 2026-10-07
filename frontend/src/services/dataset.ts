@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import axios from "axios";
 import api from "@/lib/api";
 
 function getSupabaseConfig() {
@@ -16,18 +16,6 @@ function getSupabaseConfig() {
     supabaseAnonKey,
     supabaseBucket: supabaseBucket || "insightforge-files",
   };
-}
-
-function getSupabaseClient() {
-  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Supabase upload is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment."
-    );
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey);
 }
 
 // =========================
@@ -245,34 +233,72 @@ async function uploadDatasetMultipart(file: File): Promise<Dataset> {
 }
 
 
-export async function uploadDataset(
-  file: File
+export type DatasetUploadProgress = (progress: number) => void;
+
+async function uploadDatasetMultipart(
+  file: File,
+  onProgress?: DatasetUploadProgress
 ): Promise<Dataset> {
-  /*
-   * The backend is the source of truth for the chunk size: it already
-   * clamps the configured value below Supabase's per-object limit and
-   * computes the upload session's expected chunk count from it. Using the
-   * server value verbatim keeps the chunk indices and total count in
-   * agreement with the session, so finalization cannot reject the upload.
-   */
-  const DEFAULT_CHUNK_SIZE =
-    40 * 1024 * 1024;
-  const { supabaseUrl, supabaseAnonKey, supabaseBucket } =
-    getSupabaseConfig();
+  const formData = new FormData();
+  formData.append("file", file);
 
-  // Browser-side Supabase credentials are only required for the optimized
-  // direct-to-storage upload. If they are intentionally omitted (for local
-  // development or a backend-local-storage deployment), use the supported
-  // multipart endpoint instead of failing before the request reaches the API.
+  const response = await api.post<Dataset>(
+    "/datasets/upload",
+    formData,
+    {
+      onUploadProgress: (event) => {
+        if (event.total) {
+          onProgress?.(
+            Math.min(
+              95,
+              Math.round((event.loaded / event.total) * 95)
+            )
+          );
+        }
+      },
+    }
+  );
+
+  return response.data;
+}
+
+async function uploadSignedChunk(
+  signedUrl: string,
+  chunk: Blob,
+  onProgress: (loaded: number) => void
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("cacheControl", "3600");
+  formData.append("", chunk);
+
+  await axios.put(signedUrl, formData, {
+    headers: {
+      "x-upsert": "false",
+    },
+    onUploadProgress: (event) => {
+      onProgress(
+        Math.min(
+          chunk.size,
+          event.total
+            ? Math.round((event.loaded / event.total) * chunk.size)
+            : event.loaded
+        )
+      );
+    },
+  });
+}
+
+export async function uploadDataset(
+  file: File,
+  onProgress?: DatasetUploadProgress
+): Promise<Dataset> {
+  const DEFAULT_CHUNK_SIZE = 40 * 1024 * 1024;
+  const UPLOAD_CONCURRENCY = 2;
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
+
   if (!supabaseUrl || !supabaseAnonKey) {
-    return uploadDatasetMultipart(file);
+    return uploadDatasetMultipart(file, onProgress);
   }
-
-  const supabase = getSupabaseClient();
-
-  // ---------------------------------
-  // Step 1: Initialize upload
-  // ---------------------------------
 
   const initResponse =
     await api.post<{
@@ -281,13 +307,10 @@ export async function uploadDataset(
       file_type: string;
       file_size: number;
       chunk_size: number;
-    }>(
-      "/datasets/upload/init",
-      {
-        filename: file.name,
-        file_size: file.size,
-      }
-    );
+    }>("/datasets/upload/init", {
+      filename: file.name,
+      file_size: file.size,
+    });
 
   const {
     storage_id,
@@ -300,100 +323,92 @@ export async function uploadDataset(
       : DEFAULT_CHUNK_SIZE;
 
   const totalChunks =
-    Math.ceil(
-      file.size / chunkSize
+    Math.ceil(file.size / chunkSize);
+
+  const uploadedBytes = new Array<number>(
+    totalChunks
+  ).fill(0);
+
+  const updateProgress = () => {
+    const totalUploaded = uploadedBytes.reduce(
+      (sum, bytes) => sum + bytes,
+      0
     );
 
-  // ---------------------------------
-  // Step 2: Upload chunks
-  // ---------------------------------
+    onProgress?.(
+      Math.min(
+        95,
+        Math.floor(
+          (totalUploaded / file.size) * 95
+        )
+      )
+    );
+  };
 
-  for (
-    let chunkIndex = 0;
-    chunkIndex < totalChunks;
-    chunkIndex += 1
-  ) {
-    const start =
-      chunkIndex * chunkSize;
-
+  const uploadChunk = async (
+    chunkIndex: number
+  ): Promise<void> => {
+    const start = chunkIndex * chunkSize;
     const end = Math.min(
       start + chunkSize,
       file.size
     );
+    const chunk = file.slice(start, end);
 
-    const chunk = file.slice(
-      start,
-      end
-    );
-
-    // Request a signed upload URL
-    // for this specific chunk.
     const urlResponse =
       await api.post<{
         storage_id: string;
         chunk_index: number;
         path: string;
         token: string;
+        signed_url: string;
       }>(
         "/datasets/upload/chunk-url",
         null,
         {
           params: {
             storage_id,
-            chunk_index:
-              chunkIndex,
+            chunk_index: chunkIndex,
           },
         }
       );
 
-    const {
-      path,
-      token,
-    } = urlResponse.data;
+    await uploadSignedChunk(
+      urlResponse.data.signed_url,
+      chunk,
+      (loaded) => {
+        uploadedBytes[chunkIndex] = loaded;
+        updateProgress();
+      }
+    );
 
-    // Upload directly from the browser
-    // to Supabase Storage.
-    const {
-      error,
-    } =
-      await supabase.storage
-        .from(
-          supabaseBucket
-        )
-        .uploadToSignedUrl(
-          path,
-          token,
-          chunk
-        );
+    uploadedBytes[chunkIndex] = chunk.size;
+    updateProgress();
+  };
 
-    if (error) {
-      throw new Error(
-        `Failed to upload chunk ${
-          chunkIndex + 1
-        } of ${totalChunks}: ${
-          error.message
-        }`
-      );
-    }
+  // Upload two different chunks at once. Each chunk has its own signed
+  // URL, so this reduces total upload time without risking object conflicts.
+  for (
+    let batchStart = 0;
+    batchStart < totalChunks;
+    batchStart += UPLOAD_CONCURRENCY
+  ) {
+    const batchEnd = Math.min(
+      batchStart + UPLOAD_CONCURRENCY,
+      totalChunks
+    );
+
+    await Promise.all(
+      Array.from(
+        { length: batchEnd - batchStart },
+        (_, offset) =>
+          uploadChunk(batchStart + offset)
+      )
+    );
   }
 
-  // ---------------------------------
-  // Step 3: Finalize upload
-  // ---------------------------------
+  onProgress?.(95);
 
-  /*
-   * Tell the backend that all chunks have
-   * been uploaded.
-   *
-   * The backend will:
-   * 1. Create the Supabase manifest.
-   * 2. Reconstruct the chunks temporarily.
-   * 3. Analyze the dataset.
-   * 4. Create the Dataset database record.
-   * 5. Create the Analysis database record.
-   * 6. Keep the original dataset in Supabase.
-   * 7. Return the completed Dataset object.
-   */
   const finalizeResponse =
     await api.post<Dataset>(
       "/datasets/upload/finalize",
@@ -401,16 +416,14 @@ export async function uploadDataset(
       {
         params: {
           storage_id,
-          original_filename:
-            file.name,
-          file_size:
-            file.size,
-          total_chunks:
-            totalChunks,
+          original_filename: file.name,
+          file_size: file.size,
+          total_chunks: totalChunks,
         },
       }
     );
 
+  onProgress?.(100);
   return finalizeResponse.data;
 }
 
