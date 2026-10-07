@@ -145,7 +145,7 @@ class PaymentService:
         if plan_type not in {"pro", "business"}:
             raise HTTPException(status_code=400, detail="Invalid plan type")
 
-        stripe = self._require_stripe(webhook=True)
+        stripe = self._require_stripe()
         price_id = (
             self.stripe_price_id_pro
             if plan_type == "pro"
