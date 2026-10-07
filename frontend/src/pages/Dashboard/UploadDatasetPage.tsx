@@ -181,7 +181,12 @@ export default function UploadDatasetPage() {
 
       console.log("Starting upload for file:", selectedFile.name, selectedFile.size);
 
-      const response = await uploadDataset(selectedFile);
+      const response = await uploadDataset(
+        selectedFile,
+        (nextProgress) => {
+          setProgress(nextProgress);
+        }
+      );
 
       console.log("UPLOAD RESPONSE:", response);
 
@@ -375,7 +380,9 @@ export default function UploadDatasetPage() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
-                      Uploading dataset...
+                      {progress >= 95
+                        ? "Processing dataset..."
+                        : "Uploading dataset..."}
                     </span>
 
                     <span>
