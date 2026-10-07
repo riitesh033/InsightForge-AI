@@ -32,6 +32,7 @@ export default function StudentVerificationPage() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -94,10 +95,15 @@ export default function StudentVerificationPage() {
     }
   }
 
-  async function handleWithdraw() {
-    if (!application || !window.confirm("Withdraw this pending application?")) {
-      return;
-    }
+  function handleWithdraw() {
+    if (!application) return;
+    setWithdrawConfirmOpen(true);
+  }
+
+  async function confirmWithdraw() {
+    if (!application) return;
+
+    setWithdrawConfirmOpen(false);
     setWithdrawing(true);
     setError(null);
     try {
@@ -287,6 +293,52 @@ export default function StudentVerificationPage() {
           )}
         </>
       )}
+
+      {withdrawConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !withdrawing) {
+              setWithdrawConfirmOpen(false);
+            }
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="withdraw-confirm-title"
+            aria-describedby="withdraw-confirm-description"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-foreground shadow-2xl"
+          >
+            <h2 id="withdraw-confirm-title" className="text-lg font-semibold">
+              Withdraw application?
+            </h2>
+            <p id="withdraw-confirm-description" className="mt-2 text-sm text-muted-foreground">
+              Withdraw this pending application? Your uploaded proof document will also be deleted.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={withdrawing}
+                onClick={() => setWithdrawConfirmOpen(false)}
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={withdrawing}
+                onClick={() => void confirmWithdraw()}
+                className="rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {withdrawing ? "Withdrawing..." : "Withdraw"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
