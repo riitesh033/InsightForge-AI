@@ -82,22 +82,15 @@ export interface CleaningPreview {
   rows_before: number;
   rows_after: number;
   columns: number;
-
   empty_strings_replaced: number;
   whitespace_cleaned: number;
-
   missing_values_before: number;
   missing_values_after: number;
   missing_values_filled: number;
-
   duplicates_removed: number;
-
   outliers_detected: Record<string, number>;
-
   changes: CleaningChange[];
-
   warnings: string[];
-
   cleaned_filename?: string;
   cleaned_file_path?: string;
 }
@@ -143,9 +136,7 @@ function downloadBlob(
   link.download = filename;
 
   document.body.appendChild(link);
-
   link.click();
-
   link.remove();
 
   window.URL.revokeObjectURL(url);
@@ -244,8 +235,7 @@ async function uploadDatasetMultipart(
           const progress = Math.min(
             95,
             Math.round(
-              (event.loaded / event.total) *
-                95
+              (event.loaded / event.total) * 95
             )
           );
 
@@ -293,8 +283,7 @@ async function uploadSignedChunk(
         const loaded =
           event.total
             ? Math.round(
-                (event.loaded /
-                  event.total) *
+                (event.loaded / event.total) *
                   chunk.size
               )
             : event.loaded;
@@ -318,7 +307,7 @@ async function uploadSignedChunk(
  *
  * Progress:
  *
- * 0-95%   = actual browser upload progress
+ * 0-95%  = actual browser upload progress
  * 95-100% = backend finalization/processing
  */
 export async function uploadDataset(
@@ -403,8 +392,7 @@ export async function uploadDataset(
 
     const progress =
       Math.floor(
-        (totalUploaded /
-          file.size) *
+        (totalUploaded / file.size) *
           95
       );
 
@@ -424,8 +412,7 @@ export async function uploadDataset(
     chunkIndex: number
   ): Promise<void> => {
     const start =
-      chunkIndex *
-      chunkSize;
+      chunkIndex * chunkSize;
 
     const end =
       Math.min(
@@ -710,7 +697,6 @@ export async function downloadAnalysisReport(
   );
 
   link.click();
-
   link.remove();
 
   window.URL.revokeObjectURL(
