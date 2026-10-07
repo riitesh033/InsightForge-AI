@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Optional production admin bootstrap. Keep these values in Render
+    # environment variables; never hard-code administrator credentials.
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+    ADMIN_NAME: str = "InsightForge Administrator"
+
     # One or more browser origins, comma separated.
     # Example: https://app.example.com,https://staging.example.com
     FRONTEND_URL: str = "http://localhost:5173"
