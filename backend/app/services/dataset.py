@@ -1,3 +1,4 @@
+import gc
 import logging
 import shutil
 from pathlib import Path
@@ -39,6 +40,86 @@ ALLOWED_EXTENSIONS = {
     ".xlsx",
     ".xls",
 }
+
+# Render's free web service has 512 MB RAM. A large CSV can easily exceed
+# that when pandas materializes the whole file and the analysis pipeline
+# creates additional temporary DataFrames. Keep expensive analysis bounded
+# for large CSVs while still scanning the complete file in small chunks.
+LARGE_CSV_BYTES = 80 * 1024 * 1024
+ANALYSIS_SAMPLE_ROWS = 25_000
+ANALYSIS_CHUNK_ROWS = 10_000
+
+
+def _read_dataset_for_analysis(
+    save_path: Path,
+    extension: str,
+) -> tuple[pd.DataFrame, int, bool]:
+    """Load a dataset without materializing a large CSV in RAM.
+
+    Returns the DataFrame used for analysis, the exact dataset row count, and
+    whether the analysis DataFrame is a bounded sample. Small datasets keep
+    the existing full-data behavior. Large CSVs are parsed in chunks and only
+    the first bounded sample is retained for the expensive analysis steps.
+    """
+
+    if extension != ".csv" or save_path.stat().st_size <= LARGE_CSV_BYTES:
+        dataframe = (
+            pd.read_csv(save_path)
+            if extension == ".csv"
+            else pd.read_excel(save_path)
+        )
+        return dataframe, len(dataframe), False
+
+    logger.info(
+        "Large CSV detected (%s bytes); using chunked analysis with "
+        "a %s-row bounded sample.",
+        save_path.stat().st_size,
+        ANALYSIS_SAMPLE_ROWS,
+    )
+
+    sample_parts: list[pd.DataFrame] = []
+    sample_rows = 0
+    total_rows = 0
+
+    try:
+        for chunk in pd.read_csv(
+            save_path,
+            chunksize=ANALYSIS_CHUNK_ROWS,
+            low_memory=True,
+        ):
+            total_rows += len(chunk)
+
+            if sample_rows < ANALYSIS_SAMPLE_ROWS:
+                take = min(
+                    ANALYSIS_SAMPLE_ROWS - sample_rows,
+                    len(chunk),
+                )
+                if take:
+                    sample_parts.append(
+                        chunk.iloc[:take].copy()
+                    )
+                    sample_rows += take
+
+            # Release each parsed chunk as soon as it has been accounted for.
+            del chunk
+
+        if not sample_parts:
+            raise ValueError("Dataset is empty.")
+
+        dataframe = pd.concat(
+            sample_parts,
+            ignore_index=True,
+        )
+        del sample_parts
+        gc.collect()
+
+        return dataframe, total_rows, True
+
+    except Exception:
+        logger.exception(
+            "Failed to read large CSV in bounded chunks."
+        )
+        raise
 
 
 def make_json_serializable(obj):
@@ -293,19 +374,17 @@ def upload_dataset(
         # --------------------------------------------------------
 
         logger.info(
-            "Reading dataset with pandas: %s",
+            "Reading dataset with a memory-safe analysis loader: %s",
             original_filename,
         )
 
         try:
-            if extension == ".csv":
-                dataframe = pd.read_csv(
-                    save_path
+            dataframe, dataset_row_count, analysis_sampled = (
+                _read_dataset_for_analysis(
+                    save_path,
+                    extension,
                 )
-            else:
-                dataframe = pd.read_excel(
-                    save_path
-                )
+            )
 
         except Exception:
             logger.exception(
@@ -318,9 +397,10 @@ def upload_dataset(
             ) from None
 
         logger.info(
-            "Dataset loaded: rows=%s columns=%s",
-            len(dataframe),
+            "Dataset loaded for analysis: rows=%s columns=%s sampled=%s",
+            dataset_row_count,
             len(dataframe.columns),
+            analysis_sampled,
         )
 
         # --------------------------------------------------------
@@ -339,6 +419,14 @@ def upload_dataset(
             analysis_data = make_json_serializable(
                 analysis_data
             )
+
+            # Preserve the exact dataset size even when large CSV analysis
+            # uses a bounded sample to stay below Render's memory limit.
+            analysis_data["summary"]["rows"] = dataset_row_count
+            analysis_data["summary"]["columns"] = len(dataframe.columns)
+            analysis_data["summary"]["analysis_sampled"] = analysis_sampled
+            if analysis_sampled:
+                analysis_data["summary"]["analysis_sample_rows"] = len(dataframe)
 
             logger.info(
                 "Starting professional dataset analysis."
@@ -407,7 +495,7 @@ def upload_dataset(
             ),
             file_size=file_size,
             file_path=dataset_file_path,
-            rows=len(dataframe),
+            rows=dataset_row_count,
             columns=len(dataframe.columns),
             owner_id=owner_id,
         )
@@ -476,6 +564,12 @@ def upload_dataset(
 
         db.add(dataset)
         db.add(analysis)
+
+        # The analysis objects are now JSON-safe Python values. Release the
+        # bounded DataFrame before committing so the peak memory does not
+        # overlap unnecessarily with the ORM transaction.
+        del dataframe
+        gc.collect()
 
         db.commit()
         db.refresh(dataset)
