@@ -2071,11 +2071,16 @@ def analyze_business_opportunities(
 # ============================================================
 
 def generate_professional_analysis(
-    df: pd.DataFrame
+    df: pd.DataFrame,
+    *,
+    dataset_row_count: int | None = None,
+    analysis_sampled: bool = False,
 ) -> dict:
     """
-    Main function that generates the complete
-    professional analysis.
+    Main function that generates the complete professional analysis.
+
+    ``dataset_row_count`` keeps the reported dataset size accurate when a
+    bounded sample is used for large files.
     """
 
     logger.debug("\n========================================")
@@ -2099,6 +2104,12 @@ def generate_professional_analysis(
     # --------------------------------------------------------
     # Step 1
     # --------------------------------------------------------
+
+    reported_row_count = (
+        int(dataset_row_count)
+        if dataset_row_count is not None
+        else len(df)
+    )
 
     logger.debug(
         "Step 1: Detecting column types..."
@@ -2298,7 +2309,7 @@ def generate_professional_analysis(
 
     summary_parts.append(
         f"The dataset contains "
-        f"{len(df):,} records across "
+        f"{reported_row_count:,} records across "
         f"{len(df.columns)} variables."
     )
 
@@ -2374,7 +2385,7 @@ def generate_professional_analysis(
         "executive_summary": executive_summary,
 
         "dataset_overview": {
-            "rows": int(len(df)),
+            "rows": reported_row_count,
             "columns": int(len(df.columns)),
             "memory_bytes": int(
                 df.memory_usage(
