@@ -46,8 +46,8 @@ ALLOWED_EXTENSIONS = {
 # creates additional temporary DataFrames. Keep expensive analysis bounded
 # for large CSVs while still scanning the complete file in small chunks.
 LARGE_CSV_BYTES = 80 * 1024 * 1024
-ANALYSIS_SAMPLE_ROWS = 25_000
-ANALYSIS_CHUNK_ROWS = 10_000
+ANALYSIS_SAMPLE_ROWS = 10_000
+ANALYSIS_CHUNK_ROWS = 5_000
 
 
 def _read_dataset_for_analysis(
