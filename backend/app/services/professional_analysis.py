@@ -2393,6 +2393,8 @@ def generate_professional_analysis(
                 ).sum()
             ),
             "column_types": column_types,
+            "analysis_sampled": analysis_sampled,
+            "analysis_sample_rows": int(len(df)) if analysis_sampled else reported_row_count,
         },
 
         "statistics": statistics,
@@ -2440,6 +2442,10 @@ def generate_professional_analysis(
                 (
                     "Small sample sizes may limit "
                     "statistical reliability."
+                ),
+                (
+                    "Large datasets may use a bounded analysis "
+                    "sample to control memory usage."
                 ),
                 (
                     "Automated column-name detection "
