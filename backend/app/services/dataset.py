@@ -434,7 +434,9 @@ def upload_dataset(
 
             professional_analysis = (
                 generate_professional_analysis(
-                    dataframe
+                    dataframe,
+                    dataset_row_count=dataset_row_count,
+                    analysis_sampled=analysis_sampled,
                 )
             )
 
