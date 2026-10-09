@@ -210,17 +210,19 @@ def cancel_subscription(
         ) from None
 
     # Only update local access after Stripe confirms the cancellation call.
+    canceled_at = datetime.now(UTC).replace(tzinfo=None)
     subscription.status = SubscriptionStatus.CANCELED
     subscription.plan = PlanType.FREE
     subscription.cancel_at_period_end = False
-    subscription.canceled_at = datetime.now(UTC).replace(tzinfo=None)
+    subscription.canceled_at = canceled_at
+    subscription.current_period_end = canceled_at
     db.commit()
 
     return {
         "success": True,
         "status": "canceled",
         "message": "Your subscription has been canceled immediately. Your account is now on the Free plan.",
-        "end_date": datetime.now(UTC).isoformat(),
+        "end_date": canceled_at.isoformat(),
     }
 
 
