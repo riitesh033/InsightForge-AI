@@ -63,7 +63,11 @@ def install_stripe(
     signature_error: Exception | None = None,
     create_result: dict | None = None,
     modified: list | None = None,
+    invoices: list | None = None,
+    refunds: list | None = None,
 ) -> SimpleNamespace:
+    modified = modified if modified is not None else []
+    refunds = refunds if refunds is not None else []
     monkeypatch.setattr(payment_service, "is_configured", True)
     monkeypatch.setattr(payment_service, "stripe_webhook_secret", "whsec_unit_test")
     monkeypatch.setattr(payment_service, "stripe_price_id_pro", "price_pro")
@@ -95,6 +99,10 @@ def install_stripe(
         modified.append((subscription_id, {"cancel": True}))
         return {"id": subscription_id, "status": "canceled"}
 
+    def create_refund(**kwargs):
+        refunds.append(kwargs)
+        return {"id": "re_test", "status": "succeeded"}
+
     fake = SimpleNamespace(
         StripeError=RuntimeError,
         Webhook=SimpleNamespace(construct_event=construct_event),
@@ -109,6 +117,10 @@ def install_stripe(
             modify=modify_subscription,
             cancel=cancel_subscription,
         ),
+        Invoice=SimpleNamespace(
+            list=lambda **kwargs: {"data": invoices or []},
+        ),
+        Refund=SimpleNamespace(create=create_refund),
     )
     monkeypatch.setattr(payment_service, "_get_stripe_client", lambda: fake)
     return fake
@@ -709,6 +721,48 @@ def test_cancel_subscription_cancels_stripe_and_updates_local_plan_immediately(
     assert subscription.plan == PlanType.FREE
     assert subscription.cancel_at_period_end is False
     assert subscription.canceled_at is not None
+
+
+def test_cancel_subscription_refunds_70_percent_of_latest_paid_invoice(
+    client, auth_headers, user_dict, db, monkeypatch
+):
+    user = db.query(User).filter_by(email=user_dict["email"]).one()
+    subscription = Subscription(
+        user_id=user.id,
+        plan=PlanType.PRO,
+        status=SubscriptionStatus.ACTIVE,
+        provider_customer_id="cus_test",
+        provider_subscription_id="sub_test",
+        cancel_at_period_end=False,
+    )
+    db.add(subscription)
+    db.commit()
+
+    modified = []
+    refunds = []
+    install_stripe(
+        monkeypatch,
+        modified=modified,
+        invoices=[{
+            "id": "in_paid",
+            "amount_paid": 2900,
+            "currency": "usd",
+            "payment_intent": "pi_paid",
+        }],
+        refunds=refunds,
+    )
+
+    response = client.post(f"{API}/payments/cancel", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "canceled"
+    assert response.json()["refund_amount"] == 20.3
+    assert response.json()["refund_status"] == "succeeded"
+    assert modified == [("sub_test", {"cancel": True})]
+    assert refunds[0]["payment_intent"] == "pi_paid"
+    assert refunds[0]["amount"] == 2030
+    assert subscription.status == SubscriptionStatus.CANCELED
+    assert subscription.plan == PlanType.FREE
 
 
 def test_cancel_without_provider_subscription_is_not_reported_as_success(
