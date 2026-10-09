@@ -173,43 +173,48 @@ def get_subscription(
 
 
 @router.post("/cancel")
-def cancel_subscription(
+async def cancel_subscription(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     subscription = get_active_subscription(db, current_user.id)
-    if subscription is None:
-        raise HTTPException(
-            status_code=400,
-            detail="No active subscription to cancel",
-        )
-    if subscription.status in {
+    if subscription is None or subscription.status in {
         SubscriptionStatus.CANCELED,
         SubscriptionStatus.INCOMPLETE_EXPIRED,
     }:
-        raise HTTPException(
-            status_code=400,
-            detail="There is no active subscription to cancel",
-        )
+        raise HTTPException(status_code=400, detail="There is no active subscription to cancel")
     if not subscription.provider_subscription_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Subscription cancellation is not available.",
-        )
+        raise HTTPException(status_code=503, detail="Subscription cancellation is not available.")
 
     stripe = payment_service._require_stripe()
+    stripe_id = subscription.provider_subscription_id
+    invoice = None
+    amount_minor = 0
+    currency = "USD"
+    refund_status = "not_available"
+    refund_id = None
+
     try:
-        # Cancel the Stripe subscription immediately, rather than scheduling
-        # cancellation at the end of the billing period.
-        stripe.Subscription.cancel(subscription.provider_subscription_id)
+        invoices = stripe.Invoice.list(subscription=stripe_id, status="paid", limit=10)
+        for item in (payment_service._value(invoices, "data", []) or []):
+            paid = int(payment_service._value(item, "amount_paid", 0) or 0)
+            if paid > 0 and payment_service._value(item, "payment_intent"):
+                invoice = item
+                amount_minor = int(paid * 0.70)
+                currency = str(payment_service._value(item, "currency", "usd")).upper()
+                break
+    except Exception as error:
+        logger.warning("Paid invoice lookup failed (%s)", type(error).__name__)
+
+    try:
+        stripe.Subscription.cancel(stripe_id)
     except Exception as error:
         logger.error("Stripe cancellation failed (%s)", type(error).__name__)
         raise HTTPException(
             status_code=502,
-            detail="Failed to cancel the subscription with Stripe. No local changes were made.",
+            detail="Stripe could not cancel this subscription. No local changes were made.",
         ) from None
 
-    # Only update local access after Stripe confirms the cancellation call.
     canceled_at = datetime.now(UTC).replace(tzinfo=None)
     subscription.status = SubscriptionStatus.CANCELED
     subscription.plan = PlanType.FREE
@@ -218,13 +223,57 @@ def cancel_subscription(
     subscription.current_period_end = canceled_at
     db.commit()
 
+    if invoice is not None and amount_minor > 0:
+        payment_intent = payment_service._identifier(
+            payment_service._value(invoice, "payment_intent")
+        )
+        if payment_intent:
+            try:
+                refund = stripe.Refund.create(
+                    payment_intent=payment_intent,
+                    amount=amount_minor,
+                    idempotency_key=f"cancel-refund-70-{stripe_id}",
+                )
+                refund_id = payment_service._identifier(refund)
+                refund_status = str(payment_service._value(refund, "status", "pending"))
+            except Exception as error:
+                logger.error("Stripe refund request failed (%s)", type(error).__name__)
+                refund_status = "failed"
+
+    from app.services.email import email_service
+
+    email_refund_status = refund_status
+    if refund_status not in {"pending", "succeeded", "requires_action"}:
+        email_refund_status = "failed" if invoice is not None else "not_available"
+    try:
+        await email_service.send_subscription_cancellation_email(
+            to_email=current_user.email,
+            user_name=current_user.full_name,
+            plan_type="paid",
+            refund_amount=amount_minor / 100,
+            currency=currency,
+            refund_status=email_refund_status,
+        )
+    except Exception as error:
+        logger.error("Cancellation email failed (%s)", type(error).__name__)
+
+    refund_requested = refund_status in {"pending", "succeeded", "requires_action"}
+    message = (
+        f"Subscription canceled. A 70% refund of {currency} {amount_minor / 100:.2f} "
+        "has been submitted; your bank may take several business days to post it."
+        if refund_requested
+        else "Subscription canceled. An automatic 70% refund could not be confirmed; please contact support."
+    )
     return {
         "success": True,
         "status": "canceled",
-        "message": "Your subscription has been canceled immediately. Your account is now on the Free plan.",
+        "message": message,
+        "refund_status": refund_status,
+        "refund_amount": amount_minor / 100 if refund_requested else 0,
+        "refund_currency": currency,
+        "refund_id": refund_id,
         "end_date": canceled_at.isoformat(),
     }
-
 
 @router.get("/history")
 def get_payment_history(
