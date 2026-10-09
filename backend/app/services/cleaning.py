@@ -115,7 +115,9 @@ def _clean_large_csv(
             duplicates = len(keep_mask) - sum(keep_mask)
             if duplicates:
                 cleaned = cleaned.loc[keep_mask].reset_index(drop=True)
-            summary["duplicates_removed"] += duplicates
+            summary["duplicates_removed"] += (
+                part["duplicates_removed"] + duplicates
+            )
             summary["rows_after"] += len(cleaned)
             summary["empty_strings_replaced"] += part["empty_strings_replaced"]
             summary["whitespace_cleaned"] += part["whitespace_cleaned"]
@@ -571,7 +573,12 @@ def preview_cleaning(
         ):
             summary = _clean_large_csv(dataset, local_path, apply=False)
         else:
-            df, _, _ = load_dataset_file(dataset)
+            if dataset.file_type.lower() == "csv":
+                df = pd.read_csv(local_path)
+            elif dataset.file_type.lower() in {"xlsx", "xls"}:
+                df = pd.read_excel(local_path)
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported dataset file type.")
             try:
                 _, summary = _clean_dataframe(df, copy=False, preview_only=True)
             finally:
@@ -702,7 +709,12 @@ def apply_cleaning(
             )
             cleaned_df = None
         else:
-            df, _, _ = load_dataset_file(dataset)
+            if dataset.file_type.lower() == "csv":
+                df = pd.read_csv(original_path)
+            elif dataset.file_type.lower() in {"xlsx", "xls"}:
+                df = pd.read_excel(original_path)
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported dataset file type.")
             cleaned_df, summary = _clean_dataframe(df)
 
         # --------------------------------------------------------
