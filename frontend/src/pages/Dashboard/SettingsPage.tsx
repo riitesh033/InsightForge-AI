@@ -47,6 +47,9 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Profile picture state
@@ -414,35 +417,44 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium text-foreground">Current Password</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
-              className="w-full rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
-            />
+            <div className="flex gap-2">
+              <input
+                type={showCurrentPassword ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
+              />
+              <button type="button" onClick={() => setShowCurrentPassword((value) => !value)} className="rounded-lg border border-border px-3 text-sm text-foreground">{showCurrentPassword ? "Hide" : "Show"}</button>
+            </div>
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-foreground">New Password</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              className="w-full rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
-            />
+            <div className="flex gap-2">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
+              />
+              <button type="button" onClick={() => setShowNewPassword((value) => !value)} className="rounded-lg border border-border px-3 text-sm text-foreground">{showNewPassword ? "Hide" : "Show"}</button>
+            </div>
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-foreground">Confirm New Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-              className="w-full rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
-            />
+            <div className="flex gap-2">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
+              />
+              <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} className="rounded-lg border border-border px-3 text-sm text-foreground">{showConfirmPassword ? "Hide" : "Show"}</button>
+            </div>
           </div>
         </div>
 
