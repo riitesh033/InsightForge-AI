@@ -1,4 +1,6 @@
+import gc
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -21,6 +23,153 @@ from app.services.dataset_storage import (
 from app.utils.files import create_temporary_file_path
 
 logger = logging.getLogger(__name__)
+
+
+# Keep CSV cleaning bounded on Render Free (512 MB RAM). Excel files retain
+# the existing path because pandas' Excel readers do not support chunking.
+LARGE_CSV_BYTES = 80 * 1024 * 1024
+CLEANING_CHUNK_ROWS = 5_000
+
+
+def _clean_large_csv(
+    dataset: Dataset,
+    file_path: Path,
+    *,
+    apply: bool,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Preview or clean a large CSV one chunk at a time.
+
+    Duplicate fingerprints are tracked in a temporary SQLite database, not
+    a Python set, so memory use stays bounded even when there are many rows.
+    Median/mode filling and IQR outlier detection are performed per chunk;
+    this is a memory-safe approximation for very large files.
+    """
+    summary: dict[str, Any] = {
+        "rows_before": 0,
+        "rows_after": 0,
+        "columns": 0,
+        "empty_strings_replaced": 0,
+        "whitespace_cleaned": 0,
+        "missing_values_before": 0,
+        "missing_values_after": 0,
+        "missing_values_filled": 0,
+        "duplicates_removed": 0,
+        "outliers_detected": {},
+        "changes": [],
+        "warnings": [
+            "Large CSV memory-safe mode processes chunks independently; "
+            "median/mode replacements and outlier thresholds are estimated "
+            "per chunk rather than globally."
+        ],
+        "memory_safe_chunked": True,
+        "chunk_rows": CLEANING_CHUNK_ROWS,
+    }
+
+    seen_path = create_temporary_file_path(
+        prefix="insightforge_clean_seen_",
+        suffix=".sqlite3",
+    )
+    connection = sqlite3.connect(str(seen_path))
+    connection.execute(
+        "CREATE TABLE seen_rows (fingerprint TEXT PRIMARY KEY)"
+    )
+    first_chunk = True
+
+    try:
+        if apply:
+            if output_path is None:
+                raise ValueError("output_path is required when applying cleaning")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.unlink(missing_ok=True)
+
+        for chunk in pd.read_csv(
+            file_path,
+            chunksize=CLEANING_CHUNK_ROWS,
+            low_memory=True,
+        ):
+            summary["rows_before"] += len(chunk)
+            summary["columns"] = len(chunk.columns)
+            summary["missing_values_before"] += int(chunk.isna().sum().sum())
+
+            cleaned, part = _clean_dataframe(chunk, copy=False)
+            del chunk
+
+            # Deduplicate across chunk boundaries using a disk-backed index.
+            fingerprints = pd.util.hash_pandas_object(
+                cleaned,
+                index=False,
+            ).astype("uint64").astype(str)
+            keep_mask: list[bool] = []
+            for fingerprint in fingerprints:
+                try:
+                    connection.execute(
+                        "INSERT INTO seen_rows(fingerprint) VALUES (?)",
+                        (fingerprint,),
+                    )
+                    keep_mask.append(True)
+                except sqlite3.IntegrityError:
+                    keep_mask.append(False)
+            connection.commit()
+
+            duplicates = len(keep_mask) - sum(keep_mask)
+            if duplicates:
+                cleaned = cleaned.loc[keep_mask].reset_index(drop=True)
+            summary["duplicates_removed"] += duplicates
+            summary["rows_after"] += len(cleaned)
+            summary["empty_strings_replaced"] += part["empty_strings_replaced"]
+            summary["whitespace_cleaned"] += part["whitespace_cleaned"]
+            summary["missing_values_filled"] += part["missing_values_filled"]
+            summary["missing_values_after"] += int(cleaned.isna().sum().sum())
+
+            for column, count in part["outliers_detected"].items():
+                summary["outliers_detected"][column] = (
+                    summary["outliers_detected"].get(column, 0) + count
+                )
+
+            for change in part["changes"]:
+                key = (change.get("column"), change.get("action"))
+                existing = next(
+                    (item for item in summary["changes"]
+                     if (item.get("column"), item.get("action")) == key),
+                    None,
+                )
+                if existing is None:
+                    summary["changes"].append(dict(change))
+                else:
+                    existing["count"] = existing.get("count", 0) + change.get("count", 0)
+                    if "replacement_value" in change:
+                        existing["replacement_value"] = change["replacement_value"]
+
+            if apply:
+                cleaned.to_csv(
+                    output_path,
+                    mode="w" if first_chunk else "a",
+                    header=first_chunk,
+                    index=False,
+                )
+                first_chunk = False
+
+            del cleaned, part, fingerprints, keep_mask
+            gc.collect()
+
+        if summary["rows_before"] == 0:
+            raise ValueError("Dataset is empty.")
+        if summary["duplicates_removed"]:
+            summary["changes"].append({
+                "column": None,
+                "action": "duplicate_rows_removed",
+                "count": summary["duplicates_removed"],
+            })
+        summary["missing_values_filled"] = max(
+            0,
+            summary["missing_values_before"] - summary["missing_values_after"],
+        )
+        return summary
+    finally:
+        connection.close()
+        seen_path.unlink(missing_ok=True)
+        gc.collect()
 
 
 def load_dataset_file(
@@ -410,31 +559,33 @@ def preview_cleaning(
     or creating any files.
     """
 
-    df, local_path, temporary = (
-        load_dataset_file(dataset)
-    )
+    try:
+        local_path, temporary = get_dataset_local_path(dataset.file_path)
+    except (FileNotFoundError, ValueError, RuntimeError):
+        raise HTTPException(status_code=404, detail="Dataset file not found on server.") from None
 
     try:
-        _, summary = _clean_dataframe(
-            df,
-            copy=False,
-            preview_only=True,
-        )
+        if (
+            dataset.file_type.lower() == "csv"
+            and local_path.stat().st_size > LARGE_CSV_BYTES
+        ):
+            summary = _clean_large_csv(dataset, local_path, apply=False)
+        else:
+            df, _, _ = load_dataset_file(dataset)
+            try:
+                _, summary = _clean_dataframe(df, copy=False, preview_only=True)
+            finally:
+                del df
+                gc.collect()
 
         return {
             "dataset_id": dataset.id,
-            "original_filename": (
-                dataset.original_filename
-            ),
+            "original_filename": dataset.original_filename,
             "file_type": dataset.file_type,
             "preview": summary,
         }
-
     finally:
-        cleanup_dataset_local_path(
-            local_path,
-            temporary,
-        )
+        cleanup_dataset_local_path(local_path, temporary)
 
 
 def _cleaned_extension(
@@ -518,26 +669,41 @@ def apply_cleaning(
         - existing local behavior is preserved.
     """
 
-    (
-        df,
-        original_path,
-        original_temporary,
-    ) = load_dataset_file(dataset)
+    try:
+        original_path, original_temporary = get_dataset_local_path(dataset.file_path)
+    except (FileNotFoundError, ValueError, RuntimeError):
+        raise HTTPException(status_code=404, detail="Dataset file not found on server.") from None
 
     cleaned_path: Path | None = None
+    df: pd.DataFrame | None = None
+    cleaned_df: pd.DataFrame | None = None
 
     try:
-        cleaned_df, summary = _clean_dataframe(
-            df
+        cleaned_filename = _cleaned_filename(dataset)
+        output_extension = _cleaned_extension(dataset)
+        is_large_csv = (
+            dataset.file_type.lower() == "csv"
+            and original_path.stat().st_size > LARGE_CSV_BYTES
         )
 
-        cleaned_filename = _cleaned_filename(
-            dataset
-        )
-
-        output_extension = (
-            _cleaned_extension(dataset)
-        )
+        if is_large_csv:
+            if is_cloud_dataset(dataset.file_path):
+                cleaned_path = create_temporary_file_path(
+                    prefix="insightforge_cleaned_",
+                    suffix=".csv",
+                )
+            else:
+                cleaned_path = _local_cleaned_path(dataset, original_path)
+            summary = _clean_large_csv(
+                dataset,
+                original_path,
+                apply=True,
+                output_path=cleaned_path,
+            )
+            cleaned_df = None
+        else:
+            df, _, _ = load_dataset_file(dataset)
+            cleaned_df, summary = _clean_dataframe(df)
 
         # --------------------------------------------------------
         # Local storage mode
@@ -552,16 +718,11 @@ def apply_cleaning(
             )
 
             try:
-                if output_extension == ".csv":
-                    cleaned_df.to_csv(
-                        cleaned_path,
-                        index=False,
-                    )
-                else:
-                    cleaned_df.to_excel(
-                        cleaned_path,
-                        index=False,
-                    )
+                if cleaned_df is not None:
+                    if output_extension == ".csv":
+                        cleaned_df.to_csv(cleaned_path, index=False)
+                    else:
+                        cleaned_df.to_excel(cleaned_path, index=False)
 
             except Exception:
                 logger.exception(
@@ -599,22 +760,18 @@ def apply_cleaning(
         # Supabase storage mode
         # --------------------------------------------------------
 
-        cleaned_path = create_temporary_file_path(
-            prefix="insightforge_cleaned_",
-            suffix=output_extension,
-        )
+        if cleaned_path is None:
+            cleaned_path = create_temporary_file_path(
+                prefix="insightforge_cleaned_",
+                suffix=output_extension,
+            )
 
         try:
-            if output_extension == ".csv":
-                cleaned_df.to_csv(
-                    cleaned_path,
-                    index=False,
-                )
-            else:
-                cleaned_df.to_excel(
-                    cleaned_path,
-                    index=False,
-                )
+            if cleaned_df is not None:
+                if output_extension == ".csv":
+                    cleaned_df.to_csv(cleaned_path, index=False)
+                else:
+                    cleaned_df.to_excel(cleaned_path, index=False)
 
             cleaned_storage_id = (
                 _build_cleaned_storage_id(
@@ -654,10 +811,14 @@ def apply_cleaning(
             cleaned_path = None
 
     finally:
-        cleanup_dataset_local_path(
-            original_path,
-            original_temporary,
-        )
+        if df is not None:
+            del df
+        if cleaned_df is not None:
+            del cleaned_df
+        gc.collect()
+        if cleaned_path is not None and is_cloud_dataset(dataset.file_path):
+            cleaned_path.unlink(missing_ok=True)
+        cleanup_dataset_local_path(original_path, original_temporary)
 
 
 def get_cleaned_file_path(
