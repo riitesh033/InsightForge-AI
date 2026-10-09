@@ -675,4 +675,61 @@ The InsightForge AI Team
         )
 
 
+    async def send_subscription_cancellation_email(
+        self,
+        to_email: str,
+        user_name: str,
+        plan_type: str,
+        refund_amount: float,
+        currency: str,
+        refund_status: str,
+    ) -> bool:
+        """Email the confirmed cancellation and accurately report refund state."""
+        safe_name = html.escape(user_name or "there")
+        safe_plan = html.escape(plan_type.capitalize())
+        support_email = html.escape(settings.SUPPORT_EMAIL)
+        if refund_status in {"pending", "succeeded", "requires_action"} and refund_amount > 0:
+            refund_message = (
+                f"A 70% refund of {currency} {refund_amount:.2f} has been "
+                "submitted to the payment provider. Your bank may take several "
+                "business days to post it."
+            )
+            subject = "Subscription canceled — 70% refund initiated"
+        elif refund_status == "failed":
+            refund_message = (
+                "Your subscription is canceled, but we could not initiate the "
+                "70% refund automatically. Please contact support for assistance."
+            )
+            subject = "Subscription canceled — refund needs assistance"
+        else:
+            refund_message = (
+                "Your subscription is canceled. We could not identify a paid "
+                "invoice eligible for an automatic refund. Please contact support "
+                "if you believe a refund is due."
+            )
+            subject = "Your InsightForge AI subscription has been canceled"
+
+        html_content = (
+            f"<p>Hello {safe_name},</p>"
+            f"<p>Your {safe_plan} subscription has been canceled immediately, "
+            "and your account has moved to the Free plan.</p>"
+            f"<p>{html.escape(refund_message)}</p>"
+            f"<p>Questions? Contact {support_email}.</p>"
+            "<p>Regards,<br>The InsightForge AI Team</p>"
+        )
+        text_content = (
+            f"Hello {user_name or 'there'},\n\n"
+            f"Your {plan_type.capitalize()} subscription has been canceled "
+            "immediately, and your account has moved to the Free plan.\n\n"
+            f"{refund_message}\n\nSupport: {settings.SUPPORT_EMAIL}\n\n"
+            "The InsightForge AI Team"
+        )
+        return await self.send_email(
+            to_email=to_email,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_content,
+        )
+
+
 email_service = EmailService()
