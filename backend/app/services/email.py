@@ -1,6 +1,10 @@
+import asyncio
 import base64
 import html
 import logging
+import smtplib
+import ssl
+from email.message import EmailMessage
 from typing import Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -37,6 +41,17 @@ class EmailService:
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
 
+        self.smtp_host = settings.SMTP_HOST.strip()
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_username = settings.SMTP_USERNAME.strip()
+        self.smtp_password = settings.SMTP_PASSWORD
+        self.smtp_configured = bool(
+            self.smtp_host
+            and self.smtp_username
+            and self.smtp_password
+            and self.from_email
+        )
+
         self.missing_configuration = tuple(
             name
             for name, value in (
@@ -46,7 +61,7 @@ class EmailService:
             if not value
         )
 
-        self.is_configured = not self.missing_configuration
+        self.is_configured = bool(self.api_key and self.from_email) or self.smtp_configured
 
     async def send_email(
         self,
@@ -64,10 +79,20 @@ class EmailService:
             logger.error("Email delivery skipped because recipient is empty.")
             return False
 
-        if not self.is_configured:
+        if not self.api_key and self.smtp_configured:
+            return await asyncio.to_thread(
+                self._send_email_smtp,
+                recipient,
+                subject,
+                html_content,
+                text_content,
+                attachments,
+            )
+
+        if not self.api_key or not self.from_email:
             logger.warning(
-                "Brevo email skipped; missing configuration: %s",
-                ", ".join(self.missing_configuration),
+                "Email delivery skipped because neither Brevo nor SMTP "
+                "is fully configured."
             )
             return False
 
@@ -127,6 +152,45 @@ class EmailService:
                 "Brevo email delivery failed (%s).",
                 type(error).__name__,
             )
+            return False
+
+    def _send_email_smtp(
+        self,
+        recipient: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None,
+        attachments: list[tuple[str, bytes, str]] | None = None,
+    ) -> bool:
+        """Send email through configured SMTP when Brevo API is unavailable."""
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = f"{self.from_name} <{self.from_email}>"
+        message["To"] = recipient
+        message.set_content(text_content or "Please view this message in an HTML-capable email client.")
+        message.add_alternative(html_content, subtype="html")
+
+        for filename, content, content_type in attachments or []:
+            maintype, _, subtype = content_type.partition("/")
+            message.add_attachment(
+                content,
+                maintype=maintype or "application",
+                subtype=subtype or "octet-stream",
+                filename=filename,
+            )
+
+        try:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=20) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(message)
+            logger.info("SMTP email sent successfully.")
+            return True
+        except Exception as error:
+            logger.error("SMTP email delivery failed (%s).", type(error).__name__)
             return False
 
     async def send_registration_email(
