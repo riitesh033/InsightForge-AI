@@ -24,6 +24,8 @@ export default function ResetPasswordPage() {
   const token = searchParams.get("token") ?? "";
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -67,14 +69,17 @@ export default function ResetPasswordPage() {
           >
             New password
           </label>
-          <input
-            id="reset-new-password"
-            type="password"
-            placeholder="New password"
-            autoComplete="new-password"
-            {...register("new_password")}
-            className="w-full border rounded px-3 py-2"
-          />
+          <div className="flex gap-2">
+            <input
+              id="reset-new-password"
+              type={showNewPassword ? "text" : "password"}
+              placeholder="New password"
+              autoComplete="new-password"
+              {...register("new_password")}
+              className="min-w-0 flex-1 border rounded px-3 py-2"
+            />
+            <button type="button" onClick={() => setShowNewPassword((value) => !value)} className="rounded border px-3 text-sm" aria-label={showNewPassword ? "Hide new password" : "Show new password"}>{showNewPassword ? "Hide" : "Show"}</button>
+          </div>
           {errors.new_password && (
             <p className="text-red-600 text-sm">{errors.new_password.message}</p>
           )}
@@ -86,14 +91,17 @@ export default function ResetPasswordPage() {
           >
             Confirm new password
           </label>
-          <input
-            id="reset-confirm-password"
-            type="password"
-            placeholder="Confirm new password"
-            autoComplete="new-password"
-            {...register("confirm_password")}
-            className="w-full border rounded px-3 py-2"
-          />
+          <div className="flex gap-2">
+            <input
+              id="reset-confirm-password"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              {...register("confirm_password")}
+              className="min-w-0 flex-1 border rounded px-3 py-2"
+            />
+            <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} className="rounded border px-3 text-sm" aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>{showConfirmPassword ? "Hide" : "Show"}</button>
+          </div>
           {errors.confirm_password && (
             <p className="text-red-600 text-sm">{errors.confirm_password.message}</p>
           )}
