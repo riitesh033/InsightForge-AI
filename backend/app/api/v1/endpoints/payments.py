@@ -188,6 +188,7 @@ async def cancel_subscription(
 
     stripe = payment_service._require_stripe()
     stripe_id = subscription.provider_subscription_id
+    original_plan = getattr(subscription.plan, "value", subscription.plan)
     invoice = None
     amount_minor = 0
     currency = "USD"
@@ -249,7 +250,7 @@ async def cancel_subscription(
         await email_service.send_subscription_cancellation_email(
             to_email=current_user.email,
             user_name=current_user.full_name,
-            plan_type="paid",
+            plan_type=str(original_plan),
             refund_amount=amount_minor / 100,
             currency=currency,
             refund_status=email_refund_status,
