@@ -91,6 +91,10 @@ def install_stripe(
         modified.append((subscription_id, kwargs))
         return {"id": subscription_id, **kwargs}
 
+    def cancel_subscription(subscription_id: str):
+        modified.append((subscription_id, {"cancel": True}))
+        return {"id": subscription_id, "status": "canceled"}
+
     fake = SimpleNamespace(
         StripeError=RuntimeError,
         Webhook=SimpleNamespace(construct_event=construct_event),
@@ -103,6 +107,7 @@ def install_stripe(
         Subscription=SimpleNamespace(
             retrieve=lambda subscription_id: subscription,
             modify=modify_subscription,
+            cancel=cancel_subscription,
         ),
     )
     monkeypatch.setattr(payment_service, "_get_stripe_client", lambda: fake)
@@ -678,7 +683,7 @@ def test_payment_history_is_user_scoped_and_pagination_is_bounded(
     assert invalid_limit.status_code == 422
 
 
-def test_cancel_requests_stripe_change_without_premature_local_activation(
+def test_cancel_subscription_cancels_stripe_and_updates_local_plan_immediately(
     client, auth_headers, user_dict, db, monkeypatch
 ):
     user = db.query(User).filter_by(email=user_dict["email"]).one()
@@ -698,9 +703,12 @@ def test_cancel_requests_stripe_change_without_premature_local_activation(
     response = client.post(f"{API}/payments/cancel", headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json()["status"] == "pending_webhook"
-    assert modified == [("sub_test", {"cancel_at_period_end": True})]
+    assert response.json()["status"] == "canceled"
+    assert modified == [("sub_test", {"cancel": True})]
+    assert subscription.status == SubscriptionStatus.CANCELED
+    assert subscription.plan == PlanType.FREE
     assert subscription.cancel_at_period_end is False
+    assert subscription.canceled_at is not None
 
 
 def test_cancel_without_provider_subscription_is_not_reported_as_success(
