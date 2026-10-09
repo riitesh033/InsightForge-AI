@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 # Keep CSV cleaning bounded on Render Free (512 MB RAM). Excel files retain
 # the existing path because pandas' Excel readers do not support chunking.
 LARGE_CSV_BYTES = 80 * 1024 * 1024
-CLEANING_CHUNK_ROWS = 5_000
+# Smaller chunks reduce peak memory on Render's 512 MB Free instance.
+CLEANING_CHUNK_ROWS = 1_000
 
 
 def _clean_large_csv(
@@ -70,13 +71,16 @@ def _clean_large_csv(
         prefix="insightforge_clean_seen_",
         suffix=".sqlite3",
     )
-    connection = sqlite3.connect(str(seen_path))
-    connection.execute(
-        "CREATE TABLE seen_rows (fingerprint TEXT PRIMARY KEY)"
-    )
+    connection: sqlite3.Connection | None = None
     first_chunk = True
 
     try:
+        connection = sqlite3.connect(str(seen_path))
+        connection.execute("PRAGMA journal_mode=OFF")
+        connection.execute("PRAGMA synchronous=OFF")
+        connection.execute(
+            "CREATE TABLE seen_rows (fingerprint TEXT PRIMARY KEY)"
+        )
         if apply:
             if output_path is None:
                 raise ValueError("output_path is required when applying cleaning")
@@ -96,20 +100,19 @@ def _clean_large_csv(
             del chunk
 
             # Deduplicate across chunk boundaries using a disk-backed index.
+            # Hash and deduplicate one small chunk at a time. Keep only the
+            # compact fingerprints and boolean mask for this chunk in RAM.
             fingerprints = pd.util.hash_pandas_object(
                 cleaned,
                 index=False,
-            ).astype("uint64").astype(str)
+            ).to_numpy(dtype="uint64", copy=False)
             keep_mask: list[bool] = []
             for fingerprint in fingerprints:
-                try:
-                    connection.execute(
-                        "INSERT INTO seen_rows(fingerprint) VALUES (?)",
-                        (fingerprint,),
-                    )
-                    keep_mask.append(True)
-                except sqlite3.IntegrityError:
-                    keep_mask.append(False)
+                cursor = connection.execute(
+                    "INSERT OR IGNORE INTO seen_rows(fingerprint) VALUES (?)",
+                    (str(int(fingerprint)),),
+                )
+                keep_mask.append(cursor.rowcount == 1)
             connection.commit()
 
             duplicates = len(keep_mask) - sum(keep_mask)
@@ -169,7 +172,8 @@ def _clean_large_csv(
         )
         return summary
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
         seen_path.unlink(missing_ok=True)
         gc.collect()
 
