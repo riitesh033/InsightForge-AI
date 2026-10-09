@@ -144,6 +144,15 @@ class EmailService:
                 "Brevo email delivery failed with HTTP status %s.",
                 response.status_code,
             )
+            if self.smtp_configured:
+                return await asyncio.to_thread(
+                    self._send_email_smtp,
+                    recipient,
+                    subject,
+                    html_content,
+                    text_content,
+                    attachments,
+                )
             return False
 
         except Exception as error:
@@ -152,6 +161,15 @@ class EmailService:
                 "Brevo email delivery failed (%s).",
                 type(error).__name__,
             )
+            if self.smtp_configured:
+                return await asyncio.to_thread(
+                    self._send_email_smtp,
+                    recipient,
+                    subject,
+                    html_content,
+                    text_content,
+                    attachments,
+                )
             return False
 
     def _send_email_smtp(
