@@ -197,31 +197,30 @@ def cancel_subscription(
             detail="Subscription cancellation is not available.",
         )
 
-    stripe = payment_service._require_stripe(webhook=True)
+    stripe = payment_service._require_stripe()
     try:
-        stripe.Subscription.modify(
-            subscription.provider_subscription_id,
-            cancel_at_period_end=True,
-        )
+        # Cancel the Stripe subscription immediately, rather than scheduling
+        # cancellation at the end of the billing period.
+        stripe.Subscription.cancel(subscription.provider_subscription_id)
     except Exception as error:
-        logger.error("Stripe cancellation request failed (%s)", type(error).__name__)
+        logger.error("Stripe cancellation failed (%s)", type(error).__name__)
         raise HTTPException(
             status_code=502,
-            detail="Failed to request subscription cancellation.",
+            detail="Failed to cancel the subscription with Stripe. No local changes were made.",
         ) from None
+
+    # Only update local access after Stripe confirms the cancellation call.
+    subscription.status = SubscriptionStatus.CANCELED
+    subscription.plan = PlanType.FREE
+    subscription.cancel_at_period_end = False
+    subscription.canceled_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
 
     return {
         "success": True,
-        "status": "pending_webhook",
-        "message": (
-            "Cancellation requested. Your subscription status will update "
-            "when Stripe confirms the change."
-        ),
-        "end_date": (
-            subscription.current_period_end.isoformat()
-            if subscription.current_period_end
-            else None
-        ),
+        "status": "canceled",
+        "message": "Your subscription has been canceled immediately. Your account is now on the Free plan.",
+        "end_date": datetime.now(UTC).isoformat(),
     }
 
 
